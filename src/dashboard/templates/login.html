@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in - SSH Guardian v3.0</title>
+    <style>
+        /* Azure-style Design System */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Azure Color Palette */
+            --azure-blue: #0078D4;
+            --azure-dark: #004C87;
+            --azure-light: #50E6FF;
+
+            /* Neutral Colors */
+            --background: #F3F2F1;
+            --surface: #FFFFFF;
+            --border: #EDEBE9;
+            --text-primary: #323130;
+            --text-secondary: #605E5C;
+            --text-hint: #A19F9D;
+
+            /* Status Colors */
+            --success: #0B7D43;
+            --error: #D13438;
+
+            /* Typography */
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-xs: 11px;
+            --font-sm: 12px;
+            --font-md: 14px;
+            --font-lg: 16px;
+            --font-xl: 20px;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: var(--text-primary);
+            font-size: var(--font-md);
+        }
+
+        .login-container {
+            background: var(--surface);
+            width: 400px;
+            padding: 32px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            width: 32px;
+            height: 32px;
+            background: var(--azure-blue);
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .login-title {
+            font-size: var(--font-xl);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .login-subtitle {
+            font-size: var(--font-sm);
+            color: var(--text-secondary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: var(--font-xs);
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            color: var(--text-hint);
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 32px;
+            padding: 0 12px 0 36px;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            font-size: var(--font-sm);
+            font-family: var(--font-family);
+            transition: all 0.15s ease;
+            background: var(--surface);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--azure-blue);
+            box-shadow: 0 0 0 1px var(--azure-blue);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-hint);
+        }
+
+        .btn {
+            width: 100%;
+            height: 32px;
+            border: none;
+            border-radius: 2px;
+            font-size: var(--font-sm);
+            font-weight: 600;
+            font-family: var(--font-family);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary {
+            background: var(--azure-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--azure-dark);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary:disabled {
+            background: var(--border);
+            color: var(--text-hint);
+            cursor: not-allowed;
+        }
+
+        .btn-text {
+            background: transparent;
+            color: var(--azure-blue);
+            border: 1px solid var(--border);
+        }
+
+        .btn-text:hover {
+            background: var(--background);
+        }
+
+        .error-message {
+            background: #FFF4F4;
+            color: var(--error);
+            padding: 12px;
+            border-radius: 2px;
+            font-size: var(--font-sm);
+            margin-bottom: 16px;
+            border-left: 3px solid var(--error);
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .success-message {
+            background: #F3FFF4;
+            color: var(--success);
+            padding: 12px;
+            border-radius: 2px;
+            font-size: var(--font-sm);
+            margin-bottom: 16px;
+            border-left: 3px solid var(--success);
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .info-text {
+            font-size: var(--font-xs);
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 16px;
+            line-height: 1.5;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 24px 0;
+        }
+
+        .otp-inputs {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin: 24px 0;
+        }
+
+        .otp-input {
+            width: 48px;
+            height: 48px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 600;
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .otp-input:focus {
+            outline: none;
+            border-color: var(--azure-blue);
+            box-shadow: 0 0 0 1px var(--azure-blue);
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            color: var(--azure-blue);
+            font-size: var(--font-sm);
+            text-decoration: none;
+            margin-top: 16px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Hide/Show Steps */
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        /* Icons using Unicode */
+        .icon-email::before { content: "✉"; }
+        .icon-lock::before { content: "🔒"; }
+        .icon-code::before { content: "🔐"; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo">S</div>
+            <h1 class="login-title">SSH Guardian</h1>
+            <p class="login-subtitle">Enterprise SSH Security Platform v3.0</p>
+        </div>
+
+        <div id="error-message" class="error-message"></div>
+        <div id="success-message" class="success-message"></div>
+
+        <!-- Step 1: Email & Password -->
+        <div id="step1" class="step active">
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label" for="email">Email</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon icon-email"></span>
+                        <input
+                            type="email"
+                            id="email"
+                            class="form-input"
+                            placeholder="your.email@company.com"
+                            autocomplete="email"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon icon-lock"></span>
+                        <input
+                            type="password"
+                            id="password"
+                            class="form-input"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginBtn">
+                    Sign in
+                </button>
+
+                <p class="info-text">
+                    Trusted devices skip verification. First-time logins require OTP.
+                </p>
+            </form>
+        </div>
+
+        <!-- Step 2: OTP Verification -->
+        <div id="step2" class="step">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div class="logo" style="width: 48px; height: 48px; font-size: 24px; margin: 0 auto 12px;">
+                    <span class="icon-code"></span>
+                </div>
+                <h2 style="font-size: var(--font-lg); font-weight: 600; margin-bottom: 4px;">
+                    Enter verification code
+                </h2>
+                <p style="font-size: var(--font-sm); color: var(--text-secondary);">
+                    We sent a 6-digit code to <strong id="user-email"></strong>
+                </p>
+            </div>
+
+            <form id="otpForm">
+                <div class="otp-inputs">
+                    <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="verifyBtn">
+                    Verify
+                </button>
+
+                <a href="#" class="back-link" id="backLink">← Back to sign in</a>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let userId = null;
+        let userEmail = null;
+
+        // Elements
+        const errorMsg = document.getElementById('error-message');
+        const successMsg = document.getElementById('success-message');
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const loginForm = document.getElementById('loginForm');
+        const otpForm = document.getElementById('otpForm');
+        const otpInputs = document.querySelectorAll('.otp-input');
+        const backLink = document.getElementById('backLink');
+        const loginBtn = document.getElementById('loginBtn');
+        const verifyBtn = document.getElementById('verifyBtn');
+
+        // Utility functions
+        function showError(message) {
+            errorMsg.textContent = message;
+            errorMsg.classList.add('show');
+            successMsg.classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            successMsg.textContent = message;
+            successMsg.classList.add('show');
+            errorMsg.classList.remove('show');
+        }
+
+        function hideMessages() {
+            errorMsg.classList.remove('show');
+            successMsg.classList.remove('show');
+        }
+
+        function setLoading(button, loading) {
+            if (loading) {
+                button.disabled = true;
+                button.innerHTML = '<span class="loading-spinner"></span>' + button.textContent;
+            } else {
+                button.disabled = false;
+                button.innerHTML = button.textContent.replace(/^.*?(?=[A-Z])/, '');
+            }
+        }
+
+        // Step 1: Login with email and password
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessages();
+
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            setLoading(loginBtn, true);
+
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',  // Send cookies for same-origin requests
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Check if OTP can be skipped (trusted device)
+                    if (data.skip_otp) {
+                        showSuccess('Welcome back! Redirecting...');
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 800);
+                        return;
+                    }
+
+                    // Need OTP verification
+                    userId = data.user_id;
+                    userEmail = email;
+
+                    // Show OTP step
+                    step1.classList.remove('active');
+                    step2.classList.add('active');
+                    document.getElementById('user-email').textContent = email;
+                    otpInputs[0].focus();
+
+                    // Show dev OTP if available
+                    if (data.otp_for_dev) {
+                        showSuccess(`Code sent! (Dev: ${data.otp_for_dev})`);
+                    } else {
+                        showSuccess('Verification code sent to your email');
+                    }
+                } else {
+                    showError(data.error || 'Login failed');
+                }
+            } catch (error) {
+                showError('Connection error. Please try again.');
+            } finally {
+                setLoading(loginBtn, false);
+            }
+        });
+
+        // Step 2: Verify OTP
+        otpForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessages();
+
+            const otpCode = Array.from(otpInputs).map(input => input.value).join('');
+
+            if (otpCode.length !== 6) {
+                showError('Please enter all 6 digits');
+                return;
+            }
+
+            setLoading(verifyBtn, true);
+
+            try {
+                const response = await fetch('/auth/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',  // Receive cookies in response
+                    body: JSON.stringify({ user_id: userId, otp_code: otpCode })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess('Login successful! Redirecting...');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    showError(data.error || 'Invalid code');
+                    // Clear OTP inputs
+                    otpInputs.forEach(input => input.value = '');
+                    otpInputs[0].focus();
+                }
+            } catch (error) {
+                showError('Connection error. Please try again.');
+            } finally {
+                setLoading(verifyBtn, false);
+            }
+        });
+
+        // OTP input handling
+        otpInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                if (e.target.value.length === 1 && index < otpInputs.length - 1) {
+                    otpInputs[index + 1].focus();
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                    otpInputs[index - 1].focus();
+                }
+            });
+
+            input.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                pastedData.split('').forEach((char, i) => {
+                    if (otpInputs[i]) {
+                        otpInputs[i].value = char;
+                    }
+                });
+                if (pastedData.length === 6) {
+                    otpForm.dispatchEvent(new Event('submit'));
+                }
+            });
+        });
+
+        // Back link
+        backLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            step2.classList.remove('active');
+            step1.classList.add('active');
+            hideMessages();
+            otpInputs.forEach(input => input.value = '');
+        });
+
+        // Check if already logged in
+        fetch('/auth/check-session', {
+            credentials: 'same-origin'  // Send cookies with request
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.authenticated) {
+                    window.location.href = '/dashboard';
+                }
+            })
+            .catch(() => {});
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# SSH Guardian v3.0 - Python Dependencies
+
+# Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Database
+mysql-connector-python==8.2.0
+
+# Security & Authentication
+bcrypt==4.1.2
+python-dotenv==1.0.0
+
+# Data Processing
+python-dateutil==2.8.2
+
+# HTTP Requests (for API integrations)
+requests==2.31.0
+
+# Email
+email-validator==2.1.0
+
+# Utilities
+colorama==0.4.6

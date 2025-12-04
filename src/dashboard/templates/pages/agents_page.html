@@ -1,0 +1,75 @@
+<!-- Agents Management Page -->
+<div id="page-agents" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">🤖 Agent Management</h1>
+        <p class="page-subtitle">Monitor and manage SSH Guardian agents deployed on remote servers</p>
+    </div>
+
+    <!-- Agent Statistics -->
+    <div class="stats-grid" id="agent-stats">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total-agents">-</div>
+            <div class="stat-label">Total Agents</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-online-agents">-</div>
+            <div class="stat-label">Online</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-approved-agents">-</div>
+            <div class="stat-label">Approved</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total-events">-</div>
+            <div class="stat-label">Total Events</div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="agent-search-bar">
+        <div class="search-controls">
+            <div class="search-input-wrapper">
+                <span class="search-icon">🔍</span>
+                <input
+                    type="text"
+                    id="agent-search-input"
+                    class="search-input"
+                    placeholder="Search by hostname, agent ID, or IP address..."
+                >
+            </div>
+            <select id="agent-status-filter" class="filter-select">
+                <option value="all">All Status</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+                <option value="approved">Approved</option>
+                <option value="pending">Pending Approval</option>
+            </select>
+            <select id="agent-environment-filter" class="filter-select">
+                <option value="all">All Environments</option>
+                <option value="production">Production</option>
+                <option value="staging">Staging</option>
+                <option value="development">Development</option>
+                <option value="testing">Testing</option>
+            </select>
+            <button class="btn-clear-filters" onclick="clearAgentFilters()">Clear Filters</button>
+        </div>
+        <div id="search-stats" class="search-stats">Showing all agents</div>
+    </div>
+
+    <!-- Agents List -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">📋 Registered Agents</div>
+            <button class="btn-refresh" onclick="loadAgentsPage()" title="Refresh">
+                <span>🔄</span>
+            </button>
+        </div>
+
+        <div id="agents-container" class="agents-list">
+            <!-- Agents will be loaded here -->
+            <div class="loading-message">
+                Loading agents...
+            </div>
+        </div>
+    </div>
+</div>

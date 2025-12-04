@@ -1,0 +1,671 @@
+"""
+SSH Guardian v3.0 - Agent API Routes
+Handles agent registration, heartbeat, and log submission from remote agents
+"""
+
+import uuid
+import json
+from datetime import datetime, timedelta
+from flask import Blueprint, request, jsonify
+from functools import wraps
+import sys
+from pathlib import Path
+
+# Add project paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
+
+from connection import get_connection, ip_to_binary
+
+# Import log processor
+try:
+    from log_processor import process_log_line
+except ImportError:
+    # Try alternative path
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "core"))
+    from log_processor import process_log_line
+
+agent_routes = Blueprint('agent_routes', __name__)
+
+
+# ============================================================================
+# AUTHENTICATION DECORATOR
+# ============================================================================
+
+def require_api_key(f):
+    """Decorator to require API key authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key')
+        agent_id = request.headers.get('X-Agent-ID')
+
+        if not api_key or not agent_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing API key or Agent ID in headers'
+            }), 401
+
+        # Verify API key and agent_id match in database
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT id, agent_id, hostname, is_active, is_approved
+                FROM agents
+                WHERE api_key = %s AND agent_id = %s
+            """, (api_key, agent_id))
+
+            agent = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if not agent:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid API key or Agent ID'
+                }), 401
+
+            if not agent['is_active']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Agent is not active'
+                }), 403
+
+            if not agent['is_approved']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Agent is not approved yet. Please approve the agent in the dashboard.'
+                }), 403
+
+            # Add agent info to request context
+            request.agent = agent
+
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Authentication error: {str(e)}'
+            }), 500
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+# ============================================================================
+# AGENT REGISTRATION
+# ============================================================================
+
+@agent_routes.route('/agents/register', methods=['POST'])
+def register_agent():
+    """Register a new agent or update existing agent"""
+    try:
+        data = request.json
+
+        agent_id = data.get('agent_id')
+        hostname = data.get('hostname')
+        system_info = data.get('system_info', {})
+        version = data.get('version', '3.0.0')
+        heartbeat_interval = data.get('heartbeat_interval_sec', 60)
+
+        if not agent_id or not hostname:
+            return jsonify({
+                'success': False,
+                'error': 'agent_id and hostname are required'
+            }), 400
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Check if agent already exists
+            cursor.execute("""
+                SELECT id, api_key, is_active
+                FROM agents
+                WHERE agent_id = %s
+            """, (agent_id,))
+
+            existing_agent = cursor.fetchone()
+
+            if existing_agent:
+                # Update existing agent
+                cursor.execute("""
+                    UPDATE agents
+                    SET hostname = %s,
+                        system_info = %s,
+                        version = %s,
+                        heartbeat_interval_sec = %s,
+                        last_heartbeat = NOW(),
+                        status = 'online',
+                        updated_at = NOW()
+                    WHERE agent_id = %s
+                """, (hostname, json.dumps(system_info), version,
+                     heartbeat_interval, agent_id))
+
+                conn.commit()
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Agent updated successfully',
+                    'agent_id': agent_id,
+                    'api_key': existing_agent['api_key'],
+                    'is_active': existing_agent['is_active']
+                })
+
+            else:
+                # Create new agent
+                agent_uuid = str(uuid.uuid4())
+                api_key = str(uuid.uuid4())  # Generate API key
+
+                # Get IP address from request
+                ip_address = request.remote_addr
+
+                cursor.execute("""
+                    INSERT INTO agents (
+                        agent_uuid, agent_id, api_key, hostname,
+                        ip_address_primary, system_info, version,
+                        heartbeat_interval_sec, status, last_heartbeat,
+                        is_active, is_approved
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, 'online', NOW(), TRUE, FALSE
+                    )
+                """, (agent_uuid, agent_id, api_key, hostname,
+                     ip_address, json.dumps(system_info), version, heartbeat_interval))
+
+                conn.commit()
+                new_agent_id = cursor.lastrowid
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Agent registered successfully. Waiting for approval.',
+                    'agent_id': agent_id,
+                    'agent_db_id': new_agent_id,
+                    'api_key': api_key,
+                    'note': 'Please approve this agent in the dashboard to start receiving logs'
+                }), 201
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Registration failed: {str(e)}'
+        }), 500
+
+
+# ============================================================================
+# HEARTBEAT
+# ============================================================================
+
+@agent_routes.route('/agents/heartbeat', methods=['POST'])
+@require_api_key
+def agent_heartbeat():
+    """Receive heartbeat from agent"""
+    try:
+        data = request.json
+        agent = request.agent
+
+        metrics = data.get('metrics', {})
+        status = data.get('status', 'online')
+        health_status = data.get('health_status', 'healthy')
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Update agent status
+            cursor.execute("""
+                UPDATE agents
+                SET last_heartbeat = NOW(),
+                    status = %s,
+                    health_status = %s,
+                    consecutive_missed_heartbeats = 0,
+                    updated_at = NOW()
+                WHERE id = %s
+            """, (status, health_status, agent['id']))
+
+            # Insert heartbeat record
+            cursor.execute("""
+                INSERT INTO agent_heartbeats (
+                    agent_id, heartbeat_timestamp,
+                    cpu_usage_percent, memory_usage_percent, disk_usage_percent,
+                    events_processed_last_minute, health_status
+                ) VALUES (%s, NOW(), %s, %s, %s, %s, %s)
+            """, (agent['id'],
+                 metrics.get('cpu_usage_percent'),
+                 metrics.get('memory_usage_percent'),
+                 metrics.get('disk_usage_percent'),
+                 metrics.get('events_processed_last_minute', 0),
+                 health_status))
+
+            conn.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Heartbeat received',
+                'server_time': datetime.now().isoformat()
+            })
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Heartbeat failed: {str(e)}'
+        }), 500
+
+
+# ============================================================================
+# LOG SUBMISSION
+# ============================================================================
+
+@agent_routes.route('/agents/logs', methods=['POST'])
+@require_api_key
+def submit_logs():
+    """Receive log batch from agent"""
+    try:
+        data = request.json
+        agent = request.agent
+
+        batch_uuid = data.get('batch_uuid', str(uuid.uuid4()))
+        log_lines = data.get('log_lines', [])
+        batch_size = len(log_lines)
+        source_filename = data.get('source_filename', '/var/log/auth.log')
+
+        if not log_lines:
+            return jsonify({
+                'success': False,
+                'error': 'No log lines provided'
+            }), 400
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Create batch record
+            cursor.execute("""
+                INSERT INTO agent_log_batches (
+                    batch_uuid, agent_id, batch_size,
+                    processing_status, source_filename, upload_ip
+                ) VALUES (%s, %s, %s, 'processing', %s, %s)
+            """, (batch_uuid, agent['id'], batch_size, source_filename, request.remote_addr))
+
+            batch_id = cursor.lastrowid
+
+            # Update batch processing start time
+            cursor.execute("""
+                UPDATE agent_log_batches
+                SET processing_started_at = NOW()
+                WHERE id = %s
+            """, (batch_id,))
+
+            conn.commit()
+
+            # Process log lines
+            events_created = 0
+            events_failed = 0
+            failed_lines = []
+
+            for log_line in log_lines:
+                try:
+                    # Process log line through detection engine
+                    result = process_log_line(
+                        log_line=log_line,
+                        source_type='agent',
+                        agent_id=agent['id'],
+                        agent_batch_id=batch_id
+                    )
+
+                    if result and result.get('success'):
+                        events_created += 1
+                    else:
+                        events_failed += 1
+                        failed_lines.append({
+                            'line': log_line,
+                            'error': result.get('error', 'Unknown error') if result else 'Processing failed'
+                        })
+
+                except Exception as e:
+                    events_failed += 1
+                    failed_lines.append({
+                        'line': log_line,
+                        'error': str(e)
+                    })
+
+            # Update batch record with results
+            cursor.execute("""
+                UPDATE agent_log_batches
+                SET events_created = %s,
+                    events_failed = %s,
+                    failed_log_lines = %s,
+                    processing_status = 'completed',
+                    processing_completed_at = NOW(),
+                    processing_duration_ms = TIMESTAMPDIFF(MICROSECOND, processing_started_at, NOW()) / 1000
+                WHERE id = %s
+            """, (events_created, events_failed,
+                 json.dumps(failed_lines[:10]) if failed_lines else None,  # Store only first 10 failed lines
+                 batch_id))
+
+            # Update agent statistics
+            cursor.execute("""
+                UPDATE agents
+                SET total_events_sent = total_events_sent + %s
+                WHERE id = %s
+            """, (events_created, agent['id']))
+
+            conn.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Log batch processed successfully',
+                'batch_uuid': batch_uuid,
+                'batch_id': batch_id,
+                'batch_size': batch_size,
+                'events_created': events_created,
+                'events_failed': events_failed,
+                'has_failures': events_failed > 0
+            })
+
+        except Exception as e:
+            # Mark batch as failed
+            cursor.execute("""
+                UPDATE agent_log_batches
+                SET processing_status = 'failed',
+                    error_message = %s,
+                    processing_completed_at = NOW()
+                WHERE id = %s
+            """, (str(e), batch_id))
+            conn.commit()
+            raise
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Log submission failed: {str(e)}'
+        }), 500
+
+
+# ============================================================================
+# AGENT MANAGEMENT (Dashboard API)
+# ============================================================================
+
+@agent_routes.route('/agents/list', methods=['GET'])
+def list_agents():
+    """List all agents (for dashboard)"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                id, agent_id, agent_uuid, hostname, display_name,
+                agent_type, ip_address_primary, environment,
+                status, health_status, last_heartbeat,
+                version, is_active, is_approved,
+                total_events_sent, created_at, updated_at
+            FROM agents
+            ORDER BY created_at DESC
+        """)
+
+        agents = cursor.fetchall()
+
+        # Format timestamps
+        for agent in agents:
+            if agent['last_heartbeat']:
+                agent['last_heartbeat'] = agent['last_heartbeat'].isoformat()
+            if agent['created_at']:
+                agent['created_at'] = agent['created_at'].isoformat()
+            if agent['updated_at']:
+                agent['updated_at'] = agent['updated_at'].isoformat()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'agents': agents,
+            'total': len(agents)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to list agents: {str(e)}'
+        }), 500
+
+
+@agent_routes.route('/agents/<int:agent_id>/approve', methods=['POST'])
+def approve_agent(agent_id):
+    """Approve an agent"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE agents
+            SET is_approved = TRUE,
+                approved_at = NOW(),
+                updated_at = NOW()
+            WHERE id = %s
+        """, (agent_id,))
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'Agent approved successfully'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to approve agent: {str(e)}'
+        }), 500
+
+
+@agent_routes.route('/agents/<int:agent_id>/deactivate', methods=['POST'])
+def deactivate_agent(agent_id):
+    """Deactivate an agent"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE agents
+            SET is_active = FALSE,
+                status = 'offline',
+                updated_at = NOW()
+            WHERE id = %s
+        """, (agent_id,))
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'Agent deactivated successfully'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to deactivate agent: {str(e)}'
+        }), 500
+
+
+@agent_routes.route('/agents/<int:agent_id>', methods=['GET'])
+def get_agent_details(agent_id):
+    """Get detailed agent information"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get agent details
+        cursor.execute("""
+            SELECT *
+            FROM agents
+            WHERE id = %s
+        """, (agent_id,))
+
+        agent = cursor.fetchone()
+
+        if not agent:
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
+
+        # Get recent heartbeats
+        cursor.execute("""
+            SELECT *
+            FROM agent_heartbeats
+            WHERE agent_id = %s
+            ORDER BY heartbeat_timestamp DESC
+            LIMIT 20
+        """, (agent_id,))
+
+        heartbeats = cursor.fetchall()
+
+        # Get recent batches
+        cursor.execute("""
+            SELECT *
+            FROM agent_log_batches
+            WHERE agent_id = %s
+            ORDER BY received_at DESC
+            LIMIT 20
+        """, (agent_id,))
+
+        batches = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        # Format timestamps
+        if agent['last_heartbeat']:
+            agent['last_heartbeat'] = agent['last_heartbeat'].isoformat()
+        if agent['created_at']:
+            agent['created_at'] = agent['created_at'].isoformat()
+        if agent['updated_at']:
+            agent['updated_at'] = agent['updated_at'].isoformat()
+
+        for hb in heartbeats:
+            if hb['heartbeat_timestamp']:
+                hb['heartbeat_timestamp'] = hb['heartbeat_timestamp'].isoformat()
+
+        for batch in batches:
+            if batch['received_at']:
+                batch['received_at'] = batch['received_at'].isoformat()
+            if batch['processing_completed_at']:
+                batch['processing_completed_at'] = batch['processing_completed_at'].isoformat()
+
+        return jsonify({
+            'success': True,
+            'agent': agent,
+            'recent_heartbeats': heartbeats,
+            'recent_batches': batches
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get agent details: {str(e)}'
+        }), 500
+
+
+# ============================================================================
+# AGENT STATISTICS
+# ============================================================================
+
+@agent_routes.route('/agents/stats', methods=['GET'])
+def agent_stats():
+    """Get agent statistics"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Total agents
+        cursor.execute("SELECT COUNT(*) as count FROM agents")
+        total_agents = cursor.fetchone()['count']
+
+        # Active agents
+        cursor.execute("SELECT COUNT(*) as count FROM agents WHERE is_active = TRUE")
+        active_agents = cursor.fetchone()['count']
+
+        # Approved agents
+        cursor.execute("SELECT COUNT(*) as count FROM agents WHERE is_approved = TRUE")
+        approved_agents = cursor.fetchone()['count']
+
+        # Online agents
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM agents
+            WHERE status = 'online'
+            AND last_heartbeat >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+        """)
+        online_agents = cursor.fetchone()['count']
+
+        # Total events from agents
+        cursor.execute("SELECT SUM(total_events_sent) as count FROM agents")
+        total_events = cursor.fetchone()['count'] or 0
+
+        # Total batches
+        cursor.execute("SELECT COUNT(*) as count FROM agent_log_batches")
+        total_batches = cursor.fetchone()['count']
+
+        # Recent batches (last 24h)
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM agent_log_batches
+            WHERE received_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        """)
+        recent_batches = cursor.fetchone()['count']
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_agents': total_agents,
+                'active_agents': active_agents,
+                'approved_agents': approved_agents,
+                'online_agents': online_agents,
+                'total_events_from_agents': total_events,
+                'total_batches': total_batches,
+                'batches_last_24h': recent_batches
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get stats: {str(e)}'
+        }), 500

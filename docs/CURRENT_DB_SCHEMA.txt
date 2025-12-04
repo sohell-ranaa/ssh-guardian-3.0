@@ -1,0 +1,614 @@
+================================================================================
+SSH Guardian v3.0 - Current Database Schema
+Generated: ssh_guardian_v3 on 9.5.0
+================================================================================
+
+
+================================================================================
+TABLE: agent_heartbeats
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             bigint                    NO     PRI    None           
+agent_id                       int                       NO     MUL    None           
+heartbeat_timestamp            timestamp(3)              NO     MUL    None           
+cpu_usage_percent              decimal(5,2)              YES           None           
+memory_usage_percent           decimal(5,2)              YES           None           
+disk_usage_percent             decimal(5,2)              YES           None           
+load_average                   decimal(5,2)              YES           None           
+events_in_queue                int                       YES           None           
+events_processed_last_minute   int                       YES           None           
+processing_lag_seconds         int                       YES           None           
+network_latency_ms             int                       YES           None           
+connection_status              enum('connected','degraded','disconnected') YES           connected      
+health_status                  enum('healthy','warning','critical') YES    MUL    healthy        
+health_issues                  json                      YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: agents
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+agent_uuid                     char(36)                  NO     UNI    None           
+agent_id                       varchar(100)              NO     UNI    None           
+api_key                        varchar(100)              YES    UNI    None           
+hostname                       varchar(255)              NO     MUL    None           
+display_name                   varchar(255)              YES           None           
+agent_type                     enum('primary','secondary','monitor_only') YES    MUL    secondary      
+ip_address_primary             varchar(45)               YES           None           
+ip_address_internal            varchar(45)               YES           None           
+mac_address                    varchar(17)               YES           None           
+location                       varchar(255)              YES           None           
+datacenter                     varchar(100)              YES           None           
+environment                    enum('production','staging','development','testing') YES    MUL    production     
+status                         enum('online','offline','maintenance','error','unknown') YES    MUL    unknown        
+health_status                  enum('healthy','degraded','critical') YES    MUL    healthy        
+last_heartbeat                 timestamp                 YES    MUL    None           
+heartbeat_interval_sec         int                       YES           30             
+consecutive_missed_heartbeats  int                       YES           0              
+version                        varchar(50)               YES           None           
+config_version                 varchar(50)               YES           None           
+supported_features             json                      YES           None           
+total_events_sent              bigint                    YES           0              
+total_uptime_seconds           bigint                    YES           0              
+last_restart_at                timestamp                 YES           None           
+restart_count                  int                       YES           0              
+is_active                      tinyint(1)                YES    MUL    1              
+is_approved                    tinyint(1)                YES           0              
+notes                          text                      YES           None           
+system_info                    json                      YES           None           
+custom_metadata                json                      YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+approved_at                    timestamp                 YES           None           
+approved_by_user_id            int                       YES    MUL    None           
+================================================================================
+
+
+================================================================================
+TABLE: audit_logs
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             bigint                    NO     PRI    None           
+user_id                        int                       YES    MUL    None           
+action                         varchar(100)              NO     MUL    None           
+resource_type                  varchar(50)               YES    MUL    None           
+resource_id                    varchar(100)              YES           None           
+details                        json                      YES           None           
+ip_address                     varchar(45)               YES           None           
+user_agent                     text                      YES           None           
+created_at                     timestamp                 YES    MUL    CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: auth_events
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             bigint                    NO     PRI    None           
+event_uuid                     char(36)                  NO     UNI    None           
+timestamp                      datetime(3)               NO     MUL    None           
+processed_at                   datetime(3)               YES           None           
+source_type                    enum('agent','synthetic','simulation') NO     MUL    None           
+agent_id                       int                       YES    MUL    None           
+log_source_id                  int                       YES           None           
+simulation_run_id              int                       YES           None           
+event_type                     enum('failed','successful','invalid') NO     MUL    None           
+auth_method                    enum('password','publickey','keyboard-interactive','none','other') YES           None           
+source_ip                      varbinary(16)             NO     MUL    None           
+source_ip_text                 varchar(45)               NO     MUL    None           
+source_port                    int unsigned              YES           None           
+geo_id                         int                       YES    MUL    None           
+target_server                  varchar(255)              NO     MUL    None           
+target_port                    int unsigned              YES           22             
+target_username                varchar(255)              NO     MUL    None           
+failure_reason                 enum('invalid_password','invalid_user','connection_refused','key_rejected','timeout','max_attempts','other') YES           None           
+session_id                     varchar(100)              YES           None           
+session_duration_sec           int unsigned              YES           None           
+processing_status              enum('pending','geoip_complete','ml_complete','intel_complete','completed','error') YES    MUL    pending        
+processing_error               text                      YES           None           
+ml_risk_score                  tinyint unsigned          YES           0              
+ml_threat_type                 varchar(100)              YES           None           
+ml_confidence                  decimal(5,4)              YES           None           
+is_anomaly                     tinyint(1)                YES    MUL    0              
+anomaly_reasons                json                      YES           None           
+was_blocked                    tinyint(1)                YES           0              
+block_id                       int                       YES    MUL    None           
+raw_log_line                   text                      YES           None           
+additional_metadata            json                      YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: blocking_actions
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             bigint                    NO     PRI    None           
+action_uuid                    char(36)                  NO     UNI    None           
+ip_block_id                    int                       NO     MUL    None           
+ip_address_text                varchar(45)               NO     MUL    None           
+action_type                    enum('blocked','unblocked','modified') NO     MUL    None           
+action_source                  enum('system','manual','rule','api') NO            None           
+reason                         text                      YES           None           
+performed_by_user_id           int                       YES    MUL    None           
+triggered_by_rule_id           int                       YES    MUL    None           
+triggered_by_event_id          bigint                    YES    MUL    None           
+action_metadata                json                      YES           None           
+created_at                     timestamp                 YES    MUL    CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: blocking_rules
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+rule_name                      varchar(100)              NO     UNI    None           
+rule_type                      enum('brute_force','ml_threshold','api_reputation','anomaly_pattern','geo_restriction','custom') NO     MUL    None           
+is_enabled                     tinyint(1)                YES    MUL    1              
+priority                       int                       YES           50             
+conditions                     json                      NO            None           
+block_duration_minutes         int                       YES           1440           
+auto_unblock                   tinyint(1)                YES           1              
+notify_on_trigger              tinyint(1)                YES           1              
+notification_channels          json                      YES           None           
+notification_message_template  text                      YES           None           
+times_triggered                int                       YES           0              
+last_triggered_at              timestamp                 YES    MUL    None           
+ips_blocked_total              int                       YES           0              
+description                    text                      YES           None           
+created_by_user_id             int                       YES    MUL    None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: daily_statistics
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+stat_date                      date                      NO     UNI    None           
+total_events                   int                       YES           0              
+failed_events                  int                       YES           0              
+successful_events              int                       YES           0              
+invalid_events                 int                       YES           0              
+events_from_agents             int                       YES           0              
+events_from_synthetic          int                       YES           0              
+events_from_simulation         int                       YES           0              
+unique_ips                     int                       YES           0              
+unique_servers                 int                       YES           0              
+unique_usernames               int                       YES           0              
+anomalies_detected             int                       YES           0              
+high_risk_events               int                       YES           0              
+ips_blocked                    int                       YES           0              
+ips_unblocked                  int                       YES           0              
+notifications_sent             int                       YES           0              
+active_agents                  int                       YES           0              
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: ip_blocks
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+ip_address                     varbinary(16)             NO     MUL    None           
+ip_address_text                varchar(45)               NO     MUL    None           
+ip_range_cidr                  varchar(50)               YES           None           
+block_reason                   varchar(500)              NO            None           
+block_source                   enum('manual','rule_based','ml_threshold','api_reputation','anomaly_detection') NO     MUL    None           
+blocking_rule_id               int                       YES    MUL    None           
+trigger_event_id               bigint                    YES    MUL    None           
+failed_attempts                int                       YES           0              
+risk_score                     tinyint unsigned          YES           None           
+threat_level                   varchar(50)               YES           None           
+is_active                      tinyint(1)                YES    MUL    1              
+blocked_at                     timestamp                 YES           CURRENT_TIMESTAMP
+unblock_at                     timestamp                 YES    MUL    None           
+auto_unblock                   tinyint(1)                YES           1              
+manually_unblocked_at          timestamp                 YES           None           
+unblocked_by_user_id           int                       YES    MUL    None           
+unblock_reason                 varchar(500)              YES           None           
+is_simulation                  tinyint(1)                YES    MUL    0              
+simulation_run_id              int                       YES    MUL    None           
+block_metadata                 json                      YES           None           
+created_by_user_id             int                       YES    MUL    None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: ip_geolocation
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+ip_address                     varbinary(16)             NO     UNI    None           
+ip_address_text                varchar(45)               NO     UNI    None           
+ip_version                     tinyint                   NO            None           
+country_code                   char(2)                   YES    MUL    None           
+country_name                   varchar(100)              YES           None           
+region                         varchar(100)              YES           None           
+city                           varchar(100)              YES           None           
+postal_code                    varchar(20)               YES           None           
+latitude                       decimal(10,8)             YES           None           
+longitude                      decimal(11,8)             YES           None           
+timezone                       varchar(50)               YES           None           
+asn                            int                       YES    MUL    None           
+asn_org                        varchar(255)              YES           None           
+isp                            varchar(255)              YES           None           
+connection_type                varchar(50)               YES           None           
+is_proxy                       tinyint(1)                YES    MUL    0              
+is_vpn                         tinyint(1)                YES           0              
+is_tor                         tinyint(1)                YES           0              
+is_datacenter                  tinyint(1)                YES           0              
+is_hosting                     tinyint(1)                YES           0              
+lookup_count                   int                       YES           1              
+first_seen                     timestamp                 YES           CURRENT_TIMESTAMP
+last_seen                      timestamp                 YES    MUL    CURRENT_TIMESTAMP
+cache_expires_at               timestamp                 YES    MUL    None           
+================================================================================
+
+
+================================================================================
+TABLE: ip_statistics
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+ip_address_text                varchar(45)               NO     UNI    None           
+geo_id                         int                       YES    MUL    None           
+total_events                   int                       YES    MUL    0              
+failed_events                  int                       YES    MUL    0              
+successful_events              int                       YES           0              
+invalid_events                 int                       YES           0              
+unique_servers                 int                       YES           0              
+unique_usernames               int                       YES           0              
+avg_risk_score                 decimal(5,2)              YES           None           
+max_risk_score                 tinyint unsigned          YES           None           
+anomaly_count                  int                       YES           0              
+times_blocked                  int                       YES           0              
+currently_blocked              tinyint(1)                YES    MUL    0              
+last_blocked_at                timestamp                 YES           None           
+first_seen                     timestamp                 YES           None           
+last_seen                      timestamp                 YES    MUL    None           
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: ip_threat_intelligence
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+ip_address_text                varchar(45)               NO     UNI    None           
+geo_id                         int                       YES    MUL    None           
+abuseipdb_score                int                       YES    MUL    None           
+abuseipdb_confidence           int                       YES           None           
+abuseipdb_reports              int                       YES           None           
+abuseipdb_last_reported        timestamp                 YES           None           
+abuseipdb_categories           json                      YES           None           
+abuseipdb_checked_at           timestamp                 YES           None           
+shodan_ports                   json                      YES           None           
+shodan_tags                    json                      YES           None           
+shodan_vulns                   json                      YES           None           
+shodan_last_update             timestamp                 YES           None           
+shodan_checked_at              timestamp                 YES           None           
+virustotal_positives           int                       YES           None           
+virustotal_total               int                       YES           None           
+virustotal_detected_urls       json                      YES           None           
+virustotal_checked_at          timestamp                 YES           None           
+overall_threat_level           enum('clean','low','medium','high','critical') YES    MUL    clean          
+threat_confidence              decimal(5,4)              YES           None           
+threat_categories              json                      YES           None           
+needs_refresh                  tinyint(1)                YES    MUL    0              
+refresh_after                  timestamp                 YES           None           
+last_error                     text                      YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES    MUL    CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: log_sources
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+source_type                    enum('agent','synthetic','simulation') NO     MUL    None           
+source_name                    varchar(100)              NO     UNI    None           
+source_description             text                      YES           None           
+is_active                      tinyint(1)                YES    MUL    1              
+config                         json                      YES           None           
+total_events_received          bigint                    YES           0              
+last_event_at                  timestamp                 YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: notification_rules
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+rule_name                      varchar(100)              NO     UNI    None           
+is_enabled                     tinyint(1)                YES    MUL    1              
+trigger_on                     enum('ip_blocked','high_risk_detected','anomaly_detected','brute_force_detected','agent_offline','system_error') NO     MUL    None           
+conditions                     json                      YES           None           
+channels                       json                      NO            None           
+telegram_bot_token             varchar(255)              YES           None           
+telegram_chat_id               varchar(255)              YES           None           
+email_recipients               json                      YES           None           
+webhook_url                    varchar(500)              YES           None           
+webhook_headers                json                      YES           None           
+message_template               text                      NO            None           
+message_format                 enum('text','html','markdown') YES           markdown       
+rate_limit_minutes             int                       YES           5              
+times_triggered                int                       YES           0              
+last_triggered_at              timestamp                 YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: notifications
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             bigint                    NO     PRI    None           
+notification_uuid              char(36)                  NO     UNI    None           
+notification_rule_id           int                       YES    MUL    None           
+trigger_type                   varchar(100)              NO     MUL    None           
+trigger_event_id               bigint                    YES    MUL    None           
+trigger_block_id               int                       YES    MUL    None           
+channels                       json                      NO            None           
+message_title                  varchar(500)              NO            None           
+message_body                   text                      NO            None           
+message_format                 enum('text','html','markdown') YES           text           
+priority                       enum('low','normal','high','critical') YES    MUL    normal         
+status                         enum('pending','sent','failed','cancelled') YES    MUL    pending        
+sent_at                        timestamp                 YES           None           
+failed_reason                  text                      YES           None           
+retry_count                    int                       YES           0              
+delivery_status                json                      YES           None           
+notification_metadata          json                      YES           None           
+created_at                     timestamp                 YES    MUL    CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: roles
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+name                           varchar(50)               NO     UNI    None           
+description                    text                      YES           None           
+permissions                    json                      NO            None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: simulation_ip_pool
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+ip_address                     varchar(45)               NO     UNI    None           
+pool_type                      enum('malicious','trusted','random','geo_specific') NO     MUL    None           
+country_code                   char(2)                   YES    MUL    None           
+city                           varchar(100)              YES           None           
+reputation_score               int                       YES    MUL    None           
+is_vpn                         tinyint(1)                YES           0              
+is_proxy                       tinyint(1)                YES           0              
+is_tor                         tinyint(1)                YES           0              
+source                         varchar(100)              YES           None           
+notes                          text                      YES           None           
+times_used                     int                       YES    MUL    0              
+last_used_at                   timestamp                 YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: simulation_logs
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             bigint                    NO     PRI    None           
+simulation_run_id              int                       NO     MUL    None           
+log_uuid                       char(36)                  NO     UNI    None           
+log_timestamp                  timestamp(6)              NO     MUL    None           
+sequence_number                int                       NO            None           
+stage                          varchar(50)               NO     MUL    None           
+level                          enum('TRACE','DEBUG','INFO','SUCCESS','WARNING','ERROR','CRITICAL') YES    MUL    INFO           
+category                       varchar(50)               YES           None           
+message                        text                      NO            None           
+ip_address                     varchar(45)               YES           None           
+username                       varchar(255)              YES           None           
+event_count                    int                       YES           None           
+metadata                       json                      YES           None           
+stack_trace                    text                      YES           None           
+execution_time_ms              int                       YES           None           
+memory_usage_mb                decimal(10,2)             YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: simulation_runs
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+run_uuid                       char(36)                  NO     UNI    None           
+user_id                        int                       YES    MUL    None           
+user_email                     varchar(255)              YES           None           
+template_name                  varchar(100)              NO            None           
+template_display_name          varchar(255)              YES           None           
+config                         json                      NO            None           
+status                         enum('pending','initializing','running','paused','completed','failed','cancelled') YES    MUL    pending        
+progress_percent               tinyint unsigned          YES           0              
+total_events_planned           int                       YES           0              
+events_generated               int                       YES           0              
+ips_blocked                    int                       YES           0              
+anomalies_detected             int                       YES           0              
+notifications_sent             int                       YES           0              
+started_at                     timestamp                 YES           None           
+completed_at                   timestamp                 YES           None           
+duration_seconds               int                       YES           None           
+error_message                  text                      YES           None           
+data_retention_days            int                       YES           7              
+auto_cleanup_enabled           tinyint(1)                YES    MUL    1              
+cleaned_up_at                  timestamp                 YES           None           
+created_at                     timestamp                 YES    MUL    CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: simulation_templates
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+template_name                  varchar(100)              NO     UNI    None           
+display_name                   varchar(255)              NO            None           
+description                    text                      YES           None           
+template_type                  enum('brute_force','credential_stuffing','distributed_attack','slow_attack','targeted_attack','custom') NO     MUL    None           
+default_config                 json                      NO            None           
+difficulty_level               enum('easy','medium','hard','expert') YES    MUL    medium         
+estimated_duration_minutes     int                       YES           None           
+estimated_events               int                       YES           None           
+is_visible                     tinyint(1)                YES    MUL    1              
+is_system                      tinyint(1)                YES           0              
+times_used                     int                       YES           0              
+last_used_at                   timestamp                 YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: system_alerts
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+alert_uuid                     char(36)                  NO     UNI    None           
+alert_type                     enum('security','performance','agent_health','system_error','threshold_breach','database') NO     MUL    None           
+severity                       enum('info','warning','error','critical') NO     MUL    None           
+title                          varchar(255)              NO            None           
+description                    text                      NO            None           
+source                         varchar(100)              YES           None           
+agent_id                       int                       YES    MUL    None           
+simulation_run_id              int                       YES    MUL    None           
+ip_address                     varchar(45)               YES           None           
+status                         enum('active','acknowledged','resolved','dismissed') YES    MUL    active         
+acknowledged_at                timestamp                 YES           None           
+acknowledged_by_user_id        int                       YES    MUL    None           
+resolved_at                    timestamp                 YES           None           
+resolved_by_user_id            int                       YES    MUL    None           
+resolution_notes               text                      YES           None           
+notification_sent              tinyint(1)                YES           0              
+notification_sent_at           timestamp                 YES           None           
+alert_data                     json                      YES           None           
+created_at                     timestamp                 YES    MUL    CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: system_config
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+config_key                     varchar(100)              NO     UNI    None           
+config_value                   text                      NO            None           
+value_type                     enum('string','int','float','boolean','json') YES           string         
+description                    text                      YES           None           
+is_encrypted                   tinyint(1)                YES           0              
+is_public                      tinyint(1)                YES    MUL    0              
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_by_user_id             int                       YES    MUL    None           
+================================================================================
+
+
+================================================================================
+TABLE: user_otps
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+user_id                        int                       NO     MUL    None           
+otp_code                       varchar(6)                NO            None           
+purpose                        enum('login','password_reset','email_verification') YES    MUL    login          
+expires_at                     timestamp                 NO     MUL    None           
+is_used                        tinyint(1)                YES           0              
+used_at                        timestamp                 YES           None           
+ip_address                     varchar(45)               YES           None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: user_sessions
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+user_id                        int                       NO     MUL    None           
+session_token                  varchar(255)              NO     UNI    None           
+ip_address                     varchar(45)               YES           None           
+user_agent                     text                      YES           None           
+expires_at                     timestamp                 NO     MUL    None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+last_activity                  timestamp                 YES    MUL    CURRENT_TIMESTAMP
+================================================================================
+
+
+================================================================================
+TABLE: users
+================================================================================
+Column Name                    Type                      Null   Key    Default        
+--------------------------------------------------------------------------------
+id                             int                       NO     PRI    None           
+email                          varchar(255)              NO     UNI    None           
+password_hash                  varchar(255)              NO            None           
+full_name                      varchar(255)              NO            None           
+role_id                        int                       NO     MUL    None           
+is_active                      tinyint(1)                YES    MUL    1              
+is_email_verified              tinyint(1)                YES    MUL    0              
+last_login                     timestamp                 YES           None           
+failed_login_attempts          int                       YES           0              
+locked_until                   timestamp                 YES           None           
+created_by                     int                       YES    MUL    None           
+created_at                     timestamp                 YES           CURRENT_TIMESTAMP
+updated_at                     timestamp                 YES           CURRENT_TIMESTAMP
+================================================================================
+

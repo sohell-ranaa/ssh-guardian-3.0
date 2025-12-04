@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Agent Management Test</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .agent { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        .online { background: #d4edda; }
+        .offline { background: #f8d7da; }
+        button { padding: 5px 10px; margin: 2px; }
+    </style>
+</head>
+<body>
+    <h1>SSH Guardian - Agent Management</h1>
+    
+    <div>
+        <h2>Statistics</h2>
+        <div id="stats"></div>
+    </div>
+    
+    <div>
+        <h2>Agents</h2>
+        <div id="agents"></div>
+    </div>
+
+    <script>
+        async function loadStats() {
+            const response = await fetch('/api/agents/stats');
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('stats').innerHTML = `
+                    <p>Total Agents: ${data.stats.total_agents}</p>
+                    <p>Online: ${data.stats.online_agents}</p>
+                    <p>Active: ${data.stats.active_agents}</p>
+                    <p>Approved: ${data.stats.approved_agents}</p>
+                    <p>Total Events: ${data.stats.total_events_from_agents}</p>
+                    <p>Batches (24h): ${data.stats.batches_last_24h}</p>
+                `;
+            }
+        }
+
+        async function loadAgents() {
+            const response = await fetch('/api/agents/list');
+            const data = await response.json();
+            if (data.success) {
+                const html = data.agents.map(agent => `
+                    <div class="agent ${agent.status === 'online' ? 'online' : 'offline'}">
+                        <h3>${agent.hostname} (${agent.agent_id})</h3>
+                        <p>Status: ${agent.status} | Health: ${agent.health_status}</p>
+                        <p>Last Heartbeat: ${agent.last_heartbeat || 'Never'}</p>
+                        <p>Events Sent: ${agent.total_events_sent}</p>
+                        <p>Active: ${agent.is_active ? 'Yes' : 'No'} | Approved: ${agent.is_approved ? 'Yes' : 'No'}</p>
+                        ${!agent.is_approved ? `<button onclick="approveAgent(${agent.id})">Approve</button>` : ''}
+                        ${agent.is_active ? `<button onclick="deactivateAgent(${agent.id})">Deactivate</button>` : ''}
+                    </div>
+                `).join('');
+                document.getElementById('agents').innerHTML = html || '<p>No agents found</p>';
+            }
+        }
+
+        async function approveAgent(id) {
+            const response = await fetch(`/api/agents/${id}/approve`, { method: 'POST' });
+            const data = await response.json();
+            alert(data.message);
+            loadAgents();
+            loadStats();
+        }
+
+        async function deactivateAgent(id) {
+            const response = await fetch(`/api/agents/${id}/deactivate`, { method: 'POST' });
+            const data = await response.json();
+            alert(data.message);
+            loadAgents();
+            loadStats();
+        }
+
+        // Load on page load
+        loadStats();
+        loadAgents();
+        
+        // Auto-refresh every 10 seconds
+        setInterval(() => { loadStats(); loadAgents(); }, 10000);
+    </script>
+</body>
+</html>

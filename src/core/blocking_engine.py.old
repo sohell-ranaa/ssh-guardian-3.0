@@ -1,0 +1,606 @@
+"""
+SSH Guardian v3.0 - Blocking Rules Engine
+Evaluates rules and manages IP blocking based on authentication events and threat intelligence
+"""
+
+import sys
+from pathlib import Path
+from datetime import datetime, timedelta
+import uuid
+import json
+
+# Add project paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.append(str(PROJECT_ROOT / "dbs"))
+
+from connection import get_connection, ip_to_binary
+
+
+class BlockingEngine:
+    """
+    Blocking Rules Engine
+
+    Handles:
+    - Rule evaluation (brute force, threshold-based, threat-based)
+    - IP blocking and unblocking
+    - Block history tracking
+    """
+
+    @staticmethod
+    def evaluate_brute_force_rule(rule, ip_address):
+        """
+        Evaluate brute force rule: X failed attempts in Y minutes
+
+        Rule conditions format:
+        {
+            "failed_attempts": 5,
+            "time_window_minutes": 10,
+            "event_type": "failed"
+        }
+
+        Returns:
+            dict: {
+                'should_block': bool,
+                'reason': str,
+                'failed_attempts': int,
+                'trigger_event_id': int or None
+            }
+        """
+        try:
+            conditions = rule['conditions']
+
+            # Get parameters from rule
+            threshold = conditions.get('failed_attempts', 5)
+            time_window = conditions.get('time_window_minutes', 10)
+            event_type = conditions.get('event_type', 'failed')
+
+            # Calculate time window
+            cutoff_time = datetime.now() - timedelta(minutes=time_window)
+
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            try:
+                # Count failed attempts in time window
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) as attempt_count,
+                        MAX(id) as latest_event_id
+                    FROM auth_events
+                    WHERE source_ip_text = %s
+                    AND event_type = %s
+                    AND timestamp >= %s
+                """, (ip_address, event_type, cutoff_time))
+
+                result = cursor.fetchone()
+                attempt_count = result['attempt_count']
+                latest_event_id = result['latest_event_id']
+
+                if attempt_count >= threshold:
+                    return {
+                        'should_block': True,
+                        'reason': f"{attempt_count} {event_type} attempts in {time_window} minutes (threshold: {threshold})",
+                        'failed_attempts': attempt_count,
+                        'trigger_event_id': latest_event_id
+                    }
+
+                return {
+                    'should_block': False,
+                    'reason': f"Only {attempt_count}/{threshold} attempts",
+                    'failed_attempts': attempt_count,
+                    'trigger_event_id': None
+                }
+
+            finally:
+                cursor.close()
+                conn.close()
+
+        except Exception as e:
+            print(f"❌ Error evaluating brute force rule: {e}")
+            return {
+                'should_block': False,
+                'reason': f"Error: {str(e)}",
+                'failed_attempts': 0,
+                'trigger_event_id': None
+            }
+
+    @staticmethod
+    def evaluate_threat_threshold_rule(rule, ip_address):
+        """
+        Evaluate threat-based rule: Block if threat level >= threshold
+
+        Rule conditions format:
+        {
+            "min_threat_level": "high",  # clean, low, medium, high, critical
+            "min_confidence": 0.5,
+            "sources": ["abuseipdb", "virustotal", "shodan"]
+        }
+
+        Returns:
+            dict: {
+                'should_block': bool,
+                'reason': str,
+                'threat_level': str,
+                'confidence': float
+            }
+        """
+        try:
+            conditions = rule['conditions']
+
+            # Get threat level threshold
+            min_threat_level = conditions.get('min_threat_level', 'high')
+            min_confidence = conditions.get('min_confidence', 0.5)
+
+            # Threat level priority
+            threat_priority = {
+                'clean': 0,
+                'low': 1,
+                'medium': 2,
+                'high': 3,
+                'critical': 4
+            }
+
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            try:
+                # Get threat intelligence for IP
+                cursor.execute("""
+                    SELECT
+                        overall_threat_level,
+                        threat_confidence,
+                        abuseipdb_score,
+                        virustotal_positives
+                    FROM ip_threat_intelligence
+                    WHERE ip_address_text = %s
+                """, (ip_address,))
+
+                threat_data = cursor.fetchone()
+
+                if not threat_data or not threat_data['overall_threat_level']:
+                    return {
+                        'should_block': False,
+                        'reason': 'No threat intelligence data available',
+                        'threat_level': None,
+                        'confidence': 0
+                    }
+
+                current_threat = threat_data['overall_threat_level']
+                current_confidence = float(threat_data['threat_confidence'] or 0)
+
+                # Check if threat level meets threshold
+                if (threat_priority.get(current_threat, 0) >= threat_priority.get(min_threat_level, 0) and
+                    current_confidence >= min_confidence):
+
+                    return {
+                        'should_block': True,
+                        'reason': f"Threat level '{current_threat}' (confidence: {current_confidence:.2f}) exceeds threshold '{min_threat_level}'",
+                        'threat_level': current_threat,
+                        'confidence': current_confidence
+                    }
+
+                return {
+                    'should_block': False,
+                    'reason': f"Threat level '{current_threat}' below threshold '{min_threat_level}'",
+                    'threat_level': current_threat,
+                    'confidence': current_confidence
+                }
+
+            finally:
+                cursor.close()
+                conn.close()
+
+        except Exception as e:
+            print(f"❌ Error evaluating threat threshold rule: {e}")
+            return {
+                'should_block': False,
+                'reason': f"Error: {str(e)}",
+                'threat_level': None,
+                'confidence': 0
+            }
+
+    @staticmethod
+    def evaluate_rules_for_ip(ip_address):
+        """
+        Evaluate all enabled rules for an IP address
+
+        Returns:
+            list: List of rule evaluation results
+        """
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        results = []
+
+        try:
+            # Get all enabled rules, ordered by priority
+            cursor.execute("""
+                SELECT
+                    id,
+                    rule_name,
+                    rule_type,
+                    priority,
+                    conditions,
+                    block_duration_minutes,
+                    auto_unblock
+                FROM blocking_rules
+                WHERE is_enabled = TRUE
+                ORDER BY priority DESC, id ASC
+            """)
+
+            rules = cursor.fetchall()
+
+            for rule in rules:
+                # Parse JSON conditions
+                rule['conditions'] = json.loads(rule['conditions']) if isinstance(rule['conditions'], str) else rule['conditions']
+
+                # Evaluate based on rule type
+                if rule['rule_type'] == 'brute_force':
+                    eval_result = BlockingEngine.evaluate_brute_force_rule(rule, ip_address)
+                elif rule['rule_type'] == 'api_reputation':
+                    eval_result = BlockingEngine.evaluate_threat_threshold_rule(rule, ip_address)
+                else:
+                    # Other rule types not implemented yet
+                    eval_result = {
+                        'should_block': False,
+                        'reason': f"Rule type '{rule['rule_type']}' not implemented"
+                    }
+
+                eval_result['rule'] = rule
+                results.append(eval_result)
+
+            return results
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    @staticmethod
+    def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_id=None,
+                 trigger_event_id=None, failed_attempts=0, threat_level=None,
+                 block_duration_minutes=1440, auto_unblock=True, created_by_user_id=None):
+        """
+        Block an IP address
+
+        Args:
+            ip_address (str): IP address to block
+            block_reason (str): Reason for blocking
+            block_source (str): manual, rule_based, ml_threshold, api_reputation, anomaly_detection
+            blocking_rule_id (int): ID of rule that triggered block (if applicable)
+            trigger_event_id (int): ID of event that triggered block
+            failed_attempts (int): Number of failed attempts
+            threat_level (str): Threat level assessment
+            block_duration_minutes (int): How long to block (0 = permanent)
+            auto_unblock (bool): Automatically unblock after duration
+            created_by_user_id (int): User ID if manually blocked
+
+        Returns:
+            dict: {
+                'success': bool,
+                'block_id': int,
+                'message': str
+            }
+        """
+        try:
+            # Convert IP to binary
+            ip_binary = ip_to_binary(ip_address)
+
+            # Calculate unblock time
+            if block_duration_minutes > 0 and auto_unblock:
+                unblock_at = datetime.now() + timedelta(minutes=block_duration_minutes)
+            else:
+                unblock_at = None
+
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            try:
+                # Check if IP is already blocked and active
+                cursor.execute("""
+                    SELECT id FROM ip_blocks
+                    WHERE ip_address_text = %s AND is_active = TRUE
+                """, (ip_address,))
+
+                existing_block = cursor.fetchone()
+
+                if existing_block:
+                    return {
+                        'success': False,
+                        'block_id': existing_block[0],
+                        'message': f'IP {ip_address} is already blocked'
+                    }
+
+                # Insert block
+                cursor.execute("""
+                    INSERT INTO ip_blocks (
+                        ip_address,
+                        ip_address_text,
+                        block_reason,
+                        block_source,
+                        blocking_rule_id,
+                        trigger_event_id,
+                        failed_attempts,
+                        threat_level,
+                        is_active,
+                        blocked_at,
+                        unblock_at,
+                        auto_unblock,
+                        created_by_user_id
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s, %s, %s
+                    )
+                """, (
+                    ip_binary,
+                    ip_address,
+                    block_reason,
+                    block_source,
+                    blocking_rule_id,
+                    trigger_event_id,
+                    failed_attempts,
+                    threat_level,
+                    unblock_at,
+                    auto_unblock,
+                    created_by_user_id
+                ))
+
+                block_id = cursor.lastrowid
+
+                # Log blocking action
+                action_uuid = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO blocking_actions (
+                        action_uuid,
+                        ip_block_id,
+                        ip_address_text,
+                        action_type,
+                        action_source,
+                        reason,
+                        performed_by_user_id,
+                        triggered_by_rule_id,
+                        triggered_by_event_id
+                    ) VALUES (
+                        %s, %s, %s, 'blocked', %s, %s, %s, %s, %s
+                    )
+                """, (
+                    action_uuid,
+                    block_id,
+                    ip_address,
+                    'rule' if block_source == 'rule_based' else 'manual',
+                    block_reason,
+                    created_by_user_id,
+                    blocking_rule_id,
+                    trigger_event_id
+                ))
+
+                # Update rule statistics if rule-based
+                if blocking_rule_id:
+                    cursor.execute("""
+                        UPDATE blocking_rules
+                        SET times_triggered = times_triggered + 1,
+                            ips_blocked_total = ips_blocked_total + 1,
+                            last_triggered_at = NOW()
+                        WHERE id = %s
+                    """, (blocking_rule_id,))
+
+                conn.commit()
+
+                print(f"🚫 Blocked IP: {ip_address} - {block_reason}")
+
+                return {
+                    'success': True,
+                    'block_id': block_id,
+                    'message': f'IP {ip_address} blocked successfully',
+                    'unblock_at': unblock_at.isoformat() if unblock_at else None
+                }
+
+            except Exception as e:
+                conn.rollback()
+                raise e
+            finally:
+                cursor.close()
+                conn.close()
+
+        except Exception as e:
+            print(f"❌ Error blocking IP {ip_address}: {e}")
+            return {
+                'success': False,
+                'block_id': None,
+                'message': f'Failed to block IP: {str(e)}'
+            }
+
+    @staticmethod
+    def unblock_ip(ip_address, unblock_reason='Manual unblock', unblocked_by_user_id=None):
+        """
+        Unblock an IP address
+
+        Returns:
+            dict: {
+                'success': bool,
+                'message': str
+            }
+        """
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            try:
+                # Find active block
+                cursor.execute("""
+                    SELECT id FROM ip_blocks
+                    WHERE ip_address_text = %s AND is_active = TRUE
+                """, (ip_address,))
+
+                block = cursor.fetchone()
+
+                if not block:
+                    return {
+                        'success': False,
+                        'message': f'No active block found for IP {ip_address}'
+                    }
+
+                block_id = block['id']
+
+                # Update block to inactive
+                cursor.execute("""
+                    UPDATE ip_blocks
+                    SET is_active = FALSE,
+                        manually_unblocked_at = NOW(),
+                        unblocked_by_user_id = %s,
+                        unblock_reason = %s
+                    WHERE id = %s
+                """, (unblocked_by_user_id, unblock_reason, block_id))
+
+                # Log unblock action
+                action_uuid = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO blocking_actions (
+                        action_uuid,
+                        ip_block_id,
+                        ip_address_text,
+                        action_type,
+                        action_source,
+                        reason,
+                        performed_by_user_id
+                    ) VALUES (
+                        %s, %s, %s, 'unblocked', 'manual', %s, %s
+                    )
+                """, (action_uuid, block_id, ip_address, unblock_reason, unblocked_by_user_id))
+
+                conn.commit()
+
+                print(f"✅ Unblocked IP: {ip_address} - {unblock_reason}")
+
+                return {
+                    'success': True,
+                    'message': f'IP {ip_address} unblocked successfully'
+                }
+
+            except Exception as e:
+                conn.rollback()
+                raise e
+            finally:
+                cursor.close()
+                conn.close()
+
+        except Exception as e:
+            print(f"❌ Error unblocking IP {ip_address}: {e}")
+            return {
+                'success': False,
+                'message': f'Failed to unblock IP: {str(e)}'
+            }
+
+    @staticmethod
+    def check_and_block_ip(ip_address):
+        """
+        Check all rules for an IP and block if any rule triggers
+
+        Returns:
+            dict: {
+                'blocked': bool,
+                'block_id': int or None,
+                'triggered_rules': list,
+                'message': str
+            }
+        """
+        # Evaluate all rules
+        eval_results = BlockingEngine.evaluate_rules_for_ip(ip_address)
+
+        triggered_rules = [r for r in eval_results if r['should_block']]
+
+        if not triggered_rules:
+            return {
+                'blocked': False,
+                'block_id': None,
+                'triggered_rules': [],
+                'message': 'No rules triggered'
+            }
+
+        # Block based on highest priority rule
+        rule_to_apply = triggered_rules[0]  # Already sorted by priority
+        rule = rule_to_apply['rule']
+
+        # Block the IP
+        block_result = BlockingEngine.block_ip(
+            ip_address=ip_address,
+            block_reason=rule_to_apply['reason'],
+            block_source='rule_based',
+            blocking_rule_id=rule['id'],
+            trigger_event_id=rule_to_apply.get('trigger_event_id'),
+            failed_attempts=rule_to_apply.get('failed_attempts', 0),
+            threat_level=rule_to_apply.get('threat_level'),
+            block_duration_minutes=rule['block_duration_minutes'],
+            auto_unblock=rule['auto_unblock']
+        )
+
+        return {
+            'blocked': block_result['success'],
+            'block_id': block_result['block_id'],
+            'triggered_rules': [r['rule']['rule_name'] for r in triggered_rules],
+            'message': block_result['message']
+        }
+
+    @staticmethod
+    def cleanup_expired_blocks():
+        """
+        Deactivate expired blocks (where unblock_at < NOW())
+
+        Returns:
+            int: Number of blocks cleaned up
+        """
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            try:
+                # Deactivate expired blocks
+                cursor.execute("""
+                    UPDATE ip_blocks
+                    SET is_active = FALSE
+                    WHERE is_active = TRUE
+                    AND auto_unblock = TRUE
+                    AND unblock_at IS NOT NULL
+                    AND unblock_at <= NOW()
+                """)
+
+                count = cursor.rowcount
+                conn.commit()
+
+                if count > 0:
+                    print(f"🧹 Cleaned up {count} expired IP blocks")
+
+                return count
+
+            finally:
+                cursor.close()
+                conn.close()
+
+        except Exception as e:
+            print(f"❌ Error cleaning up expired blocks: {e}")
+            return 0
+
+
+# Convenience functions
+def evaluate_rules_for_ip(ip_address):
+    """Evaluate all rules for an IP address"""
+    return BlockingEngine.evaluate_rules_for_ip(ip_address)
+
+
+def check_and_block_ip(ip_address):
+    """Check rules and block IP if triggered"""
+    return BlockingEngine.check_and_block_ip(ip_address)
+
+
+def block_ip_manual(ip_address, reason, user_id=None, duration_minutes=1440):
+    """Manually block an IP address"""
+    return BlockingEngine.block_ip(
+        ip_address=ip_address,
+        block_reason=reason,
+        block_source='manual',
+        block_duration_minutes=duration_minutes,
+        created_by_user_id=user_id
+    )
+
+
+def unblock_ip(ip_address, reason='Manual unblock', user_id=None):
+    """Unblock an IP address"""
+    return BlockingEngine.unblock_ip(ip_address, reason, user_id)
