@@ -3,6 +3,9 @@
 async function loadAgents() {
     try {
         const response = await fetch('/api/agents/list');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.success) {
@@ -51,6 +54,9 @@ async function approveAgent(agentId) {
         const response = await fetch(`/api/agents/${agentId}/approve`, {
             method: 'POST'
         });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.success) {
@@ -73,6 +79,9 @@ async function deactivateAgent(agentId) {
         const response = await fetch(`/api/agents/${agentId}/deactivate`, {
             method: 'POST'
         });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.success) {
@@ -91,6 +100,9 @@ async function deactivateAgent(agentId) {
 async function loadAgentStats() {
     try {
         const response = await fetch('/api/agents/stats');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.success) {

@@ -1,71 +1,99 @@
 <!-- SSH Guardian v3.0 - Events Timeline Page -->
 <div id="page-events-timeline" class="page-content" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 4px 0; font-size: 24px; font-weight: 600;">Events Timeline</h2>
             <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Visualize authentication events over time</p>
         </div>
-        <button id="timeline-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-            ↻ Refresh
-        </button>
-    </div>
-
-    <!-- Filters -->
-    <div class="card" style="padding: 20px; margin-bottom: 24px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-            <div>
-                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Interval</label>
-                <select id="timeline-interval" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
-                    <option value="hour">Hourly</option>
-                    <option value="day" selected>Daily</option>
-                    <option value="week">Weekly</option>
-                </select>
-            </div>
-            <div>
-                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Range</label>
-                <select id="timeline-days" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
-                    <option value="1">Last 24 Hours</option>
-                    <option value="3">Last 3 Days</option>
-                    <option value="7" selected>Last 7 Days</option>
-                    <option value="14">Last 14 Days</option>
-                    <option value="30">Last 30 Days</option>
-                    <option value="60">Last 60 Days</option>
-                    <option value="90">Last 90 Days</option>
-                </select>
+        <div class="page-header-actions" style="display: flex; align-items: center; gap: 12px;">
+            <button id="timeline-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                ↻ Refresh
+            </button>
+            <div class="cache-indicator loading" data-cache-endpoint="events_timeline">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadEventsTimelinePage()" title="Refresh data">↻</button>
             </div>
         </div>
     </div>
 
-    <!-- Timeline Visualization -->
-    <div class="card" style="padding: 20px; margin-bottom: 24px;">
-        <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600;">Timeline Visualization</h3>
-        <div id="timeline-chart-container">
-            <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Loading timeline...</p>
-        </div>
+    <!-- Loading State -->
+    <div id="timeline-loading" style="text-align: center; padding: 60px; color: var(--text-secondary);">
+        <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--azure-blue); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 16px;">Loading timeline data...</p>
     </div>
 
-    <!-- Timeline Data Table -->
-    <div class="card" style="padding: 20px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Timeline Data</h3>
-        <div class="table-wrapper">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
-                        <th style="padding: 12px; text-align: center; font-weight: 600;">Total</th>
-                        <th style="padding: 12px; text-align: center; font-weight: 600;">Failed</th>
-                        <th style="padding: 12px; text-align: center; font-weight: 600;">Successful</th>
-                        <th style="padding: 12px; text-align: center; font-weight: 600;">Invalid</th>
-                        <th style="padding: 12px; text-align: center; font-weight: 600;">Anomalies</th>
-                        <th style="padding: 12px; text-align: center; font-weight: 600;">Avg Risk</th>
-                    </tr>
-                </thead>
-                <tbody id="timeline-table-body">
-                    <tr>
-                        <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-secondary);">Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
+    <!-- Error State -->
+    <div id="timeline-error" style="display: none; background: #FDE7E9; border: 1px solid #D13438; color: #A80000; padding: 20px; border-radius: 4px; text-align: center; margin-bottom: 24px;">
+        Error loading timeline data
+    </div>
+
+    <!-- Main Content (hidden until loaded) -->
+    <div id="timeline-content" style="display: none;">
+        <!-- Filters -->
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Interval</label>
+                    <select id="timeline-interval" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                        <option value="hour">Hourly (max 7 days)</option>
+                        <option value="day" selected>Daily</option>
+                        <option value="week">Weekly</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Range</label>
+                    <select id="timeline-days" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                        <option value="1">Last 24 Hours</option>
+                        <option value="3">Last 3 Days</option>
+                        <option value="7" selected>Last 7 Days</option>
+                        <option value="14">Last 14 Days</option>
+                        <option value="30">Last 30 Days</option>
+                        <option value="60">Last 60 Days</option>
+                        <option value="90">Last 90 Days</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Visualization -->
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600;">Timeline Visualization</h3>
+            <div id="timeline-chart-container">
+                <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Loading timeline...</p>
+            </div>
+        </div>
+
+        <!-- Timeline Data Table -->
+        <div class="card" style="padding: 20px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Timeline Data</h3>
+            <div class="table-wrapper">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                            <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600;">Total</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600;">Failed</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600;">Successful</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600;">Invalid</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600;">Anomalies</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600;">Avg Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="timeline-table-body">
+                        <tr>
+                            <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>

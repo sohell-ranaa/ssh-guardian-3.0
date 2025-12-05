@@ -39,6 +39,13 @@ from routes.notification_channels_routes import notification_channels_routes
 from routes.daily_reports_routes import daily_reports_routes
 from routes.trends_reports_routes import trends_reports_routes
 from routes.simulation_routes import simulation_routes
+from routes.ml_routes import ml_routes
+from routes.demo_routes import demo_routes
+from routes.system_routes import system_routes
+from routes.cache_settings_routes import cache_settings_routes
+from routes.export_routes import export_routes
+from routes.event_actions_routes import event_actions_routes
+from routes.ip_info_routes import ip_info_routes
 from auth import SessionManager, login_required
 
 # Import API blueprints
@@ -76,6 +83,13 @@ app.register_blueprint(notification_channels_routes, url_prefix='/api/dashboard/
 app.register_blueprint(daily_reports_routes, url_prefix='/api/dashboard/daily-reports')  # Daily reports
 app.register_blueprint(trends_reports_routes, url_prefix='/api/dashboard/trends-reports')  # Trends reports
 app.register_blueprint(simulation_routes, url_prefix='/api/simulation')  # Simulation API
+app.register_blueprint(ml_routes)  # ML Intelligence API
+app.register_blueprint(demo_routes, url_prefix='/api/demo')  # Demo scenarios API
+app.register_blueprint(system_routes, url_prefix='/api/dashboard/system')  # System status & cache API
+app.register_blueprint(cache_settings_routes, url_prefix='/api/dashboard/cache-settings')  # Cache settings API
+app.register_blueprint(export_routes)  # Data export API
+app.register_blueprint(event_actions_routes)  # Event actions API (whitelist, watchlist, notes, reports)
+app.register_blueprint(ip_info_routes)  # IP geolocation info API (FreeIPAPI)
 app.register_blueprint(events_api)  # API for agent event submission
 
 
@@ -120,16 +134,164 @@ def agents_test():
         return f.read()
 
 
+@app.errorhandler(401)
+def unauthorized_error(error):
+    """401 Unauthorized error handler"""
+    # For API requests, return JSON
+    if _is_api_request():
+        return {'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}, 401
+
+    # For browser requests, show error page
+    return render_template('errors/base_error.html',
+        code=401,
+        title='Authentication Required',
+        message='You need to sign in to access this page. Please log in with your credentials to continue.',
+        icon='🔐',
+        header_color='#0078D4',
+        header_color_dark='#004C87',
+        show_login=True,
+        error_id=None,
+        request_path=request.path,
+        timestamp=None
+    ), 401
+
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    """403 Forbidden error handler"""
+    # For API requests, return JSON
+    if _is_api_request():
+        return {'error': 'Access forbidden', 'code': 'FORBIDDEN'}, 403
+
+    # For browser requests, show error page
+    return render_template('errors/base_error.html',
+        code=403,
+        title='Access Denied',
+        message="You don't have permission to access this resource. Contact your administrator if you believe this is an error.",
+        icon='🚫',
+        header_color='#D13438',
+        header_color_dark='#A52A2A',
+        show_login=False,
+        error_id=None,
+        request_path=request.path,
+        timestamp=None
+    ), 403
+
+
 @app.errorhandler(404)
-def not_found(error):
-    """404 error handler"""
-    return redirect(url_for('index'))
+def not_found_error(error):
+    """404 Not Found error handler"""
+    # For API requests, return JSON
+    if _is_api_request():
+        return {'error': 'Resource not found', 'code': 'NOT_FOUND'}, 404
+
+    # For browser requests, show error page
+    return render_template('errors/base_error.html',
+        code=404,
+        title='Page Not Found',
+        message="The page you're looking for doesn't exist or has been moved. Check the URL or navigate back to the dashboard.",
+        icon='🔍',
+        header_color='#8764B8',
+        header_color_dark='#5C4E8E',
+        show_login=False,
+        error_id=None,
+        request_path=request.path,
+        timestamp=None
+    ), 404
 
 
 @app.errorhandler(500)
 def internal_error(error):
-    """500 error handler"""
-    return {'error': 'Internal server error'}, 500
+    """500 Internal Server error handler"""
+    import uuid
+    from datetime import datetime
+
+    error_id = str(uuid.uuid4())[:8].upper()
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Log the error
+    print(f"❌ [ERROR {error_id}] Internal server error at {request.path}: {error}")
+
+    # For API requests, return JSON
+    if _is_api_request():
+        return {'error': 'Internal server error', 'code': 'SERVER_ERROR', 'error_id': error_id}, 500
+
+    # For browser requests, show error page
+    return render_template('errors/base_error.html',
+        code=500,
+        title='Something Went Wrong',
+        message="We encountered an unexpected error. Our team has been notified. Please try again later or contact support if the problem persists.",
+        icon='⚠️',
+        header_color='#D13438',
+        header_color_dark='#8B0000',
+        show_login=False,
+        error_id=error_id,
+        request_path=request.path,
+        timestamp=timestamp
+    ), 500
+
+
+@app.errorhandler(502)
+def bad_gateway_error(error):
+    """502 Bad Gateway error handler"""
+    if _is_api_request():
+        return {'error': 'Bad gateway', 'code': 'BAD_GATEWAY'}, 502
+
+    return render_template('errors/base_error.html',
+        code=502,
+        title='Bad Gateway',
+        message="The server received an invalid response. This usually resolves itself. Please try again in a few moments.",
+        icon='🔌',
+        header_color='#FFB900',
+        header_color_dark='#CC9400',
+        show_login=False,
+        error_id=None,
+        request_path=request.path,
+        timestamp=None
+    ), 502
+
+
+@app.errorhandler(503)
+def service_unavailable_error(error):
+    """503 Service Unavailable error handler"""
+    if _is_api_request():
+        return {'error': 'Service temporarily unavailable', 'code': 'SERVICE_UNAVAILABLE'}, 503
+
+    return render_template('errors/base_error.html',
+        code=503,
+        title='Service Unavailable',
+        message="The service is temporarily unavailable due to maintenance or high load. Please try again in a few minutes.",
+        icon='🔧',
+        header_color='#FFB900',
+        header_color_dark='#CC9400',
+        show_login=False,
+        error_id=None,
+        request_path=request.path,
+        timestamp=None
+    ), 503
+
+
+def _is_api_request():
+    """Check if request is an API call (expects JSON) or browser request"""
+    # Check Accept header
+    accept = request.headers.get('Accept', '')
+    if 'application/json' in accept and 'text/html' not in accept:
+        return True
+
+    # Check X-Requested-With header (AJAX requests)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return True
+
+    # Check if request path starts with /api/
+    if request.path.startswith('/api/'):
+        return True
+
+    # Check Content-Type for JSON
+    content_type = request.headers.get('Content-Type', '')
+    if 'application/json' in content_type:
+        return True
+
+    return False
 
 
 # Health check endpoint

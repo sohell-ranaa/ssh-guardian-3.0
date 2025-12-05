@@ -1,6 +1,6 @@
 """
 SSH Guardian v3.0 - Agent Statistics
-Provides agent analytics and statistics
+Provides agent analytics and statistics with Redis caching
 """
 
 from flask import jsonify
@@ -10,15 +10,32 @@ from pathlib import Path
 # Add project paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key
 from . import agent_routes
+
+# Cache TTL for agent stats (30 seconds - agents change status frequently)
+AGENT_STATS_TTL = 30
 
 
 @agent_routes.route('/agents/stats', methods=['GET'])
 def agent_stats():
-    """Get agent statistics"""
+    """Get agent statistics with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('agents', 'stats')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'stats': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -62,17 +79,23 @@ def agent_stats():
         cursor.close()
         conn.close()
 
+        stats = {
+            'total_agents': total_agents,
+            'active_agents': active_agents,
+            'approved_agents': approved_agents,
+            'online_agents': online_agents,
+            'total_events_from_agents': int(total_events),
+            'total_batches': total_batches,
+            'batches_last_24h': recent_batches
+        }
+
+        # Cache the result
+        cache.set(cache_k, stats, AGENT_STATS_TTL)
+
         return jsonify({
             'success': True,
-            'stats': {
-                'total_agents': total_agents,
-                'active_agents': active_agents,
-                'approved_agents': approved_agents,
-                'online_agents': online_agents,
-                'total_events_from_agents': total_events,
-                'total_batches': total_batches,
-                'batches_last_24h': recent_batches
-            }
+            'stats': stats,
+            'from_cache': False
         })
 
     except Exception as e:

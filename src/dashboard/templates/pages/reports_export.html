@@ -1,0 +1,358 @@
+<!-- SSH Guardian v3.0 - Export Data Page -->
+<div id="page-reports-export" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">Export Data</h1>
+        <p class="page-subtitle">Export security data in various formats for analysis and reporting</p>
+    </div>
+
+    <!-- Export Options -->
+    <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600;">Export Configuration</h3>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+            <!-- Data Type Selection -->
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    Data Type
+                </label>
+                <select id="export-data-type" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="events">Authentication Events</option>
+                    <option value="blocked_ips">Blocked IPs</option>
+                    <option value="ip_stats">IP Statistics</option>
+                    <option value="threat_intel">Threat Intelligence</option>
+                    <option value="geoip">GeoIP Data</option>
+                    <option value="audit">Audit Logs</option>
+                    <option value="notifications">Notification History</option>
+                    <option value="ml_predictions">ML Predictions</option>
+                </select>
+            </div>
+
+            <!-- Date Range -->
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    Date Range
+                </label>
+                <select id="export-date-range" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="today">Today</option>
+                    <option value="7days" selected>Last 7 Days</option>
+                    <option value="30days">Last 30 Days</option>
+                    <option value="90days">Last 90 Days</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+
+            <!-- Format -->
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    Export Format
+                </label>
+                <select id="export-format" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="csv">CSV (Comma Separated)</option>
+                    <option value="json">JSON</option>
+                    <option value="xlsx">Excel (XLSX)</option>
+                </select>
+            </div>
+
+            <!-- Limit -->
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                    Max Records
+                </label>
+                <select id="export-limit" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="1000">1,000 records</option>
+                    <option value="5000">5,000 records</option>
+                    <option value="10000" selected>10,000 records</option>
+                    <option value="50000">50,000 records</option>
+                    <option value="100000">100,000 records</option>
+                    <option value="all">All records (may be slow)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Custom Date Range (hidden by default) -->
+        <div id="custom-date-range" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                        Start Date
+                    </label>
+                    <input type="date" id="export-start-date" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">
+                        End Date
+                    </label>
+                    <input type="date" id="export-end-date" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Button -->
+        <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center;">
+            <button onclick="startExport()" style="padding: 12px 24px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                Export Data
+            </button>
+            <span id="export-status" style="color: var(--text-secondary); font-size: 13px;"></span>
+        </div>
+    </div>
+
+    <!-- Data Preview -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Data Preview</h3>
+            <button onclick="refreshExportPreview()" style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; cursor: pointer; font-size: 12px;">
+                Refresh Preview
+            </button>
+        </div>
+        <div id="export-preview-container" style="overflow-x: auto;">
+            <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                Select export options and click "Refresh Preview" to see sample data
+            </div>
+        </div>
+        <div id="export-preview-info" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 12px;"></div>
+    </div>
+
+    <!-- Export History -->
+    <div class="card">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Recent Exports</h3>
+        <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Data Type</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Format</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Records</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Size</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="export-history-tbody">
+                    <tr>
+                        <td colspan="6" style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                            No recent exports
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Export page initialization
+function initReportsExportPage() {
+    // Show/hide custom date range
+    document.getElementById('export-date-range').addEventListener('change', function() {
+        const customRange = document.getElementById('custom-date-range');
+        customRange.style.display = this.value === 'custom' ? 'block' : 'none';
+    });
+
+    // Set default dates for custom range
+    const today = new Date().toISOString().split('T')[0];
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    document.getElementById('export-end-date').value = today;
+    document.getElementById('export-start-date').value = weekAgo;
+}
+
+// Refresh preview based on current selections
+async function refreshExportPreview() {
+    const container = document.getElementById('export-preview-container');
+    const infoEl = document.getElementById('export-preview-info');
+
+    container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading preview...</div>';
+
+    const dataType = document.getElementById('export-data-type').value;
+    const dateRange = document.getElementById('export-date-range').value;
+
+    try {
+        // Build date params
+        const params = new URLSearchParams({ limit: 10 });
+
+        if (dateRange === 'custom') {
+            params.append('start_date', document.getElementById('export-start-date').value);
+            params.append('end_date', document.getElementById('export-end-date').value);
+        } else if (dateRange !== 'today') {
+            const days = parseInt(dateRange.replace('days', ''));
+            const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            params.append('start_date', startDate);
+        }
+
+        // Get preview data based on type
+        let endpoint = '';
+        switch (dataType) {
+            case 'events':
+                endpoint = '/api/dashboard/events/list';
+                break;
+            case 'blocked_ips':
+                endpoint = '/api/dashboard/blocking/blocks/list';
+                break;
+            case 'ip_stats':
+                endpoint = '/api/dashboard/ip-stats/list';
+                break;
+            case 'threat_intel':
+                endpoint = '/api/threat-intel/recent';
+                break;
+            case 'geoip':
+                endpoint = '/api/geoip/recent';
+                break;
+            case 'audit':
+                endpoint = '/api/dashboard/audit/list';
+                break;
+            case 'notifications':
+                endpoint = '/api/dashboard/notification-history/list';
+                break;
+            case 'ml_predictions':
+                endpoint = '/api/ml/predictions/recent';
+                break;
+            default:
+                endpoint = '/api/dashboard/events/list';
+        }
+
+        const response = await fetch(`${endpoint}?${params}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const items = data.events || data.blocks || data.data || data.logs || data.notifications || [];
+
+            if (items.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No data available for the selected criteria</div>';
+                infoEl.textContent = '';
+                return;
+            }
+
+            // Build preview table
+            const keys = Object.keys(items[0]).slice(0, 6);
+            let html = '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: var(--background);">';
+            keys.forEach(key => {
+                html += `<th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--border);">${key}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            items.slice(0, 5).forEach(item => {
+                html += '<tr style="border-bottom: 1px solid var(--border-light);">';
+                keys.forEach(key => {
+                    let value = item[key];
+                    if (typeof value === 'object') value = JSON.stringify(value).slice(0, 50);
+                    if (typeof value === 'string' && value.length > 40) value = value.slice(0, 40) + '...';
+                    html += `<td style="padding: 8px;">${value ?? '-'}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+
+            container.innerHTML = html;
+
+            const total = data.pagination?.total || items.length;
+            infoEl.textContent = `Showing 5 of ${total.toLocaleString()} total records. Export will include up to ${document.getElementById('export-limit').value === 'all' ? 'all' : parseInt(document.getElementById('export-limit').value).toLocaleString()} records.`;
+        } else {
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #D13438;">Failed to load preview</div>';
+        }
+    } catch (error) {
+        console.error('Preview error:', error);
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #D13438;">Error loading preview</div>';
+    }
+}
+
+// Start export
+async function startExport() {
+    const statusEl = document.getElementById('export-status');
+    statusEl.textContent = 'Preparing export...';
+    statusEl.style.color = 'var(--text-secondary)';
+
+    const dataType = document.getElementById('export-data-type').value;
+    const dateRange = document.getElementById('export-date-range').value;
+    const format = document.getElementById('export-format').value;
+    const limit = document.getElementById('export-limit').value;
+
+    try {
+        // Build export params
+        const params = new URLSearchParams({
+            format: format,
+            limit: limit === 'all' ? '1000000' : limit
+        });
+
+        if (dateRange === 'custom') {
+            params.append('start_date', document.getElementById('export-start-date').value);
+            params.append('end_date', document.getElementById('export-end-date').value);
+        } else if (dateRange !== 'today') {
+            const days = parseInt(dateRange.replace('days', ''));
+            const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            params.append('start_date', startDate);
+        }
+
+        statusEl.textContent = 'Generating export file...';
+
+        // Request export
+        const response = await fetch(`/api/dashboard/export/${dataType}?${params}`);
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Export failed');
+        }
+
+        // Get filename from headers or generate one
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `${dataType}_export_${new Date().toISOString().split('T')[0]}.${format}`;
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename="?(.+)"?/);
+            if (match) filename = match[1];
+        }
+
+        // Download the file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        statusEl.textContent = `Export complete: ${filename}`;
+        statusEl.style.color = '#107C10';
+
+        // Add to history
+        addExportToHistory(dataType, format, 'Completed');
+
+    } catch (error) {
+        console.error('Export error:', error);
+        statusEl.textContent = `Export failed: ${error.message}`;
+        statusEl.style.color = '#D13438';
+    }
+}
+
+// Add export to local history
+function addExportToHistory(dataType, format, status) {
+    const tbody = document.getElementById('export-history-tbody');
+    const now = new Date().toLocaleString();
+
+    const row = document.createElement('tr');
+    row.style.borderBottom = '1px solid var(--border-light)';
+    row.innerHTML = `
+        <td style="padding: 12px;">${now}</td>
+        <td style="padding: 12px;">${dataType}</td>
+        <td style="padding: 12px;">${format.toUpperCase()}</td>
+        <td style="padding: 12px;">-</td>
+        <td style="padding: 12px;">-</td>
+        <td style="padding: 12px;">
+            <span style="padding: 4px 8px; background: ${status === 'Completed' ? '#DFF6DD' : '#FED9CC'}; color: ${status === 'Completed' ? '#107C10' : '#D13438'}; border-radius: 4px; font-size: 11px;">${status}</span>
+        </td>
+    `;
+
+    // Remove "no exports" message if present
+    if (tbody.querySelector('td[colspan="6"]')) {
+        tbody.innerHTML = '';
+    }
+
+    tbody.insertBefore(row, tbody.firstChild);
+}
+
+// Load page function
+window.loadReportsExportPage = function() {
+    console.log('Loading Reports Export page...');
+    initReportsExportPage();
+};
+</script>

@@ -1,6 +1,6 @@
 """
 SSH Guardian v3.0 - GeoIP Lookup Routes
-Handles IP geolocation lookups and statistics
+Handles IP geolocation lookups and statistics with Redis caching
 """
 
 from flask import Blueprint, request, jsonify
@@ -14,14 +14,39 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from geoip import GeoIPLookup
+from cache import get_cache, cache_key
 
 geoip_routes = Blueprint('geoip_routes', __name__)
+
+# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
+GEOIP_LOOKUP_TTL = 7200   # 2 hours - GeoIP data rarely changes
+GEOIP_STATS_TTL = 3600    # 1 hour for stats
+GEOIP_RECENT_TTL = 1800   # 30 minutes for recent list
+GEOIP_TOP_COUNTRIES_TTL = 7200  # 2 hours for top countries
+
+
+def invalidate_geoip_cache():
+    """Invalidate all GeoIP-related caches"""
+    cache = get_cache()
+    cache.delete_pattern('geoip')
 
 
 @geoip_routes.route('/api/geoip/lookup/<ip_address>', methods=['GET'])
 def lookup_ip(ip_address):
-    """Lookup GeoIP information for an IP address"""
+    """Lookup GeoIP information for an IP address with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('geoip', 'lookup', ip_address)
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -41,9 +66,25 @@ def lookup_ip(ip_address):
             if 'ip_address' in result:
                 del result['ip_address']
 
+            # Convert datetime fields
+            if result.get('first_seen'):
+                result['first_seen'] = result['first_seen'].isoformat()
+            if result.get('last_seen'):
+                result['last_seen'] = result['last_seen'].isoformat()
+
+            # Convert Decimal fields
+            if result.get('latitude') is not None:
+                result['latitude'] = float(result['latitude'])
+            if result.get('longitude') is not None:
+                result['longitude'] = float(result['longitude'])
+
+            # Cache the result
+            cache.set(cache_k, result, GEOIP_LOOKUP_TTL)
+
             return jsonify({
                 'success': True,
-                'data': result
+                'data': result,
+                'from_cache': False
             })
         else:
             return jsonify({
@@ -60,8 +101,20 @@ def lookup_ip(ip_address):
 
 @geoip_routes.route('/api/geoip/stats', methods=['GET'])
 def get_stats():
-    """Get GeoIP statistics"""
+    """Get GeoIP statistics with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('geoip', 'stats')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'stats': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -94,13 +147,25 @@ def get_stats():
         cursor.close()
         conn.close()
 
+        # Convert Decimal to int for threat stats
+        if threat_stats:
+            for key in threat_stats:
+                if threat_stats[key] is not None:
+                    threat_stats[key] = int(threat_stats[key])
+
+        stats = {
+            'total_ips': total,
+            'top_countries': top_countries,
+            'threat_indicators': threat_stats
+        }
+
+        # Cache the result
+        cache.set(cache_k, stats, GEOIP_STATS_TTL)
+
         return jsonify({
             'success': True,
-            'stats': {
-                'total_ips': total,
-                'top_countries': top_countries,
-                'threat_indicators': threat_stats
-            }
+            'stats': stats,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -112,9 +177,22 @@ def get_stats():
 
 @geoip_routes.route('/api/geoip/recent', methods=['GET'])
 def get_recent():
-    """Get recently looked up IPs"""
+    """Get recently looked up IPs with caching"""
     try:
         limit = request.args.get('limit', 50, type=int)
+
+        cache = get_cache()
+        cache_k = cache_key('geoip', 'recent', str(limit))
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached['data'],
+                'total': cached['total'],
+                'from_cache': True
+            })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -145,10 +223,14 @@ def get_recent():
         cursor.close()
         conn.close()
 
+        cache_data = {'data': results, 'total': len(results)}
+        cache.set(cache_k, cache_data, GEOIP_RECENT_TTL)
+
         return jsonify({
             'success': True,
             'data': results,
-            'total': len(results)
+            'total': len(results),
+            'from_cache': False
         })
 
     except Exception as e:
@@ -167,10 +249,11 @@ def enrich_ip(ip_address):
         geo_data = geo_lookup.lookup_ip(ip_address)
 
         if geo_data:
-            # Remove binary ip_address field if present
-            if isinstance(geo_data, dict) and 'ip_address' in geo_data:
-                geo_data = geo_data.copy()
-                del geo_data['ip_address']
+            # Invalidate related caches
+            cache = get_cache()
+            cache.delete(cache_key('geoip', 'lookup', ip_address))
+            cache.delete_pattern('geoip:stats')
+            cache.delete_pattern('geoip:recent')
 
             return jsonify({
                 'success': True,

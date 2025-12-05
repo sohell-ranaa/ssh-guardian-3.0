@@ -1,6 +1,6 @@
 """
 SSH Guardian v3.0 - Agent Management
-Handles agent CRUD operations for dashboard
+Handles agent CRUD operations for dashboard with Redis caching
 """
 
 from flask import request, jsonify
@@ -10,15 +10,40 @@ from pathlib import Path
 # Add project paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key
 from . import agent_routes
+
+# Cache TTLs
+AGENTS_LIST_TTL = 30  # 30 seconds for agent list
+AGENT_DETAILS_TTL = 60  # 1 minute for agent details
+
+
+def invalidate_agents_cache():
+    """Invalidate all agent-related caches"""
+    cache = get_cache()
+    cache.delete_pattern('agents')
 
 
 @agent_routes.route('/agents/list', methods=['GET'])
 def list_agents():
-    """List all agents (for dashboard)"""
+    """List all agents (for dashboard) with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('agents', 'list')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'agents': cached['agents'],
+                'total': cached['total'],
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -44,14 +69,22 @@ def list_agents():
                 agent['created_at'] = agent['created_at'].isoformat()
             if agent['updated_at']:
                 agent['updated_at'] = agent['updated_at'].isoformat()
+            # Convert Decimal to int for total_events_sent
+            if agent['total_events_sent'] is not None:
+                agent['total_events_sent'] = int(agent['total_events_sent'])
 
         cursor.close()
         conn.close()
 
+        # Cache the result
+        cache_data = {'agents': agents, 'total': len(agents)}
+        cache.set(cache_k, cache_data, AGENTS_LIST_TTL)
+
         return jsonify({
             'success': True,
             'agents': agents,
-            'total': len(agents)
+            'total': len(agents),
+            'from_cache': False
         })
 
     except Exception as e:
@@ -86,6 +119,9 @@ def approve_agent(agent_id):
 
         cursor.close()
         conn.close()
+
+        # Invalidate cache
+        invalidate_agents_cache()
 
         return jsonify({
             'success': True,
@@ -123,6 +159,9 @@ def activate_agent(agent_id):
 
         cursor.close()
         conn.close()
+
+        # Invalidate cache
+        invalidate_agents_cache()
 
         return jsonify({
             'success': True,
@@ -162,6 +201,9 @@ def deactivate_agent(agent_id):
         cursor.close()
         conn.close()
 
+        # Invalidate cache
+        invalidate_agents_cache()
+
         return jsonify({
             'success': True,
             'message': 'Agent deactivated successfully'
@@ -176,8 +218,22 @@ def deactivate_agent(agent_id):
 
 @agent_routes.route('/agents/<int:agent_id>', methods=['GET'])
 def get_agent_details(agent_id):
-    """Get detailed agent information"""
+    """Get detailed agent information with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('agents', 'details', str(agent_id))
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'agent': cached['agent'],
+                'recent_heartbeats': cached['recent_heartbeats'],
+                'recent_batches': cached['recent_batches'],
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -228,10 +284,19 @@ def get_agent_details(agent_id):
             agent['created_at'] = agent['created_at'].isoformat()
         if agent['updated_at']:
             agent['updated_at'] = agent['updated_at'].isoformat()
+        if agent.get('approved_at'):
+            agent['approved_at'] = agent['approved_at'].isoformat()
+        # Convert Decimal to int
+        if agent['total_events_sent'] is not None:
+            agent['total_events_sent'] = int(agent['total_events_sent'])
 
         for hb in heartbeats:
             if hb['heartbeat_timestamp']:
                 hb['heartbeat_timestamp'] = hb['heartbeat_timestamp'].isoformat()
+            # Convert Decimal fields
+            for field in ['cpu_percent', 'memory_percent', 'disk_percent']:
+                if field in hb and hb[field] is not None:
+                    hb[field] = float(hb[field])
 
         for batch in batches:
             if batch['received_at']:
@@ -239,11 +304,20 @@ def get_agent_details(agent_id):
             if batch['processing_completed_at']:
                 batch['processing_completed_at'] = batch['processing_completed_at'].isoformat()
 
+        # Cache the result
+        cache_data = {
+            'agent': agent,
+            'recent_heartbeats': heartbeats,
+            'recent_batches': batches
+        }
+        cache.set(cache_k, cache_data, AGENT_DETAILS_TTL)
+
         return jsonify({
             'success': True,
             'agent': agent,
             'recent_heartbeats': heartbeats,
-            'recent_batches': batches
+            'recent_batches': batches,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -282,6 +356,9 @@ def regenerate_api_key(agent_id):
 
         cursor.close()
         conn.close()
+
+        # Invalidate cache
+        invalidate_agents_cache()
 
         return jsonify({
             'success': True,
@@ -322,6 +399,9 @@ def revoke_api_key(agent_id):
 
         cursor.close()
         conn.close()
+
+        # Invalidate cache
+        invalidate_agents_cache()
 
         return jsonify({
             'success': True,

@@ -9,10 +9,21 @@ from flask import Blueprint, jsonify, request
 # Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src"))
 
 from connection import get_connection
+from core.cache import get_cache, cache_key_hash
 
 notification_rules_routes = Blueprint('notification_rules', __name__)
+
+# Cache TTL
+NOTIFICATION_RULES_LIST_TTL = 900  # 15 minutes for notification rules list
+
+
+def invalidate_notification_rules_cache():
+    """Invalidate all notification rules caches"""
+    cache = get_cache()
+    cache.delete_pattern('notification_rules')
 
 # Valid trigger types
 VALID_TRIGGERS = [
@@ -33,8 +44,20 @@ VALID_FORMATS = ['text', 'html', 'markdown']
 
 @notification_rules_routes.route('/list', methods=['GET'])
 def list_notification_rules():
-    """Get all notification rules"""
+    """Get all notification rules with caching support"""
+    conn = None
+    cursor = None
     try:
+        # Generate cache key based on query parameters (for pagination support)
+        cache = get_cache()
+        cache_k = cache_key_hash('notification_rules', 'list')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            cached['from_cache'] = True
+            return jsonify(cached), 200
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -59,22 +82,29 @@ def list_notification_rules():
             if rule['updated_at']:
                 rule['updated_at'] = rule['updated_at'].isoformat()
 
-        cursor.close()
-        conn.close()
-
-        return jsonify({
+        response_data = {
             'success': True,
             'data': {
                 'rules': rules,
                 'total': len(rules)
             }
-        })
+        }
+
+        # Cache the result
+        cache.set(cache_k, response_data, NOTIFICATION_RULES_LIST_TTL)
+
+        return jsonify(response_data)
 
     except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_rules_routes.route('/triggers', methods=['GET'])
@@ -98,6 +128,8 @@ def list_trigger_types():
 @notification_rules_routes.route('/<int:rule_id>', methods=['GET'])
 def get_notification_rule(rule_id):
     """Get a specific notification rule"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -114,9 +146,6 @@ def get_notification_rule(rule_id):
         """, (rule_id,))
 
         rule = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
 
         if not rule:
             return jsonify({
@@ -146,11 +175,18 @@ def get_notification_rule(rule_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_rules_routes.route('/create', methods=['POST'])
 def create_notification_rule():
     """Create a new notification rule"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
 
@@ -215,8 +251,8 @@ def create_notification_rule():
             conn.commit()
             new_id = cursor.lastrowid
 
-            cursor.close()
-            conn.close()
+            # Invalidate cache after successful creation
+            invalidate_notification_rules_cache()
 
             return jsonify({
                 'success': True,
@@ -226,8 +262,6 @@ def create_notification_rule():
 
         except Exception as e:
             conn.rollback()
-            cursor.close()
-            conn.close()
 
             if 'Duplicate entry' in str(e):
                 return jsonify({
@@ -242,11 +276,18 @@ def create_notification_rule():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_rules_routes.route('/<int:rule_id>', methods=['PUT'])
 def update_notification_rule(rule_id):
     """Update a notification rule"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
 
@@ -256,8 +297,6 @@ def update_notification_rule(rule_id):
         # Check if rule exists
         cursor.execute("SELECT id FROM notification_rules WHERE id = %s", (rule_id,))
         if not cursor.fetchone():
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'Rule not found'}), 404
 
         # Build update query dynamically
@@ -274,8 +313,6 @@ def update_notification_rule(rule_id):
 
         if 'trigger_on' in data:
             if data['trigger_on'] not in VALID_TRIGGERS:
-                cursor.close()
-                conn.close()
                 return jsonify({'success': False, 'error': 'Invalid trigger type'}), 400
             updates.append("trigger_on = %s")
             params.append(data['trigger_on'])
@@ -287,8 +324,6 @@ def update_notification_rule(rule_id):
         if 'channels' in data:
             channels = data['channels']
             if not channels or not isinstance(channels, list):
-                cursor.close()
-                conn.close()
                 return jsonify({'success': False, 'error': 'At least one channel is required'}), 400
             updates.append("channels = %s")
             params.append(json.dumps(channels))
@@ -331,8 +366,6 @@ def update_notification_rule(rule_id):
             params.append(int(data['rate_limit_minutes']))
 
         if not updates:
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'No fields to update'}), 400
 
         params.append(rule_id)
@@ -341,16 +374,15 @@ def update_notification_rule(rule_id):
         try:
             cursor.execute(query, params)
             conn.commit()
+
+            # Invalidate cache after successful update
+            invalidate_notification_rules_cache()
+
         except Exception as e:
             conn.rollback()
             if 'Duplicate entry' in str(e):
-                cursor.close()
-                conn.close()
                 return jsonify({'success': False, 'error': 'Rule name already exists'}), 400
             raise e
-
-        cursor.close()
-        conn.close()
 
         return jsonify({
             'success': True,
@@ -362,11 +394,18 @@ def update_notification_rule(rule_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_rules_routes.route('/<int:rule_id>/toggle', methods=['POST'])
 def toggle_notification_rule(rule_id):
     """Toggle notification rule enabled status"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -376,8 +415,6 @@ def toggle_notification_rule(rule_id):
         rule = cursor.fetchone()
 
         if not rule:
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'Rule not found'}), 404
 
         new_status = not rule['is_enabled']
@@ -387,8 +424,9 @@ def toggle_notification_rule(rule_id):
         """, (new_status, rule_id))
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        # Invalidate cache after successful toggle
+        invalidate_notification_rules_cache()
 
         return jsonify({
             'success': True,
@@ -401,11 +439,18 @@ def toggle_notification_rule(rule_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_rules_routes.route('/<int:rule_id>', methods=['DELETE'])
 def delete_notification_rule(rule_id):
     """Delete a notification rule"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -414,13 +459,12 @@ def delete_notification_rule(rule_id):
 
         if cursor.rowcount == 0:
             conn.rollback()
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'Rule not found'}), 404
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        # Invalidate cache after successful deletion
+        invalidate_notification_rules_cache()
 
         return jsonify({
             'success': True,
@@ -432,11 +476,18 @@ def delete_notification_rule(rule_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_rules_routes.route('/<int:rule_id>/test', methods=['POST'])
 def test_notification_rule(rule_id):
     """Test a notification rule by sending a test notification"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -446,9 +497,6 @@ def test_notification_rule(rule_id):
         """, (rule_id,))
 
         rule = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
 
         if not rule:
             return jsonify({'success': False, 'error': 'Rule not found'}), 404
@@ -484,6 +532,11 @@ def test_notification_rule(rule_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def test_telegram_channel(rule):
@@ -495,6 +548,8 @@ def test_telegram_channel(rule):
 
     # If no token in rule, get from integration_config table
     if not bot_token or not chat_id:
+        conn = None
+        cursor = None
         try:
             conn = get_connection()
             cursor = conn.cursor(dictionary=True)
@@ -519,10 +574,13 @@ def test_telegram_channel(rule):
                 if row and row['config_value']:
                     chat_id = row['config_value']
 
-            cursor.close()
-            conn.close()
         except Exception as e:
             return {'success': False, 'error': f'Database error: {str(e)}'}
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     if not bot_token or not chat_id:
         return {'success': False, 'error': 'Telegram not configured - missing bot_token or chat_id'}
@@ -560,6 +618,8 @@ def test_email_channel(rule):
         return {'success': False, 'error': 'No email recipients configured'}
 
     # Get SMTP config from integration_config
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -571,9 +631,6 @@ def test_email_channel(rule):
         """)
         for row in cursor.fetchall():
             smtp_config[row['config_key']] = row['config_value']
-
-        cursor.close()
-        conn.close()
 
         if not smtp_config.get('host') or not smtp_config.get('user'):
             return {'success': False, 'error': 'SMTP not configured'}
@@ -619,6 +676,11 @@ This is a test message from SSH Guardian notification system.
         return {'success': False, 'error': 'Could not connect to SMTP server'}
     except Exception as e:
         return {'success': False, 'error': f'Email error: {str(e)}'}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def test_webhook_channel(rule):
@@ -771,6 +833,8 @@ def get_default_rules():
 @notification_rules_routes.route('/seed-defaults', methods=['POST'])
 def seed_default_rules():
     """Seed default notification rules into the database"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json() or {}
         skip_existing = data.get('skip_existing', True)
@@ -821,8 +885,10 @@ def seed_default_rules():
             created.append(rule['rule_name'])
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        # Invalidate cache after seeding rules
+        if created:
+            invalidate_notification_rules_cache()
 
         return jsonify({
             'success': True,
@@ -838,3 +904,8 @@ def seed_default_rules():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

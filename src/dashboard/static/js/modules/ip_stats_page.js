@@ -16,8 +16,6 @@
      * Load and display IP statistics page
      */
     window.loadIPStatsPage = async function() {
-    console.log('Loading IP Statistics page...');
-
     try {
         // Load summary statistics
         await loadIPStatsSummary();
@@ -39,8 +37,14 @@
      */
     async function loadIPStatsSummary() {
     try {
-        const response = await fetch('/api/dashboard/ip-stats/summary');
-        const data = await response.json();
+        // Use fetchWithCache if available to track cache status
+        let data;
+        if (typeof fetchWithCache === 'function') {
+            data = await fetchWithCache('/api/dashboard/ip-stats/summary', 'ip_stats');
+        } else {
+            const response = await fetch('/api/dashboard/ip-stats/summary');
+            data = await response.json();
+        }
 
         if (data.success) {
             const summary = data.data.summary;
@@ -102,8 +106,14 @@ async function loadIPStatsTable() {
             ...ipStatsCurrentFilters
         });
 
-        const response = await fetch(`/api/dashboard/ip-stats/list?${params}`);
-        const data = await response.json();
+        // Use fetchWithCache if available to track cache status
+        let data;
+        if (typeof fetchWithCache === 'function') {
+            data = await fetchWithCache(`/api/dashboard/ip-stats/list?${params}`, 'ip_stats');
+        } else {
+            const response = await fetch(`/api/dashboard/ip-stats/list?${params}`);
+            data = await response.json();
+        }
 
         if (data.success) {
             renderIPStatsTable(data.data);

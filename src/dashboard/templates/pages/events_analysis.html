@@ -1,6 +1,6 @@
 <!-- SSH Guardian v3.0 - Events Analysis Page -->
 <div id="page-events-analysis" class="page-content" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
                 Events Analysis
@@ -9,9 +9,22 @@
                 Detailed analysis and statistics for authentication events
             </p>
         </div>
-        <button id="events-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
-            Refresh
-        </button>
+        <div class="page-header-actions" style="display: flex; align-items: center; gap: 12px;">
+            <button id="events-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                ↻ Refresh
+            </button>
+            <div class="cache-indicator loading" data-cache-endpoint="events_analysis">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadEventsAnalysisPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    <div id="events-analysis-error" style="display: none; background: #FDE7E9; border: 1px solid #D13438; color: #A80000; padding: 16px; border-radius: 4px; margin-bottom: 16px; text-align: center;">
+        Error loading data
     </div>
 
     <!-- Summary Statistics -->
@@ -157,7 +170,7 @@
             <div>
                 <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Sort By</label>
                 <select id="events-sort" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
-                    <option value="event_timestamp">Latest First</option>
+                    <option value="timestamp">Latest First</option>
                     <option value="ml_risk_score">Risk Score</option>
                     <option value="source_ip_text">IP Address</option>
                     <option value="target_username">Username</option>

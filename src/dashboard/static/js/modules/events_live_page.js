@@ -8,13 +8,24 @@
 
     let currentPage = 0;
     const pageSize = 50;
+    let autoRefreshInterval = null;
+    let autoRefreshEnabled = false;
+    const AUTO_REFRESH_DELAY = 30000; // 30 seconds
+
+    /**
+     * Escape HTML to prevent XSS attacks
+     */
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
 
     /**
      * Load and display Events Live page
      */
     window.loadEventsLivePage = async function() {
-        console.log('Loading Events Live page...');
-
         try {
             // Reset pagination
             currentPage = 0;
@@ -25,10 +36,70 @@
             // Setup event listeners
             setupEventsEventListeners();
 
+            // Start auto-refresh if enabled
+            if (autoRefreshEnabled) {
+                startAutoRefresh();
+            }
+
         } catch (error) {
             console.error('Error loading Events Live page:', error);
         }
     };
+
+    /**
+     * Start auto-refresh for live events
+     */
+    function startAutoRefresh() {
+        stopAutoRefresh(); // Clear any existing interval
+        autoRefreshInterval = setInterval(() => {
+            if (document.getElementById('page-events-live')?.style.display !== 'none') {
+                loadEvents();
+            }
+        }, AUTO_REFRESH_DELAY);
+        autoRefreshEnabled = true;
+        updateAutoRefreshButton();
+    }
+
+    /**
+     * Stop auto-refresh
+     */
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        autoRefreshEnabled = false;
+        updateAutoRefreshButton();
+    }
+
+    /**
+     * Toggle auto-refresh
+     */
+    window.toggleAutoRefresh = function() {
+        if (autoRefreshEnabled) {
+            stopAutoRefresh();
+        } else {
+            startAutoRefresh();
+        }
+    };
+
+    /**
+     * Update auto-refresh button state
+     */
+    function updateAutoRefreshButton() {
+        const btn = document.getElementById('autoRefreshToggle');
+        if (btn) {
+            if (autoRefreshEnabled) {
+                btn.innerHTML = '⏸ Pause';
+                btn.style.background = '#107C10';
+                btn.title = 'Click to pause auto-refresh (refreshes every 30s)';
+            } else {
+                btn.innerHTML = '▶ Live';
+                btn.style.background = 'var(--azure-blue)';
+                btn.title = 'Click to enable auto-refresh';
+            }
+        }
+    }
 
     /**
      * Load events from API
@@ -37,10 +108,12 @@
         const searchInput = document.getElementById('eventSearch');
         const typeFilter = document.getElementById('eventTypeFilter');
         const threatFilter = document.getElementById('threatLevelFilter');
+        const agentFilter = document.getElementById('agentFilter');
 
         const search = searchInput ? searchInput.value : '';
         const eventType = typeFilter ? typeFilter.value : '';
         const threatLevel = threatFilter ? threatFilter.value : '';
+        const agentId = agentFilter ? agentFilter.value : '';
 
         const params = new URLSearchParams({
             limit: pageSize,
@@ -50,6 +123,7 @@
         if (search) params.append('search', search);
         if (eventType) params.append('event_type', eventType);
         if (threatLevel) params.append('threat_level', threatLevel);
+        if (agentId) params.append('agent_id', agentId);
 
         // Show loading
         const loadingEl = document.getElementById('eventsLoading');
@@ -61,8 +135,14 @@
         if (errorEl) errorEl.style.display = 'none';
 
         try {
-            const response = await fetch(`/api/dashboard/events/list?${params}`);
-            const data = await response.json();
+            // Use fetchWithCache if available to track cache status
+            let data;
+            if (typeof fetchWithCache === 'function') {
+                data = await fetchWithCache(`/api/dashboard/events/list?${params}`, 'events');
+            } else {
+                const response = await fetch(`/api/dashboard/events/list?${params}`);
+                data = await response.json();
+            }
 
             if (!data.success) {
                 throw new Error('Failed to load events');
@@ -81,7 +161,7 @@
                     row.style.borderBottom = '1px solid var(--border)';
 
                     const location = event.location ?
-                        `${event.location.city || 'Unknown'}, ${event.location.country || ''}` :
+                        `${escapeHtml(event.location.city) || 'Unknown'}, ${escapeHtml(event.location.country) || ''}` :
                         'Unknown';
 
                     const flags = [];
@@ -91,40 +171,66 @@
 
                     const threatInfo = event.threat ? `
                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
-                            ${event.threat.abuseipdb_score ? `Abuse: ${event.threat.abuseipdb_score} | ` : ''}
-                            ${event.threat.virustotal_detections ? `VT: ${event.threat.virustotal_detections}` : ''}
+                            ${event.threat.abuseipdb_score ? `Abuse: ${escapeHtml(event.threat.abuseipdb_score)} | ` : ''}
+                            ${event.threat.virustotal_detections ? `VT: ${escapeHtml(event.threat.virustotal_detections)}` : ''}
                         </div>
                     ` : '';
+
+                    // Create safe onclick handler using data attributes
+                    const safeIp = escapeHtml(event.ip);
+                    const safeEventType = escapeHtml(event.event_type);
+                    const safeReason = `Blocked from Live Events - ${safeEventType} attempt`;
 
                     row.innerHTML = `
                         <td style="padding: 12px; font-size: 12px;">${formatTimestamp(event.timestamp)}</td>
                         <td style="padding: 12px;">
-                            <div style="font-family: monospace; font-size: 13px;">${event.ip}</div>
-                            ${flags.length > 0 ? `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px;">${flags.join(' ')}</div>` : ''}
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="ip-status-indicator" data-ip="${safeIp}" style="width: 8px; height: 8px; border-radius: 50%; background: #605E5C; display: inline-block;" title="Checking status..."></span>
+                                <div style="font-family: monospace; font-size: 13px;">${safeIp}</div>
+                            </div>
+                            ${flags.length > 0 ? `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px; margin-left: 16px;">${flags.join(' ')}</div>` : ''}
                         </td>
-                        <td style="padding: 12px; font-size: 12px;">
-                            ${event.location?.country_code ? `<span style="font-size: 16px;">${getFlagEmoji(event.location.country_code)}</span> ` : ''}
+                        <td style="padding: 12px; font-size: 12px;" class="location-cell" data-ip="${safeIp}">
+                            ${event.location?.country_code ? getFlagImage(event.location.country_code) : ''}
                             ${location}
-                            ${event.location?.isp ? `<div style="font-size: 11px; color: var(--text-secondary);">${event.location.isp}</div>` : ''}
+                            ${event.location?.isp ? `<div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(event.location.isp)}</div>` : ''}
                         </td>
-                        <td style="padding: 12px; font-family: monospace; font-size: 13px;">${event.username}</td>
+                        <td style="padding: 12px; font-family: monospace; font-size: 13px;">${escapeHtml(event.username)}</td>
                         <td style="padding: 12px;">${getStatusBadge(event.event_type)}</td>
                         <td style="padding: 12px;">
                             ${getThreatBadge(event.threat?.level)}
                             ${threatInfo}
                         </td>
                         <td style="padding: 12px; font-size: 12px;">
-                            Server: ${event.server || 'N/A'}<br>
-                            Method: ${event.auth_method || 'N/A'}
+                            ${event.agent ? `<div style="font-weight: 500;">${escapeHtml(event.agent.name)}</div>` : ''}
+                            Server: ${escapeHtml(event.server) || 'N/A'}<br>
+                            Method: ${escapeHtml(event.auth_method) || 'N/A'}
                         </td>
                         <td style="padding: 12px;">
-                            <button onclick="quickBlock('${event.ip}', 'Blocked from Live Events - ${event.event_type} attempt')" style="padding: 4px 8px; border: 1px solid var(--border); background: #D83B01; color: white; border-radius: 2px; cursor: pointer; font-size: 11px;">
-                                Block IP
-                            </button>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <button class="block-ip-btn" data-ip="${safeIp}" data-reason="${safeReason}" style="padding: 4px 8px; border: 1px solid var(--border); background: #D83B01; color: white; border-radius: 2px; cursor: pointer; font-size: 11px;">
+                                    Block IP
+                                </button>
+                                <div class="event-actions-dropdown" style="position: relative;">
+                                    <button class="actions-menu-btn" data-ip="${safeIp}" data-event-id="${event.id}" style="padding: 4px 10px; border: 1px solid var(--border); background: var(--background); color: var(--text-primary); border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                        Actions ▼
+                                    </button>
+                                </div>
+                            </div>
                         </td>
                     `;
                     tbody.appendChild(row);
                 });
+
+                // Attach event listeners to block buttons and action buttons safely
+                attachBlockButtonListeners();
+                attachActionButtonListeners();
+
+                // Update IP status indicators
+                updateIpStatusIndicators();
+
+                // Enrich any events missing location data using FreeIPAPI
+                enrichMissingLocationData();
             }
 
             // Update pagination
@@ -142,9 +248,123 @@
             if (tableEl) tableEl.style.display = 'block';
 
         } catch (error) {
-            console.error('Error loading events:', error);
             if (loadingEl) loadingEl.style.display = 'none';
             if (errorEl) errorEl.style.display = 'block';
+        }
+    }
+
+    /**
+     * Attach event listeners to block buttons (prevents XSS via onclick)
+     */
+    function attachBlockButtonListeners() {
+        const buttons = document.querySelectorAll('.block-ip-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const ip = this.getAttribute('data-ip');
+                const reason = this.getAttribute('data-reason');
+                if (ip && typeof quickBlock === 'function') {
+                    quickBlock(ip, reason);
+                }
+            });
+        });
+    }
+
+    /**
+     * Attach event listeners to action menu buttons (prevents XSS via onclick)
+     */
+    function attachActionButtonListeners() {
+        const buttons = document.querySelectorAll('.actions-menu-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const ip = this.getAttribute('data-ip');
+                const eventId = this.getAttribute('data-event-id');
+                if (ip && typeof showIpActions === 'function') {
+                    showIpActions(ip, eventId, this);
+                }
+            });
+        });
+    }
+
+    /**
+     * Update IP status indicators for all visible IPs
+     */
+    async function updateIpStatusIndicators() {
+        // Get all unique IPs from current table
+        const indicators = document.querySelectorAll('.ip-status-indicator');
+        const uniqueIps = new Set();
+
+        indicators.forEach(indicator => {
+            const ip = indicator.getAttribute('data-ip');
+            if (ip) uniqueIps.add(ip);
+        });
+
+        if (uniqueIps.size === 0) return;
+
+        try {
+            // Batch check IP statuses
+            for (const ip of uniqueIps) {
+                // Check if IP is in any list
+                const [blockStatus, whitelistStatus, watchlistStatus] = await Promise.all([
+                    checkIpInList(ip, 'blocklist'),
+                    checkIpInList(ip, 'whitelist'),
+                    checkIpInList(ip, 'watchlist')
+                ]);
+
+                // Update all indicators for this IP
+                const ipIndicators = document.querySelectorAll(`.ip-status-indicator[data-ip="${ip}"]`);
+                ipIndicators.forEach(indicator => {
+                    if (blockStatus) {
+                        indicator.style.background = '#D83B01'; // Red for blocked
+                        indicator.title = 'IP is blocked';
+                    } else if (whitelistStatus) {
+                        indicator.style.background = '#107C10'; // Green for whitelisted
+                        indicator.title = 'IP is whitelisted';
+                    } else if (watchlistStatus) {
+                        indicator.style.background = '#FFB900'; // Yellow for watched
+                        indicator.title = 'IP is on watchlist';
+                    } else {
+                        indicator.style.background = '#605E5C'; // Gray for unknown/clean
+                        indicator.title = 'No special status';
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error updating IP status indicators:', error);
+        }
+    }
+
+    /**
+     * Check if IP exists in a specific list
+     */
+    async function checkIpInList(ip, listType) {
+        try {
+            let endpoint = '';
+            switch(listType) {
+                case 'blocklist':
+                    endpoint = '/api/dashboard/firewall/blocklist';
+                    break;
+                case 'whitelist':
+                    endpoint = '/api/dashboard/firewall/whitelist';
+                    break;
+                case 'watchlist':
+                    endpoint = '/api/dashboard/watchlist';
+                    break;
+                default:
+                    return false;
+            }
+
+            const response = await fetch(`${endpoint}?search=${encodeURIComponent(ip)}`);
+            const data = await response.json();
+
+            if (!data.success) return false;
+
+            // Check if IP exists in the results
+            const items = data.items || data.watchlist || [];
+            return items.some(item => item.ip === ip);
+        } catch (error) {
+            console.error(`Error checking ${listType} for IP ${ip}:`, error);
+            return false;
         }
     }
 
@@ -158,7 +378,21 @@
     }
 
     /**
-     * Get flag emoji from country code
+     * Get flag image from country code (using flagcdn.com for consistency)
+     */
+    function getFlagImage(countryCode) {
+        if (!countryCode || countryCode === 'N/A') return '';
+        const code = countryCode.toLowerCase();
+        return `<img src="https://flagcdn.com/16x12/${code}.png"
+                     srcset="https://flagcdn.com/32x24/${code}.png 2x"
+                     width="16" height="12"
+                     alt="${countryCode}"
+                     style="vertical-align: middle; margin-right: 4px;"
+                     onerror="this.style.display='none'">`;
+    }
+
+    /**
+     * Get flag emoji from country code (fallback)
      */
     function getFlagEmoji(countryCode) {
         if (!countryCode) return '';
@@ -170,15 +404,70 @@
     }
 
     /**
+     * Fetch IP geolocation info from FreeIPAPI
+     */
+    async function fetchIpLocationInfo(ip) {
+        try {
+            const response = await fetch(`/api/dashboard/ip-info/lookup/${encodeURIComponent(ip)}`);
+            if (!response.ok) return null;
+            const data = await response.json();
+            if (data.success) {
+                return data;
+            }
+            return null;
+        } catch (error) {
+            console.error(`Error fetching IP info for ${ip}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Enrich events missing location data with FreeIPAPI
+     */
+    async function enrichMissingLocationData() {
+        // Find table rows that need location enrichment
+        const rows = document.querySelectorAll('#eventsTableBody tr');
+        const enrichmentNeeded = [];
+
+        rows.forEach(row => {
+            const locationCell = row.querySelector('td:nth-child(3)');
+            const ipCell = row.querySelector('.ip-status-indicator');
+
+            if (locationCell && ipCell) {
+                const ip = ipCell.getAttribute('data-ip');
+                const locationText = locationCell.textContent.trim();
+
+                // Check if location is missing or "Unknown"
+                if (ip && (locationText.includes('Unknown, Unknown') || locationText === 'Unknown')) {
+                    enrichmentNeeded.push({ ip, cell: locationCell });
+                }
+            }
+        });
+
+        // Enrich each IP missing location (limit concurrent requests)
+        for (const item of enrichmentNeeded) {
+            const info = await fetchIpLocationInfo(item.ip);
+            if (info && info.success && !info.is_private) {
+                const flag = getFlagImage(info.country_code);
+                const location = `${info.city || 'Unknown'}, ${info.country || ''}`;
+                const isp = info.isp ? `<div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(info.isp)}</div>` : '';
+
+                item.cell.innerHTML = `${flag}${escapeHtml(location)}${isp}`;
+            }
+        }
+    }
+
+    /**
      * Get status badge HTML
      */
     function getStatusBadge(eventType) {
+        const safeType = escapeHtml(eventType);
         const badges = {
             'failed': '<span style="background: #D83B01; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">FAILED</span>',
             'successful': '<span style="background: #107C10; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">SUCCESS</span>',
             'invalid': '<span style="background: #605E5C; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">INVALID</span>'
         };
-        return badges[eventType] || `<span style="background: #605E5C; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">${eventType?.toUpperCase() || 'UNKNOWN'}</span>`;
+        return badges[eventType] || `<span style="background: #605E5C; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">${safeType?.toUpperCase() || 'UNKNOWN'}</span>`;
     }
 
     /**
@@ -206,6 +495,12 @@
                 currentPage = 0;
                 loadEvents();
             };
+        }
+
+        // Auto-refresh toggle
+        const autoRefreshBtn = document.getElementById('autoRefreshToggle');
+        if (autoRefreshBtn) {
+            autoRefreshBtn.onclick = toggleAutoRefresh;
         }
 
         // Search on Enter
@@ -237,6 +532,15 @@
             };
         }
 
+        // Agent filter
+        const agentFilter = document.getElementById('agentFilter');
+        if (agentFilter) {
+            agentFilter.onchange = () => {
+                currentPage = 0;
+                loadEvents();
+            };
+        }
+
         // Previous page
         const prevBtn = document.getElementById('prevPage');
         if (prevBtn) {
@@ -257,5 +561,13 @@
             };
         }
     }
+
+    // Cleanup when navigating away
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash.substring(1);
+        if (hash !== 'events-live') {
+            stopAutoRefresh();
+        }
+    });
 
 })();

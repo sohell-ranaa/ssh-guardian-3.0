@@ -1,6 +1,6 @@
 <!-- SSH Guardian v3.0 - IP Statistics Page -->
 <div id="page-ip-stats" class="page-content" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
                 IP Statistics
@@ -9,9 +9,14 @@
                 Detailed statistics and analysis for all tracked IP addresses
             </p>
         </div>
-        <button id="ip-stats-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
-            Refresh
-        </button>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="ip_stats">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadIPStatsPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
     </div>
 
     <!-- Summary Statistics -->

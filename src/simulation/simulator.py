@@ -16,6 +16,7 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 
 from connection import get_connection
 from core.log_processor import process_log_line
+from core.enrichment import enrich_event
 from .templates import ATTACK_TEMPLATES
 from .ip_pools import get_pool_manager
 from .logger import SimulationLogger
@@ -160,6 +161,23 @@ class AttackSimulator:
                     logger.success('SUBMISSION',
                                   f"Event {idx} stored (ID: {result['event_id']})",
                                   metadata={'event_id': result['event_id']})
+
+                    # Enrich the event (GeoIP, ML prediction, Threat Intel)
+                    try:
+                        enrichment_result = enrich_event(
+                            event_id=result['event_id'],
+                            source_ip=event['source_ip'],
+                            verbose=False  # Don't spam console during simulation
+                        )
+                        if enrichment_result.get('ml', {}).get('ml_available'):
+                            logger.info('ENRICHMENT',
+                                       f"ML prediction: risk={enrichment_result['ml'].get('risk_score')}, "
+                                       f"type={enrichment_result['ml'].get('threat_type')}",
+                                       metadata={'ml_result': enrichment_result['ml']})
+                    except Exception as enrich_error:
+                        logger.warning('ENRICHMENT',
+                                      f"Enrichment failed for event {idx}: {str(enrich_error)}")
+
                     results.append({
                         'event': event,
                         'status': 'success',

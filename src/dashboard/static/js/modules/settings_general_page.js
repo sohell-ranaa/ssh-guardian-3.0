@@ -8,16 +8,18 @@
 
     let allSettings = [];
     let currentCategory = 'all';
+    let timeSettingsData = null;
 
     /**
      * Load and display Settings General page
      */
     window.loadSettingsGeneralPage = async function() {
-        console.log('Loading Settings General page...');
-
         try {
             // Load settings data
             await loadSettings();
+
+            // Load and render time settings section
+            await loadAndRenderTimeSettings();
 
             // Setup event listeners
             setupSettingsEventListeners();
@@ -27,6 +29,278 @@
             showNotification('Failed to load settings', 'error');
         }
     };
+
+    /**
+     * Load and render time settings section
+     */
+    async function loadAndRenderTimeSettings() {
+        try {
+            const response = await fetch('/api/dashboard/settings/time');
+            const data = await response.json();
+
+            if (data.success) {
+                timeSettingsData = data.data;
+                renderTimeSettingsSection();
+            }
+        } catch (error) {
+            console.error('Error loading time settings:', error);
+        }
+    }
+
+    /**
+     * Render Time Settings section
+     */
+    function renderTimeSettingsSection() {
+        const container = document.getElementById('time-settings-container');
+        if (!container || !timeSettingsData) return;
+
+        const html = `
+            <div class="settings-category-section" style="margin-bottom: 32px;">
+                <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--text-primary);">
+                    Time & Date Display
+                </h3>
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <!-- Timezone -->
+                    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
+                                    Timezone
+                                </div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                                    Select your preferred timezone for displaying dates and times
+                                </div>
+                                <select id="time-setting-timezone"
+                                        style="width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                                    ${(timeSettingsData.available_timezones || []).map(tz =>
+                                        `<option value="${tz}" ${timeSettingsData.timezone === tz ? 'selected' : ''}>${tz}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Time Format -->
+                    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
+                                    Time Format
+                                </div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                                    Choose between 12-hour (AM/PM) or 24-hour format
+                                </div>
+                                <div style="display: flex; gap: 16px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="time_format" value="12h"
+                                               ${timeSettingsData.time_format === '12h' ? 'checked' : ''}
+                                               style="width: 18px; height: 18px;">
+                                        <span style="font-size: 14px;">12-hour (1:30 PM)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="time_format" value="24h"
+                                               ${timeSettingsData.time_format === '24h' ? 'checked' : ''}
+                                               style="width: 18px; height: 18px;">
+                                        <span style="font-size: 14px;">24-hour (13:30)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date Format -->
+                    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
+                                    Date Format
+                                </div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                                    Select how dates should be displayed
+                                </div>
+                                <select id="time-setting-date-format"
+                                        style="width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                                    ${(timeSettingsData.available_date_formats || []).map(fmt => {
+                                        const example = getDateFormatExample(fmt);
+                                        return `<option value="${fmt}" ${timeSettingsData.date_format === fmt ? 'selected' : ''}>${fmt} (${example})</option>`;
+                                    }).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview & Save -->
+                    <div style="padding: 20px; background: var(--hover-bg);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px;">
+                            <div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Preview</div>
+                                <div id="time-preview" style="font-size: 16px; font-weight: 500; font-family: monospace; color: var(--text-primary);">
+                                    ${getCurrentTimePreview()}
+                                </div>
+                            </div>
+                            <button id="save-time-settings-btn"
+                                    style="padding: 10px 24px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                                Save Time Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+
+        // Setup time settings event listeners
+        setupTimeSettingsListeners();
+
+        // Start preview update interval
+        startPreviewUpdate();
+    }
+
+    /**
+     * Get example date for format preview
+     */
+    function getDateFormatExample(format) {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+
+        switch (format) {
+            case 'DD/MM/YYYY': return `${day}/${month}/${year}`;
+            case 'MM/DD/YYYY': return `${month}/${day}/${year}`;
+            case 'DD-MM-YYYY': return `${day}-${month}-${year}`;
+            case 'YYYY-MM-DD':
+            default: return `${year}-${month}-${day}`;
+        }
+    }
+
+    /**
+     * Get current time preview based on selected settings
+     */
+    function getCurrentTimePreview() {
+        if (!timeSettingsData) return '';
+
+        const timezone = document.getElementById('time-setting-timezone')?.value || timeSettingsData.timezone;
+        const timeFormat = document.querySelector('input[name="time_format"]:checked')?.value || timeSettingsData.time_format;
+        const dateFormat = document.getElementById('time-setting-date-format')?.value || timeSettingsData.date_format;
+
+        try {
+            const now = new Date();
+            const options = { timeZone: timezone };
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                ...options,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: timeFormat === '12h'
+            });
+
+            const parts = formatter.formatToParts(now);
+            const partMap = {};
+            parts.forEach(p => partMap[p.type] = p.value);
+
+            let datePart;
+            switch (dateFormat) {
+                case 'DD/MM/YYYY': datePart = `${partMap.day}/${partMap.month}/${partMap.year}`; break;
+                case 'MM/DD/YYYY': datePart = `${partMap.month}/${partMap.day}/${partMap.year}`; break;
+                case 'DD-MM-YYYY': datePart = `${partMap.day}-${partMap.month}-${partMap.year}`; break;
+                default: datePart = `${partMap.year}-${partMap.month}-${partMap.day}`;
+            }
+
+            const timePart = timeFormat === '12h'
+                ? `${partMap.hour}:${partMap.minute}:${partMap.second} ${partMap.dayPeriod || ''}`
+                : `${partMap.hour}:${partMap.minute}:${partMap.second}`;
+
+            return `${datePart} ${timePart}`;
+        } catch (error) {
+            return 'Invalid timezone';
+        }
+    }
+
+    /**
+     * Setup time settings event listeners
+     */
+    function setupTimeSettingsListeners() {
+        // Update preview on any change
+        const updatePreview = () => {
+            const preview = document.getElementById('time-preview');
+            if (preview) {
+                preview.textContent = getCurrentTimePreview();
+            }
+        };
+
+        document.getElementById('time-setting-timezone')?.addEventListener('change', updatePreview);
+        document.getElementById('time-setting-date-format')?.addEventListener('change', updatePreview);
+        document.querySelectorAll('input[name="time_format"]').forEach(radio => {
+            radio.addEventListener('change', updatePreview);
+        });
+
+        // Save button
+        document.getElementById('save-time-settings-btn')?.addEventListener('click', saveTimeSettings);
+    }
+
+    let previewInterval = null;
+
+    /**
+     * Start updating preview every second
+     */
+    function startPreviewUpdate() {
+        if (previewInterval) clearInterval(previewInterval);
+        previewInterval = setInterval(() => {
+            const preview = document.getElementById('time-preview');
+            if (preview) {
+                preview.textContent = getCurrentTimePreview();
+            }
+        }, 1000);
+    }
+
+    /**
+     * Save time settings
+     */
+    async function saveTimeSettings() {
+        const timezone = document.getElementById('time-setting-timezone')?.value;
+        const timeFormat = document.querySelector('input[name="time_format"]:checked')?.value;
+        const dateFormat = document.getElementById('time-setting-date-format')?.value;
+
+        try {
+            const response = await fetch('/api/dashboard/settings/time', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    timezone: timezone,
+                    time_format: timeFormat,
+                    date_format: dateFormat
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showNotification('Time settings saved successfully', 'success');
+
+                // Update local timeSettingsData
+                if (timeSettingsData) {
+                    timeSettingsData.timezone = timezone;
+                    timeSettingsData.time_format = timeFormat;
+                    timeSettingsData.date_format = dateFormat;
+                }
+
+                // Reload TimeSettings module if available
+                if (window.TimeSettings && typeof window.TimeSettings.load === 'function') {
+                    window.TimeSettings.load();
+                }
+            } else {
+                showNotification('Failed to save time settings: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            console.error('Error saving time settings:', error);
+            showNotification('Error saving time settings', 'error');
+        }
+    }
 
     /**
      * Load settings from API

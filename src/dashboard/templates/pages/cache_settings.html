@@ -1,0 +1,710 @@
+<!-- Cache Settings Page -->
+<div id="page-cache-settings" class="page-content" style="display: none;">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Cache Settings</h1>
+            <p class="page-subtitle">Configure cache TTL, auto-refresh, and view cache performance</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-secondary" onclick="CacheSettingsPage.clearAllCache()">Clear All Cache</button>
+            <button class="btn btn-primary" onclick="CacheSettingsPage.warmCache()">Warm Cache</button>
+            <button class="btn btn-secondary" onclick="CacheSettingsPage.resetAll()">Reset All</button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="stat-card">
+            <div class="stat-card-value" id="stat-cached-keys">-</div>
+            <div class="stat-card-label">Cached Keys</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" style="color: var(--azure-blue);" id="stat-hit-rate">-</div>
+            <div class="stat-card-label">Hit Rate</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" style="color: #28a745;" id="stat-total-hits">-</div>
+            <div class="stat-card-label">Total Hits</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" style="color: #ffc107;" id="stat-total-misses">-</div>
+            <div class="stat-card-label">Total Misses</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" id="stat-memory">-</div>
+            <div class="stat-card-label">Redis Memory</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" id="stat-warmer">-</div>
+            <div class="stat-card-label">Auto Warmer</div>
+        </div>
+    </div>
+
+    <!-- Auto Warmer Control -->
+    <div class="content-card" style="margin-bottom: 24px;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Background Cache Warmer</h3>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" id="btn-start-warmer" onclick="CacheSettingsPage.startAutoWarmer()">Start Auto Warmer</button>
+                <button class="btn btn-danger" id="btn-stop-warmer" style="display: none;" onclick="CacheSettingsPage.stopAutoWarmer()">Stop Auto Warmer</button>
+            </div>
+        </div>
+        <div class="card-body" style="padding: 16px;">
+            <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 14px;">
+                The background cache warmer automatically refreshes endpoints marked with "Auto Refresh" enabled.
+                This ensures data is always pre-cached for faster page loads.
+            </p>
+            <span style="font-size: 13px; color: var(--text-hint);">
+                Endpoints with auto-refresh enabled: <strong id="auto-refresh-count">-</strong>
+            </span>
+        </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="filter-bar" style="margin-bottom: 16px;">
+        <div id="categoryTabs" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="filter-tab active" data-category="" onclick="CacheSettingsPage.filterCategory('')">All</button>
+        </div>
+    </div>
+
+    <!-- Settings Table -->
+    <div class="content-card">
+        <div class="table-container" style="overflow-x: auto;">
+            <table class="data-table" id="cache-settings-table">
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Category</th>
+                        <th>TTL</th>
+                        <th style="width: 180px;">TTL Slider</th>
+                        <th>Auto Refresh</th>
+                        <th>Priority</th>
+                        <th>Hit Rate</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="settings-tbody">
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-hint);">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    #page-cache-settings .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+    }
+    #page-cache-settings .stat-card-value {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+    #page-cache-settings .stat-card-label {
+        font-size: 12px;
+        color: var(--text-hint);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    #page-cache-settings .content-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #page-cache-settings .card-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        background: #fafafa;
+    }
+    #page-cache-settings .filter-tab {
+        padding: 8px 16px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    #page-cache-settings .filter-tab:hover {
+        border-color: var(--azure-blue);
+        color: var(--azure-blue);
+    }
+    #page-cache-settings .filter-tab.active {
+        background: var(--azure-blue);
+        color: white;
+        border-color: var(--azure-blue);
+    }
+    #page-cache-settings .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    #page-cache-settings .data-table th {
+        padding: 12px 16px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        background: #fafafa;
+        border-bottom: 1px solid var(--border);
+    }
+    #page-cache-settings .data-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+        vertical-align: middle;
+    }
+    #page-cache-settings .data-table tbody tr:hover {
+        background: #f8f8f8;
+    }
+    #page-cache-settings .endpoint-name {
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+    #page-cache-settings .endpoint-desc {
+        font-size: 12px;
+        color: var(--text-hint);
+        margin-top: 2px;
+    }
+    #page-cache-settings .ttl-slider {
+        width: 100%;
+        height: 6px;
+        -webkit-appearance: none;
+        appearance: none;
+        background: var(--border);
+        border-radius: 3px;
+        outline: none;
+        cursor: pointer;
+    }
+    #page-cache-settings .ttl-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        background: var(--azure-blue);
+        border-radius: 50%;
+        cursor: pointer;
+    }
+    #page-cache-settings .ttl-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: var(--azure-blue);
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+    }
+    #page-cache-settings .ttl-value {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        min-width: 50px;
+        display: inline-block;
+    }
+    #page-cache-settings .ttl-range {
+        font-size: 11px;
+        color: var(--text-hint);
+        margin-top: 4px;
+    }
+    #page-cache-settings .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    #page-cache-settings .badge-category {
+        background: #e9ecef;
+        color: #495057;
+    }
+    #page-cache-settings .badge-priority-critical {
+        background: #dc3545;
+        color: white;
+    }
+    #page-cache-settings .badge-priority-high {
+        background: #fd7e14;
+        color: white;
+    }
+    #page-cache-settings .badge-priority-normal {
+        background: #6c757d;
+        color: white;
+    }
+    #page-cache-settings .badge-priority-low {
+        background: #adb5bd;
+        color: #333;
+    }
+    #page-cache-settings .badge-enabled {
+        background: #28a745;
+        color: white;
+    }
+    #page-cache-settings .badge-disabled {
+        background: #6c757d;
+        color: white;
+    }
+    #page-cache-settings .hit-rate-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    #page-cache-settings .hit-rate-bar {
+        width: 60px;
+        height: 6px;
+        background: var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    #page-cache-settings .hit-rate-fill {
+        height: 100%;
+        background: #28a745;
+        border-radius: 3px;
+        transition: width 0.3s;
+    }
+    #page-cache-settings .toggle-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        display: inline-block;
+    }
+    #page-cache-settings .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    #page-cache-settings .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: 0.3s;
+        border-radius: 24px;
+    }
+    #page-cache-settings .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+    }
+    #page-cache-settings .toggle-switch input:checked + .toggle-slider {
+        background-color: var(--azure-blue);
+    }
+    #page-cache-settings .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+    }
+    #page-cache-settings .action-btn {
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-right: 4px;
+    }
+    #page-cache-settings .action-btn:hover {
+        border-color: var(--azure-blue);
+        color: var(--azure-blue);
+    }
+    #page-cache-settings .btn-danger {
+        background: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+    #page-cache-settings .btn-danger:hover {
+        background: #c82333;
+        border-color: #c82333;
+    }
+
+    @media (max-width: 1200px) {
+        #page-cache-settings .stats-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+        }
+    }
+    @media (max-width: 768px) {
+        #page-cache-settings .stats-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+        }
+    }
+</style>
+
+<script>
+const CacheSettingsPage = {
+    settings: [],
+    categories: [],
+    currentCategory: '',
+
+    init() {
+        this.loadStats();
+        this.loadCategories();
+        this.loadSettings();
+        // Refresh stats every 30 seconds
+        setInterval(() => this.loadStats(), 30000);
+    },
+
+    async loadStats() {
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/stats');
+            const data = await response.json();
+
+            if (data.success) {
+                const stats = data.data;
+
+                document.getElementById('stat-cached-keys').textContent =
+                    stats.redis.cached_keys || 0;
+                document.getElementById('stat-hit-rate').textContent =
+                    stats.performance.hit_rate + '%';
+                document.getElementById('stat-total-hits').textContent =
+                    this.formatNumber(stats.performance.total_hits);
+                document.getElementById('stat-total-misses').textContent =
+                    this.formatNumber(stats.performance.total_misses);
+                document.getElementById('stat-memory').textContent =
+                    stats.redis.used_memory || 'N/A';
+
+                // Update warmer status
+                const warmerRunning = stats.warmer_running;
+                const warmerEl = document.getElementById('stat-warmer');
+                warmerEl.textContent = warmerRunning ? 'Running' : 'Stopped';
+                warmerEl.style.color = warmerRunning ? '#28a745' : 'var(--text-hint)';
+
+                // Toggle buttons
+                document.getElementById('btn-start-warmer').style.display = warmerRunning ? 'none' : 'inline-block';
+                document.getElementById('btn-stop-warmer').style.display = warmerRunning ? 'inline-block' : 'none';
+
+                document.getElementById('auto-refresh-count').textContent = stats.endpoints.auto_refresh;
+            }
+        } catch (e) {
+            console.error('Failed to load stats:', e);
+        }
+    },
+
+    async loadCategories() {
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/categories');
+            const data = await response.json();
+
+            if (data.success) {
+                this.categories = data.data;
+                this.renderCategoryTabs();
+            }
+        } catch (e) {
+            console.error('Failed to load categories:', e);
+        }
+    },
+
+    renderCategoryTabs() {
+        const tabs = document.getElementById('categoryTabs');
+        let html = '<button class="filter-tab active" data-category="" onclick="CacheSettingsPage.filterCategory(\'\')">All</button>';
+
+        for (const cat of this.categories) {
+            html += `
+                <button class="filter-tab" data-category="${cat.category}"
+                   onclick="CacheSettingsPage.filterCategory('${cat.category}')">
+                    ${this.formatCategoryName(cat.category)} (${cat.count})
+                </button>
+            `;
+        }
+
+        tabs.innerHTML = html;
+    },
+
+    formatCategoryName(cat) {
+        return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    },
+
+    filterCategory(category) {
+        this.currentCategory = category;
+
+        // Update active tab
+        document.querySelectorAll('#categoryTabs .filter-tab').forEach(tab => {
+            const tabCategory = tab.dataset.category;
+            tab.classList.toggle('active', tabCategory === category);
+        });
+
+        this.loadSettings();
+    },
+
+    async loadSettings() {
+        try {
+            let url = '/api/dashboard/cache-settings/list';
+            if (this.currentCategory) {
+                url += `?category=${this.currentCategory}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                this.settings = data.data;
+                this.renderSettings();
+            }
+        } catch (e) {
+            console.error('Failed to load settings:', e);
+        }
+    },
+
+    renderSettings() {
+        const tbody = document.getElementById('settings-tbody');
+
+        if (!this.settings.length) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-hint);">No settings found</td></tr>';
+            return;
+        }
+
+        let html = '';
+        for (const s of this.settings) {
+            html += `
+                <tr data-id="${s.id}">
+                    <td>
+                        <div class="endpoint-name">${s.endpoint_name}</div>
+                        <div class="endpoint-desc">${s.endpoint_description || ''}</div>
+                    </td>
+                    <td><span class="badge badge-category">${this.formatCategoryName(s.category)}</span></td>
+                    <td>
+                        <span class="ttl-value" id="ttl-display-${s.id}">${this.formatTTL(s.ttl_seconds)}</span>
+                    </td>
+                    <td>
+                        <input type="range" class="ttl-slider" id="ttl-slider-${s.id}"
+                               min="${s.min_ttl_seconds}" max="${s.max_ttl_seconds}"
+                               value="${s.ttl_seconds}"
+                               onchange="CacheSettingsPage.updateTTL(${s.id}, this.value)"
+                               oninput="CacheSettingsPage.previewTTL(${s.id}, this.value)">
+                        <div class="ttl-range">
+                            ${this.formatTTL(s.min_ttl_seconds)} - ${this.formatTTL(s.max_ttl_seconds)}
+                        </div>
+                    </td>
+                    <td>
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${s.auto_refresh_enabled ? 'checked' : ''}
+                                   onchange="CacheSettingsPage.toggleAutoRefresh(${s.id}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </td>
+                    <td>
+                        <span class="badge badge-priority-${s.priority}">${s.priority}</span>
+                    </td>
+                    <td>
+                        <div class="hit-rate-container">
+                            <span>${s.hit_rate}%</span>
+                            <div class="hit-rate-bar">
+                                <div class="hit-rate-fill" style="width: ${s.hit_rate}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge ${s.is_enabled ? 'badge-enabled' : 'badge-disabled'}">
+                            ${s.is_enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="action-btn" onclick="CacheSettingsPage.clearEndpointCache('${s.endpoint_key}')"
+                                title="Clear cache for this endpoint">Clear</button>
+                        <button class="action-btn" onclick="CacheSettingsPage.resetSetting(${s.id})"
+                                title="Reset to default">Reset</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        tbody.innerHTML = html;
+    },
+
+    formatTTL(seconds) {
+        if (seconds >= 3600) {
+            return (seconds / 3600).toFixed(1) + 'h';
+        } else if (seconds >= 60) {
+            return Math.round(seconds / 60) + 'm';
+        }
+        return seconds + 's';
+    },
+
+    formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num || 0;
+    },
+
+    previewTTL(id, value) {
+        document.getElementById(`ttl-display-${id}`).textContent = this.formatTTL(parseInt(value));
+    },
+
+    async updateTTL(id, value) {
+        try {
+            const response = await fetch(`/api/dashboard/cache-settings/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ttl_seconds: parseInt(value) })
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                alert('Failed to update TTL: ' + data.error);
+                this.loadSettings();
+            }
+        } catch (e) {
+            console.error('Failed to update TTL:', e);
+        }
+    },
+
+    async toggleAutoRefresh(id, enabled) {
+        try {
+            const response = await fetch(`/api/dashboard/cache-settings/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto_refresh_enabled: enabled })
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                alert('Failed to update: ' + data.error);
+                this.loadSettings();
+            } else {
+                this.loadStats();
+            }
+        } catch (e) {
+            console.error('Failed to toggle auto-refresh:', e);
+        }
+    },
+
+    async clearEndpointCache(endpointKey) {
+        try {
+            const response = await fetch(`/api/dashboard/cache-settings/clear/${endpointKey}`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.loadStats();
+            } else {
+                alert('Failed to clear cache: ' + data.error);
+            }
+        } catch (e) {
+            console.error('Failed to clear cache:', e);
+        }
+    },
+
+    async clearAllCache() {
+        if (!confirm('Are you sure you want to clear all cache data?')) return;
+
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/clear', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                this.loadStats();
+                this.loadSettings();
+            } else {
+                alert('Failed to clear cache: ' + data.error);
+            }
+        } catch (e) {
+            console.error('Failed to clear cache:', e);
+        }
+    },
+
+    async warmCache() {
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/warm', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            alert(data.message);
+            this.loadStats();
+        } catch (e) {
+            console.error('Failed to warm cache:', e);
+        }
+    },
+
+    async resetSetting(id) {
+        try {
+            const response = await fetch(`/api/dashboard/cache-settings/reset/${id}`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.loadSettings();
+            } else {
+                alert('Failed to reset: ' + data.error);
+            }
+        } catch (e) {
+            console.error('Failed to reset:', e);
+        }
+    },
+
+    async resetAll() {
+        if (!confirm('Are you sure you want to reset all settings to defaults?')) return;
+
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/reset-all', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                this.loadSettings();
+                this.loadStats();
+            } else {
+                alert('Failed to reset: ' + data.error);
+            }
+        } catch (e) {
+            console.error('Failed to reset all:', e);
+        }
+    },
+
+    async startAutoWarmer() {
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/warmer/start-auto', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            alert(data.message);
+            this.loadStats();
+        } catch (e) {
+            console.error('Failed to start warmer:', e);
+        }
+    },
+
+    async stopAutoWarmer() {
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/warmer/stop', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+            alert(data.message);
+            this.loadStats();
+        } catch (e) {
+            console.error('Failed to stop warmer:', e);
+        }
+    }
+};
+
+// Initialize when page loads
+if (typeof pageInitCallbacks !== 'undefined') {
+    pageInitCallbacks['cache-settings'] = () => CacheSettingsPage.init();
+} else {
+    document.addEventListener('DOMContentLoaded', () => CacheSettingsPage.init());
+}
+</script>

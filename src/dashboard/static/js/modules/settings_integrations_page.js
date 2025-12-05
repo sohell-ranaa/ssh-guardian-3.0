@@ -13,8 +13,6 @@
      * Load and display Settings Integrations page
      */
     window.loadSettingsIntegrationsPage = async function() {
-        console.log('Loading Settings Integrations page...');
-
         try {
             // Load integrations data
             await loadIntegrations();

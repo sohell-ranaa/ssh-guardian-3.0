@@ -1,5 +1,6 @@
 """
 IP Statistics Routes - API endpoints for IP statistics data
+With Redis caching for improved performance
 """
 import sys
 from pathlib import Path
@@ -8,16 +9,29 @@ from flask import Blueprint, jsonify, request
 # Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key, cache_key_hash
 
 ip_stats_routes = Blueprint('ip_stats', __name__)
+
+# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
+IP_STATS_LIST_TTL = 900      # 15 minutes for paginated list
+IP_STATS_SUMMARY_TTL = 1800  # 30 minutes for summary stats
+IP_STATS_DETAIL_TTL = 1800   # 30 minutes for IP details
+
+
+def invalidate_ip_stats_cache():
+    """Invalidate all IP statistics caches"""
+    cache = get_cache()
+    cache.delete_pattern('ip_stats')
 
 
 @ip_stats_routes.route('/list', methods=['GET'])
 def get_ip_statistics_list():
     """
-    Get paginated list of IP statistics
+    Get paginated list of IP statistics with caching
     Query params:
     - page: Page number (default: 1)
     - limit: Items per page (default: 20)
@@ -47,6 +61,23 @@ def get_ip_statistics_list():
             sort = 'last_seen'
 
         offset = (page - 1) * limit
+
+        # Try cache first
+        cache = get_cache()
+        cache_params = {
+            'page': page, 'limit': limit, 'sort': sort, 'order': order,
+            'search': search, 'risk_level': risk_level, 'blocked': blocked
+        }
+        cache_k = cache_key_hash('ip_stats', 'list', cache_params)
+
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached['data'],
+                'pagination': cached['pagination'],
+                'from_cache': True
+            })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -107,7 +138,7 @@ def get_ip_statistics_list():
         cursor.execute(query, query_params)
         stats = cursor.fetchall()
 
-        # Format dates
+        # Format dates and convert Decimal fields
         for stat in stats:
             if stat.get('last_blocked_at'):
                 stat['last_blocked_at'] = stat['last_blocked_at'].isoformat()
@@ -117,19 +148,30 @@ def get_ip_statistics_list():
                 stat['last_seen'] = stat['last_seen'].isoformat()
             if stat.get('updated_at'):
                 stat['updated_at'] = stat['updated_at'].isoformat()
+            # Convert Decimal fields
+            if stat.get('avg_risk_score') is not None:
+                stat['avg_risk_score'] = float(stat['avg_risk_score'])
+            if stat.get('abuseipdb_score') is not None:
+                stat['abuseipdb_score'] = int(stat['abuseipdb_score'])
 
         cursor.close()
         conn.close()
 
+        pagination = {
+            'page': page,
+            'limit': limit,
+            'total': total_count,
+            'pages': (total_count + limit - 1) // limit
+        }
+
+        # Cache the result
+        cache.set(cache_k, {'data': stats, 'pagination': pagination}, IP_STATS_LIST_TTL)
+
         return jsonify({
             'success': True,
             'data': stats,
-            'pagination': {
-                'page': page,
-                'limit': limit,
-                'total': total_count,
-                'pages': (total_count + limit - 1) // limit
-            }
+            'pagination': pagination,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -142,9 +184,21 @@ def get_ip_statistics_list():
 @ip_stats_routes.route('/summary', methods=['GET'])
 def get_ip_statistics_summary():
     """
-    Get overall IP statistics summary
+    Get overall IP statistics summary with caching
     """
     try:
+        cache = get_cache()
+        cache_k = cache_key('ip_stats', 'summary')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -162,6 +216,17 @@ def get_ip_statistics_summary():
             FROM ip_statistics
         """)
         summary = cursor.fetchone()
+
+        # Convert Decimal fields in summary
+        if summary:
+            for key in summary:
+                if summary[key] is not None:
+                    if key == 'overall_avg_risk_score':
+                        summary[key] = float(summary[key])
+                    elif isinstance(summary[key], (int, float)):
+                        pass  # Keep as is
+                    else:
+                        summary[key] = int(summary[key])
 
         # Get risk level distribution
         cursor.execute("""
@@ -194,16 +259,27 @@ def get_ip_statistics_summary():
         """)
         top_countries = cursor.fetchall()
 
+        # Convert Decimal fields in top_countries
+        for country in top_countries:
+            if country.get('total_failed_events') is not None:
+                country['total_failed_events'] = int(country['total_failed_events'])
+
         cursor.close()
         conn.close()
 
+        data = {
+            'summary': summary,
+            'risk_distribution': risk_distribution,
+            'top_countries': top_countries
+        }
+
+        # Cache the result
+        cache.set(cache_k, data, IP_STATS_SUMMARY_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'summary': summary,
-                'risk_distribution': risk_distribution,
-                'top_countries': top_countries
-            }
+            'data': data,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -216,9 +292,21 @@ def get_ip_statistics_summary():
 @ip_stats_routes.route('/<ip_address>', methods=['GET'])
 def get_ip_statistics_detail(ip_address):
     """
-    Get detailed statistics for a specific IP address
+    Get detailed statistics for a specific IP address with caching
     """
     try:
+        cache = get_cache()
+        cache_k = cache_key('ip_stats', 'detail', ip_address)
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -252,7 +340,7 @@ def get_ip_statistics_detail(ip_address):
                 'error': 'IP address not found'
             }), 404
 
-        # Format dates
+        # Format dates and convert Decimal fields
         if stat.get('last_blocked_at'):
             stat['last_blocked_at'] = stat['last_blocked_at'].isoformat()
         if stat.get('first_seen'):
@@ -261,6 +349,17 @@ def get_ip_statistics_detail(ip_address):
             stat['last_seen'] = stat['last_seen'].isoformat()
         if stat.get('updated_at'):
             stat['updated_at'] = stat['updated_at'].isoformat()
+        # Convert Decimal fields
+        if stat.get('latitude') is not None:
+            stat['latitude'] = float(stat['latitude'])
+        if stat.get('longitude') is not None:
+            stat['longitude'] = float(stat['longitude'])
+        if stat.get('avg_risk_score') is not None:
+            stat['avg_risk_score'] = float(stat['avg_risk_score'])
+        if stat.get('abuseipdb_score') is not None:
+            stat['abuseipdb_score'] = int(stat['abuseipdb_score'])
+        if stat.get('abuseipdb_confidence') is not None:
+            stat['abuseipdb_confidence'] = float(stat['abuseipdb_confidence'])
 
         # Get recent events for this IP
         cursor.execute("""
@@ -307,13 +406,19 @@ def get_ip_statistics_detail(ip_address):
         cursor.close()
         conn.close()
 
+        data = {
+            'statistics': stat,
+            'recent_events': recent_events,
+            'blocking_history': blocking_history
+        }
+
+        # Cache the result
+        cache.set(cache_k, data, IP_STATS_DETAIL_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'statistics': stat,
-                'recent_events': recent_events,
-                'blocking_history': blocking_history
-            }
+            'data': data,
+            'from_cache': False
         })
 
     except Exception as e:

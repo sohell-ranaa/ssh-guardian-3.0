@@ -1,6 +1,6 @@
 <!-- SSH Guardian v3.0 - Simulation Page -->
 <div id="page-simulation" class="page-content" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
                 Attack Simulation
@@ -8,6 +8,14 @@
             <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
                 Generate realistic SSH attack scenarios to test detection and response
             </p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="simulation">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadSimulationPage()" title="Refresh data">↻</button>
+            </div>
         </div>
     </div>
 
@@ -28,6 +36,34 @@
         <div class="card" style="padding: 20px;">
             <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Templates</div>
             <div style="font-size: 28px; font-weight: 600; color: #2EA44F;" id="sim-templates-count">0</div>
+        </div>
+    </div>
+
+    <!-- Live Demo Section -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px; border: 2px solid #E6A502;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div>
+                <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">🎯</span> Live Threat Detection Demo
+                </h3>
+                <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
+                    Run real threat intelligence lookups against known malicious IPs to demonstrate detection capabilities
+                </p>
+            </div>
+            <button id="demo-run-all-btn" style="padding: 10px 20px; background: #E6A502; color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                <span>▶ Run Full Demo</span>
+            </button>
+        </div>
+
+        <!-- Demo Scenarios Grid -->
+        <div id="demo-scenarios-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div style="text-align: center; padding: 30px; color: var(--text-secondary);">Loading demo scenarios...</div>
+        </div>
+
+        <!-- Demo Results Panel -->
+        <div id="demo-results-panel" style="display: none; margin-top: 20px; padding: 16px; background: var(--background); border-radius: 8px; border: 1px solid var(--border);">
+            <h4 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600;">Detection Results</h4>
+            <div id="demo-results-content"></div>
         </div>
     </div>
 
@@ -554,5 +590,446 @@
     if (window.location.hash === '#simulation') {
         setTimeout(initSimulation, 100);
     }
+
+    // =====================================================
+    // DEMO FUNCTIONALITY
+    // =====================================================
+
+    let demoScenarios = [];
+
+    async function loadDemoScenarios() {
+        try {
+            const response = await fetch('/api/demo/scenarios', { credentials: 'same-origin' });
+            const data = await response.json();
+
+            if (data.success && data.scenarios) {
+                demoScenarios = data.scenarios;
+                renderDemoScenarios(data.scenarios);
+            }
+        } catch (error) {
+            console.error('Error loading demo scenarios:', error);
+            document.getElementById('demo-scenarios-grid').innerHTML =
+                '<div style="color: #D13438; padding: 20px;">Failed to load demo scenarios</div>';
+        }
+    }
+
+    function renderDemoScenarios(scenarios) {
+        const grid = document.getElementById('demo-scenarios-grid');
+        grid.innerHTML = scenarios.map(s => `
+            <div class="demo-scenario-card" data-scenario="${s.id}"
+                 style="padding: 16px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: var(--card-bg);">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">${getDemoIcon(s.category)}</span>
+                        <span style="font-weight: 600; font-size: 14px;">${s.name}</span>
+                    </div>
+                    <span style="padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+                          background: ${getSeverityColor(s.severity)}20; color: ${getSeverityColor(s.severity)};">${s.severity}</span>
+                </div>
+                <p style="margin: 0 0 10px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${s.description}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--border);">
+                    <code style="font-size: 11px; color: var(--azure-blue); background: var(--background); padding: 2px 6px; border-radius: 3px;">${s.ip}</code>
+                    <button class="demo-run-btn" data-scenario="${s.id}"
+                            style="padding: 6px 14px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                        Run
+                    </button>
+                </div>
+                <div class="demo-expected" style="margin-top: 10px; font-size: 11px; color: var(--text-tertiary);">
+                    Expected: AbuseIPDB ${s.expected_results.abuseipdb_score} | Threat: ${s.expected_results.threat_level}
+                </div>
+            </div>
+        `).join('');
+
+        // Add click handlers for individual scenario run buttons
+        grid.querySelectorAll('.demo-run-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                runDemoScenario(btn.dataset.scenario);
+            });
+        });
+    }
+
+    function getDemoIcon(category) {
+        const icons = {
+            'anonymization': '🧅',
+            'reputation': '🚨',
+            'malware': '🤖',
+            'reconnaissance': '🔍',
+            'geographic': '🌍',
+            'baseline': '✅'
+        };
+        return icons[category] || '⚠️';
+    }
+
+    async function runDemoScenario(scenarioId) {
+        const btn = document.querySelector(`.demo-run-btn[data-scenario="${scenarioId}"]`);
+        const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenarioId}"]`);
+        const resultsPanel = document.getElementById('demo-results-panel');
+        const resultsContent = document.getElementById('demo-results-content');
+
+        // Show loading state
+        btn.disabled = true;
+        btn.textContent = 'Running...';
+        card.style.borderColor = '#E6A502';
+
+        try {
+            const response = await fetch(`/api/demo/run/${scenarioId}`, {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                // Show results
+                resultsPanel.style.display = 'block';
+                card.style.borderColor = '#2EA44F';
+
+                resultsContent.innerHTML = renderDemoResult(data);
+
+                // Scroll to results
+                resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                card.style.borderColor = '#D13438';
+                resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${data.error}</div>`;
+                resultsPanel.style.display = 'block';
+            }
+        } catch (error) {
+            card.style.borderColor = '#D13438';
+            resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${error.message}</div>`;
+            resultsPanel.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Run';
+        }
+    }
+
+    function renderDemoResult(data) {
+        const ti = data.results.threat_intel || {};
+        const ml = data.results.ml || {};
+        const geo = data.results.geo || {};
+        const history = data.results.history || {};
+        const recommendations = data.results.recommendations || [];
+
+        const abuseScore = ti.abuseipdb_score !== null ? ti.abuseipdb_score : 'N/A';
+        const vtPositives = ti.virustotal_positives !== null ? ti.virustotal_positives : 0;
+        const vtTotal = ti.virustotal_total !== null ? ti.virustotal_total : 0;
+        const threatLevel = ti.threat_level || 'unknown';
+        const riskScore = ml.risk_score !== null ? ml.risk_score : 'N/A';
+        const isAnomaly = ml.is_anomaly;
+
+        // Build network flags string
+        let networkFlags = [];
+        if (geo.is_tor) networkFlags.push('<span style="color: #D13438;">Tor Exit</span>');
+        if (geo.is_vpn) networkFlags.push('<span style="color: #E6A502;">VPN</span>');
+        if (geo.is_proxy) networkFlags.push('<span style="color: #E6A502;">Proxy</span>');
+        if (geo.is_datacenter) networkFlags.push('<span style="color: #0078D4;">Datacenter</span>');
+        const networkFlagsStr = networkFlags.length > 0 ? networkFlags.join(' | ') : '<span style="color: #2EA44F;">Clean</span>';
+
+        return `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                <!-- Scenario Info -->
+                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
+                    <h5 style="margin: 0 0 8px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Scenario</h5>
+                    <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">${data.scenario_name}</div>
+                    <code style="font-size: 12px; color: var(--azure-blue);">${data.ip}</code>
+                    <div style="margin-top: 8px; font-size: 11px; color: var(--text-tertiary);">Event ID: ${data.event_id}</div>
+                </div>
+
+                <!-- Threat Intel Results -->
+                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
+                    <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Threat Intelligence</h5>
+                    <div style="display: grid; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">AbuseIPDB Score:</span>
+                            <span style="font-weight: 600; color: ${getScoreColor(abuseScore)};">${abuseScore}/100</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">AbuseIPDB Reports:</span>
+                            <span style="font-weight: 600;">${ti.abuseipdb_reports || 0}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">VirusTotal:</span>
+                            <span style="font-weight: 600; color: ${vtPositives > 0 ? '#D13438' : '#2EA44F'};">${vtPositives}/${vtTotal}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">Threat Level:</span>
+                            <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+                                  background: ${getThreatLevelColor(threatLevel)}20; color: ${getThreatLevelColor(threatLevel)};">
+                                ${threatLevel.toUpperCase()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ML Results -->
+                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
+                    <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">ML Analysis</h5>
+                    ${ml.ml_available ? `
+                        <div style="display: grid; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 13px;">Risk Score:</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="width: 80px; height: 8px; background: var(--background); border-radius: 4px; overflow: hidden;">
+                                        <div style="width: ${riskScore}%; height: 100%; background: ${getScoreColor(riskScore)}; border-radius: 4px;"></div>
+                                    </div>
+                                    <span style="font-weight: 600; color: ${getScoreColor(riskScore)};">${riskScore}/100</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-size: 13px;">Threat Type:</span>
+                                <span style="font-weight: 600;">${ml.threat_type || 'Normal'}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-size: 13px;">Confidence:</span>
+                                <span style="font-weight: 600;">${(ml.confidence * 100).toFixed(1)}%</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-size: 13px;">Anomaly:</span>
+                                <span style="font-weight: 600; color: ${isAnomaly ? '#D13438' : '#2EA44F'};">
+                                    ${isAnomaly ? '🚨 YES' : '✓ NO'}
+                                </span>
+                            </div>
+                        </div>
+                    ` : '<div style="color: var(--text-secondary); font-size: 13px;">ML model not available</div>'}
+                </div>
+
+                <!-- GeoIP -->
+                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
+                    <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">GeoLocation</h5>
+                    <div style="display: grid; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">Country:</span>
+                            <span style="font-weight: 600;">${geo.country || 'Unknown'} ${geo.country_code ? '(' + geo.country_code + ')' : ''}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">City:</span>
+                            <span style="font-weight: 600;">${geo.city || 'Unknown'}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">ISP:</span>
+                            <span style="font-weight: 600; font-size: 11px;">${geo.isp || 'Unknown'}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px;">Network:</span>
+                            <span style="font-size: 11px;">${networkFlagsStr}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historical Analysis -->
+            ${history && history.total_events > 0 ? `
+            <div style="margin-top: 16px; padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
+                <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Historical Analysis (From Database)</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: var(--azure-blue);">${history.total_events}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Total Events</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: #D13438;">${history.failed_attempts}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Failed Attempts</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: #2EA44F;">${history.successful_logins}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Successful Logins</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: #E6A502;">${history.unique_usernames}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Unique Usernames</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600;">${history.unique_servers}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Target Servers</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
+                        <div style="font-size: 20px; font-weight: 600; color: ${getScoreColor(history.avg_risk_score)};">${history.avg_risk_score}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Avg Risk Score</div>
+                    </div>
+                </div>
+                ${history.top_usernames && history.top_usernames.length > 0 ? `
+                <div style="margin-top: 10px;">
+                    <span style="font-size: 12px; color: var(--text-secondary);">Most Targeted Usernames:</span>
+                    <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${history.top_usernames.map(u => `
+                            <span style="padding: 3px 8px; background: var(--background); border-radius: 4px; font-size: 11px;">
+                                ${u.target_username} <span style="color: var(--text-tertiary);">(${u.attempts})</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+                ${history.first_seen ? `
+                <div style="margin-top: 10px; font-size: 11px; color: var(--text-tertiary);">
+                    First seen: ${new Date(history.first_seen).toLocaleString()} | Last seen: ${new Date(history.last_seen).toLocaleString()}
+                </div>
+                ` : ''}
+            </div>
+            ` : ''}
+
+            <!-- Recommendations -->
+            ${recommendations && recommendations.length > 0 ? `
+            <div style="margin-top: 16px; padding: 16px; background: var(--card-bg); border-radius: 8px; border: 2px solid ${recommendations[0].priority === 'critical' ? '#D13438' : recommendations[0].priority === 'high' ? '#E6A502' : 'var(--border)'};">
+                <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Security Recommendations</h5>
+                <div style="display: grid; gap: 10px;">
+                    ${recommendations.map(rec => `
+                        <div style="display: flex; align-items: start; gap: 12px; padding: 10px; background: ${getPriorityBg(rec.priority)}; border-radius: 6px; border-left: 3px solid ${getPriorityColor(rec.priority)};">
+                            <span style="font-size: 18px;">${rec.icon}</span>
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <span style="font-weight: 600; font-size: 13px; color: ${getPriorityColor(rec.priority)};">${rec.action}</span>
+                                    <span style="padding: 2px 6px; background: ${getPriorityColor(rec.priority)}20; color: ${getPriorityColor(rec.priority)}; font-size: 9px; font-weight: 600; border-radius: 3px; text-transform: uppercase;">${rec.priority}</span>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">${rec.reason}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+        `;
+    }
+
+    function getPriorityColor(priority) {
+        const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
+        return colors[priority] || '#666';
+    }
+
+    function getPriorityBg(priority) {
+        const colors = { critical: 'rgba(209, 52, 56, 0.1)', high: 'rgba(230, 165, 2, 0.1)', medium: 'rgba(0, 120, 212, 0.05)', low: 'rgba(46, 164, 79, 0.05)' };
+        return colors[priority] || 'var(--background)';
+    }
+
+    function getScoreColor(score) {
+        if (score === 'N/A') return 'var(--text-secondary)';
+        if (score >= 80) return '#D13438';
+        if (score >= 50) return '#E6A502';
+        if (score >= 20) return '#0078D4';
+        return '#2EA44F';
+    }
+
+    function getThreatLevelColor(level) {
+        const colors = {
+            'high': '#D13438',
+            'medium': '#E6A502',
+            'low': '#0078D4',
+            'clean': '#2EA44F',
+            'unknown': '#666'
+        };
+        return colors[level?.toLowerCase()] || '#666';
+    }
+
+    // Run All Demo
+    document.getElementById('demo-run-all-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('demo-run-all-btn');
+        const resultsPanel = document.getElementById('demo-results-panel');
+        const resultsContent = document.getElementById('demo-results-content');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span>Running all scenarios...</span>';
+
+        // Reset all cards
+        document.querySelectorAll('.demo-scenario-card').forEach(card => {
+            card.style.borderColor = 'var(--border)';
+        });
+
+        try {
+            const response = await fetch('/api/demo/run-all', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                resultsPanel.style.display = 'block';
+
+                // Mark successful scenarios
+                data.results.forEach(r => {
+                    const card = document.querySelector(`.demo-scenario-card[data-scenario="${r.scenario_id}"]`);
+                    if (card) {
+                        card.style.borderColor = r.success ? '#2EA44F' : '#D13438';
+                    }
+                });
+
+                // Render summary
+                resultsContent.innerHTML = `
+                    <div style="margin-bottom: 16px; padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
+                        <h5 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600;">Demo Summary</h5>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; text-align: center;">
+                            <div>
+                                <div style="font-size: 24px; font-weight: 600;">${data.summary.total_scenarios}</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Total Scenarios</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 24px; font-weight: 600; color: #2EA44F;">${data.summary.successful}</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Successful</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 24px; font-weight: 600; color: #D13438;">${data.summary.anomalies_detected}</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Anomalies Detected</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 24px; font-weight: 600; color: #E6A502;">${data.summary.high_risk_detected}</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">High Risk (>60)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background);">
+                                    <th style="padding: 10px; text-align: left;">Scenario</th>
+                                    <th style="padding: 10px; text-align: left;">IP</th>
+                                    <th style="padding: 10px; text-align: center;">AbuseIPDB</th>
+                                    <th style="padding: 10px; text-align: center;">VirusTotal</th>
+                                    <th style="padding: 10px; text-align: center;">Risk Score</th>
+                                    <th style="padding: 10px; text-align: center;">Anomaly</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.results.map(r => `
+                                    <tr style="border-bottom: 1px solid var(--border);">
+                                        <td style="padding: 10px;">${r.scenario_name || r.scenario_id}</td>
+                                        <td style="padding: 10px;"><code style="font-size: 11px;">${r.ip || '-'}</code></td>
+                                        <td style="padding: 10px; text-align: center; font-weight: 600; color: ${getScoreColor(r.results?.abuseipdb_score)};">
+                                            ${r.results?.abuseipdb_score !== null ? r.results.abuseipdb_score : '-'}
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            ${r.results?.virustotal_positives !== null ? r.results.virustotal_positives : '-'}
+                                        </td>
+                                        <td style="padding: 10px; text-align: center; font-weight: 600; color: ${getScoreColor(r.results?.risk_score)};">
+                                            ${r.results?.risk_score !== null ? r.results.risk_score : '-'}
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            ${r.results?.is_anomaly ? '🚨' : (r.results?.ml_available ? '✓' : '-')}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${data.error}</div>`;
+                resultsPanel.style.display = 'block';
+            }
+        } catch (error) {
+            resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${error.message}</div>`;
+            resultsPanel.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span>▶ Run Full Demo</span>';
+        }
+    });
+
+    // Load demo scenarios when simulation page is initialized
+    const origInitSimulation = initSimulation;
+    initSimulation = function() {
+        origInitSimulation();
+        loadDemoScenarios();
+    };
 })();
 </script>

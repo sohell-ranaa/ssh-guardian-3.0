@@ -18,6 +18,8 @@ notification_channels_routes = Blueprint('notification_channels', __name__)
 @notification_channels_routes.route('/list', methods=['GET'])
 def list_channels():
     """Get all notification channels with their configuration"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -69,9 +71,6 @@ def list_channels():
             if channel['updated_at']:
                 channel['updated_at'] = channel['updated_at'].isoformat()
 
-        cursor.close()
-        conn.close()
-
         return jsonify({
             'success': True,
             'data': {
@@ -84,11 +83,18 @@ def list_channels():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_channels_routes.route('/<channel_id>', methods=['GET'])
 def get_channel(channel_id):
     """Get a specific channel with full configuration"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -104,8 +110,6 @@ def get_channel(channel_id):
         channel = cursor.fetchone()
 
         if not channel:
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'Channel not found'
@@ -141,9 +145,6 @@ def get_channel(channel_id):
         if channel['updated_at']:
             channel['updated_at'] = channel['updated_at'].isoformat()
 
-        cursor.close()
-        conn.close()
-
         return jsonify({
             'success': True,
             'data': channel
@@ -154,11 +155,18 @@ def get_channel(channel_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_channels_routes.route('/<channel_id>/configure', methods=['POST'])
 def configure_channel(channel_id):
     """Update channel configuration"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json() or {}
 
@@ -174,8 +182,6 @@ def configure_channel(channel_id):
         # Check channel exists
         cursor.execute("SELECT id FROM integrations WHERE integration_id = %s", (channel_id,))
         if not cursor.fetchone():
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'Channel not found'
@@ -197,8 +203,6 @@ def configure_channel(channel_id):
         """, (channel_id,))
 
         conn.commit()
-        cursor.close()
-        conn.close()
 
         return jsonify({
             'success': True,
@@ -210,11 +214,18 @@ def configure_channel(channel_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_channels_routes.route('/<channel_id>/enable', methods=['POST'])
 def enable_channel(channel_id):
     """Enable a notification channel"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -233,8 +244,6 @@ def enable_channel(channel_id):
         """, (channel_id,))
 
         conn.commit()
-        cursor.close()
-        conn.close()
 
         return jsonify({
             'success': True,
@@ -246,11 +255,18 @@ def enable_channel(channel_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_channels_routes.route('/<channel_id>/disable', methods=['POST'])
 def disable_channel(channel_id):
     """Disable a notification channel"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -269,8 +285,6 @@ def disable_channel(channel_id):
         """, (channel_id,))
 
         conn.commit()
-        cursor.close()
-        conn.close()
 
         return jsonify({
             'success': True,
@@ -282,11 +296,18 @@ def disable_channel(channel_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @notification_channels_routes.route('/<channel_id>/test', methods=['POST'])
 def test_channel(channel_id):
     """Test a notification channel"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json() or {}
 
@@ -298,8 +319,6 @@ def test_channel(channel_id):
         elif channel_id == 'smtp':
             result = test_smtp_channel(cursor, data)
         else:
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': f'Unknown channel: {channel_id}'
@@ -325,8 +344,6 @@ def test_channel(channel_id):
         ))
 
         conn.commit()
-        cursor.close()
-        conn.close()
 
         return jsonify(result)
 
@@ -335,6 +352,11 @@ def test_channel(channel_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def test_telegram_channel(cursor, params):
@@ -492,6 +514,8 @@ def test_smtp_channel(cursor, params):
 @notification_channels_routes.route('/stats', methods=['GET'])
 def get_channel_stats():
     """Get notification channel statistics"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -521,9 +545,6 @@ def get_channel_stats():
         """)
         by_channel = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
-
         return jsonify({
             'success': True,
             'data': {
@@ -540,3 +561,8 @@ def get_channel_stats():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

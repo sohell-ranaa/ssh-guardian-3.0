@@ -15,8 +15,14 @@ async function loadThreatIntelPage() {
 // Load threat intelligence statistics
 async function loadThreatStats() {
     try {
-        const response = await fetch('/api/threat-intel/stats');
-        const data = await response.json();
+        // Use fetchWithCache if available to track cache status
+        let data;
+        if (typeof fetchWithCache === 'function') {
+            data = await fetchWithCache('/api/threat-intel/stats', 'threat_intel');
+        } else {
+            const response = await fetch('/api/threat-intel/stats');
+            data = await response.json();
+        }
 
         if (data.success && data.stats) {
             const stats = data.stats;

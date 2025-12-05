@@ -1,5 +1,6 @@
 """
 Users Routes - API endpoints for user management
+With Redis caching for improved performance
 """
 import sys
 from pathlib import Path
@@ -9,16 +10,42 @@ import bcrypt
 # Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key, cache_key_hash
 
 users_routes = Blueprint('users', __name__)
+
+# Cache TTLs
+USERS_LIST_TTL = 600         # 10 minutes for user list
+USERS_ROLES_TTL = 3600       # 1 hour for roles (static data)
+USERS_DETAIL_TTL = 600       # 10 minutes for single user detail
+
+
+def invalidate_users_cache():
+    """Invalidate all users-related caches"""
+    cache = get_cache()
+    cache.delete_pattern('users')
 
 
 @users_routes.route('/list', methods=['GET'])
 def list_users():
     """Get all users with their roles"""
+    conn = None
+    cursor = None
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('users', 'list')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -47,15 +74,18 @@ def list_users():
             if user['updated_at']:
                 user['updated_at'] = user['updated_at'].isoformat()
 
-        cursor.close()
-        conn.close()
+        result_data = {
+            'users': users,
+            'total': len(users)
+        }
+
+        # Cache the result
+        cache.set(cache_k, result_data, USERS_LIST_TTL)
 
         return jsonify({
             'success': True,
-            'data': {
-                'users': users,
-                'total': len(users)
-            }
+            'data': result_data,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -63,12 +93,30 @@ def list_users():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/roles', methods=['GET'])
 def list_roles():
     """Get all available roles"""
+    conn = None
+    cursor = None
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('users', 'roles')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': {'roles': cached},
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -80,14 +128,15 @@ def list_roles():
 
         roles = cursor.fetchall()
 
-        cursor.close()
-        conn.close()
+        # Cache the result
+        cache.set(cache_k, roles, USERS_ROLES_TTL)
 
         return jsonify({
             'success': True,
             'data': {
                 'roles': roles
-            }
+            },
+            'from_cache': False
         })
 
     except Exception as e:
@@ -95,12 +144,30 @@ def list_roles():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/<int:user_id>', methods=['GET'])
 def get_user(user_id):
     """Get a specific user"""
+    conn = None
+    cursor = None
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('users', 'detail', str(user_id))
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -118,9 +185,6 @@ def get_user(user_id):
 
         user = cursor.fetchone()
 
-        cursor.close()
-        conn.close()
-
         if not user:
             return jsonify({
                 'success': False,
@@ -137,9 +201,13 @@ def get_user(user_id):
         if user['updated_at']:
             user['updated_at'] = user['updated_at'].isoformat()
 
+        # Cache the result
+        cache.set(cache_k, user, USERS_DETAIL_TTL)
+
         return jsonify({
             'success': True,
-            'data': user
+            'data': user,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -147,11 +215,18 @@ def get_user(user_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/create', methods=['POST'])
 def create_user():
     """Create a new user"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
 
@@ -188,8 +263,8 @@ def create_user():
             conn.commit()
             new_user_id = cursor.lastrowid
 
-            cursor.close()
-            conn.close()
+            # Invalidate cache
+            invalidate_users_cache()
 
             return jsonify({
                 'success': True,
@@ -203,8 +278,6 @@ def create_user():
 
         except Exception as e:
             conn.rollback()
-            cursor.close()
-            conn.close()
 
             if 'Duplicate entry' in str(e):
                 return jsonify({
@@ -219,11 +292,18 @@ def create_user():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/<int:user_id>', methods=['PUT'])
 def update_user(user_id):
     """Update a user"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
 
@@ -233,8 +313,6 @@ def update_user(user_id):
         # Check if user exists
         cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if not cursor.fetchone():
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'User not found'
@@ -266,8 +344,6 @@ def update_user(user_id):
 
         if 'password' in data and data['password']:
             if len(data['password']) < 8:
-                cursor.close()
-                conn.close()
                 return jsonify({
                     'success': False,
                     'error': 'Password must be at least 8 characters'
@@ -277,8 +353,6 @@ def update_user(user_id):
             params.append(password_hash)
 
         if not updates:
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'No fields to update'
@@ -292,19 +366,17 @@ def update_user(user_id):
         try:
             cursor.execute(query, params)
             conn.commit()
+
+            # Invalidate cache
+            invalidate_users_cache()
         except Exception as e:
             conn.rollback()
             if 'Duplicate entry' in str(e):
-                cursor.close()
-                conn.close()
                 return jsonify({
                     'success': False,
                     'error': 'Email already exists'
                 }), 400
             raise e
-
-        cursor.close()
-        conn.close()
 
         return jsonify({
             'success': True,
@@ -316,11 +388,18 @@ def update_user(user_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/<int:user_id>/toggle-active', methods=['POST'])
 def toggle_user_active(user_id):
     """Toggle user active status"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -330,8 +409,6 @@ def toggle_user_active(user_id):
         user = cursor.fetchone()
 
         if not user:
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'User not found'
@@ -345,8 +422,9 @@ def toggle_user_active(user_id):
         """, (new_status, user_id))
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        # Invalidate cache
+        invalidate_users_cache()
 
         return jsonify({
             'success': True,
@@ -359,11 +437,18 @@ def toggle_user_active(user_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/<int:user_id>/unlock', methods=['POST'])
 def unlock_user(user_id):
     """Unlock a locked user account"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -377,15 +462,13 @@ def unlock_user(user_id):
         conn.commit()
 
         if cursor.rowcount == 0:
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'User not found'
             }), 404
 
-        cursor.close()
-        conn.close()
+        # Invalidate cache
+        invalidate_users_cache()
 
         return jsonify({
             'success': True,
@@ -397,11 +480,18 @@ def unlock_user(user_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     """Delete a user"""
+    conn = None
+    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -417,8 +507,6 @@ def delete_user(user_id):
         user = cursor.fetchone()
 
         if user and user[0] == 1 and result[0] == 0:
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'Cannot delete the last active Super Admin'
@@ -433,16 +521,15 @@ def delete_user(user_id):
 
         if cursor.rowcount == 0:
             conn.rollback()
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'User not found'
             }), 404
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        # Invalidate cache
+        invalidate_users_cache()
 
         return jsonify({
             'success': True,
@@ -454,11 +541,18 @@ def delete_user(user_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @users_routes.route('/<int:user_id>/reset-password', methods=['POST'])
 def reset_user_password(user_id):
     """Reset user password (admin action)"""
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
         new_password = data.get('password', '')
@@ -482,16 +576,15 @@ def reset_user_password(user_id):
 
         if cursor.rowcount == 0:
             conn.rollback()
-            cursor.close()
-            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'User not found'
             }), 404
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        # Invalidate cache
+        invalidate_users_cache()
 
         return jsonify({
             'success': True,
@@ -503,3 +596,8 @@ def reset_user_password(user_id):
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

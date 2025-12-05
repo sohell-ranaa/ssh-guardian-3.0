@@ -25,8 +25,14 @@ async function loadIPBlocks() {
         tableEl.style.display = 'none';
         errorEl.style.display = 'none';
 
-        const response = await fetch('/api/dashboard/blocking/blocks/list');
-        const data = await response.json();
+        // Use fetchWithCache if available to track cache status
+        let data;
+        if (typeof fetchWithCache === 'function') {
+            data = await fetchWithCache('/api/dashboard/blocking/blocks/list', 'blocking');
+        } else {
+            const response = await fetch('/api/dashboard/blocking/blocks/list');
+            data = await response.json();
+        }
 
         if (!data.success || !data.blocks || data.blocks.length === 0) {
             loadingEl.style.display = 'none';
@@ -42,35 +48,50 @@ async function loadIPBlocks() {
                 ? '<span style="padding: 4px 12px; background: #D13438; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Active</span>'
                 : '<span style="padding: 4px 12px; background: #107C10; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Unblocked</span>';
 
-            const sourceBadge = getSourceBadge(block.block_source);
+            const sourceBadge = getSourceBadge(block.source || block.block_source);
 
             const unblockTime = block.unblock_at
                 ? formatLocalDateTime(block.unblock_at)
                 : (block.auto_unblock ? 'Auto' : 'Manual');
 
-            const unblockButton = block.is_active
+            // Use ip_address field from API (not ip_address_text)
+            const ipAddress = block.ip_address || block.ip_address_text;
+
+            const actionButton = block.is_active
                 ? `<button
-                    onclick="unblockIPFromTable('${escapeHtml(block.ip_address_text)}', ${block.id})"
+                    onclick="unblockIPFromTable('${escapeHtml(ipAddress)}', ${block.id})"
                     style="padding: 6px 12px; border: 1px solid #107C10; background: var(--surface); color: #107C10; border-radius: 3px; cursor: pointer; font-size: 12px;"
                     title="Unblock IP"
                 >
                     Unblock
                 </button>`
-                : '<span style="color: #8A8886; font-size: 12px;">Already unblocked</span>';
+                : `<button
+                    onclick="reblockIPFromTable('${escapeHtml(ipAddress)}')"
+                    style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
+                    title="Block IP again"
+                >
+                    Block Again
+                </button>`;
 
-            // Location data (will show "N/A" if not available)
-            const location = block.country_name ? `${block.country_name} (${block.country_code || 'N/A'})` : 'N/A';
+            // View Details button
+            const viewDetailsBtn = `<button
+                onclick="if(typeof showIpDetails === 'function') showIpDetails('${escapeHtml(ipAddress)}')"
+                style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 8px;"
+                title="View IP Details"
+            >
+                Details
+            </button>`;
 
             return `
-                <tr style="border-bottom: 1px solid var(--border-light);">
+                <tr style="border-bottom: 1px solid var(--border-light);" data-ip="${escapeHtml(ipAddress)}">
                     <td style="padding: 12px; font-size: 13px; font-weight: 600; font-family: 'Courier New', monospace;">
-                        ${escapeHtml(block.ip_address_text)}
+                        ${escapeHtml(ipAddress)}
+                    </td>
+                    <td style="padding: 12px; font-size: 12px;" class="ip-location-cell" data-ip="${escapeHtml(ipAddress)}">
+                        <span class="location-loading" style="color: var(--text-secondary);">Loading...</span>
                     </td>
                     <td style="padding: 12px; font-size: 12px;">
-                        ${escapeHtml(location)}
-                    </td>
-                    <td style="padding: 12px; font-size: 12px;">
-                        ${escapeHtml(block.block_reason || 'No reason specified')}
+                        ${escapeHtml(block.reason || block.block_reason || 'No reason specified')}
                     </td>
                     <td style="padding: 12px;">${sourceBadge}</td>
                     <td style="padding: 12px; font-size: 12px;">
@@ -81,11 +102,14 @@ async function loadIPBlocks() {
                     </td>
                     <td style="padding: 12px; text-align: center;">${statusBadge}</td>
                     <td style="padding: 12px; text-align: right;">
-                        ${unblockButton}
+                        ${viewDetailsBtn}${actionButton}
                     </td>
                 </tr>
             `;
         }).join('');
+
+        // Enrich location data asynchronously
+        enrichBlocksLocationData();
 
         // Show table
         loadingEl.style.display = 'none';
@@ -273,6 +297,38 @@ async function unblockIPFromTable(ipAddress, blockId) {
     await unblockIPAddress(ipAddress, 'Unblocked from dashboard');
 }
 
+// Re-block IP from table row (for previously unblocked IPs)
+async function reblockIPFromTable(ipAddress) {
+    if (!confirm(`Are you sure you want to block IP: ${ipAddress} again?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/dashboard/blocking/blocks/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ip_address: ipAddress,
+                reason: 'Re-blocked from IP Blocks page',
+                duration_minutes: 1440
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showBlockNotification(`IP ${ipAddress} blocked successfully`, 'success');
+            // Reload blocks
+            setTimeout(() => loadIPBlocks(), 1000);
+        } else {
+            showBlockNotification(`Failed to block IP: ${data.message || data.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error blocking IP:', error);
+        showBlockNotification('Error blocking IP', 'error');
+    }
+}
+
 // Unblock IP address
 async function unblockIPAddress(ipAddress, reason) {
     try {
@@ -407,4 +463,47 @@ if (!document.getElementById('block-notification-styles')) {
         }
     `;
     document.head.appendChild(style);
+}
+
+// Enrich location data for blocked IPs using FreeIPAPI
+async function enrichBlocksLocationData() {
+    const locationCells = document.querySelectorAll('.ip-location-cell');
+    if (locationCells.length === 0) return;
+
+    // Get unique IPs
+    const uniqueIps = new Set();
+    locationCells.forEach(cell => {
+        const ip = cell.getAttribute('data-ip');
+        if (ip) uniqueIps.add(ip);
+    });
+
+    // Fetch info for each IP (limit concurrent requests)
+    for (const ip of uniqueIps) {
+        try {
+            const response = await fetch(`/api/dashboard/ip-info/lookup/${encodeURIComponent(ip)}`);
+            const data = await response.json();
+
+            // Update all cells for this IP
+            const cells = document.querySelectorAll(`.ip-location-cell[data-ip="${ip}"]`);
+            cells.forEach(cell => {
+                if (data.success) {
+                    const flagImg = data.country_code && data.country_code !== 'N/A'
+                        ? `<img src="https://flagcdn.com/20x15/${data.country_code.toLowerCase()}.png" alt="${data.country_code}" style="vertical-align: middle; margin-right: 6px;">`
+                        : '';
+                    const locationText = data.is_private
+                        ? 'Private Network'
+                        : `${data.city || 'Unknown'}, ${data.country || 'Unknown'}`;
+                    cell.innerHTML = `${flagImg}<span>${escapeHtml(locationText)}</span>`;
+                } else {
+                    cell.innerHTML = '<span style="color: var(--text-secondary);">Unknown</span>';
+                }
+            });
+        } catch (error) {
+            console.error(`Error fetching location for ${ip}:`, error);
+            const cells = document.querySelectorAll(`.ip-location-cell[data-ip="${ip}"]`);
+            cells.forEach(cell => {
+                cell.innerHTML = '<span style="color: var(--text-secondary);">Error</span>';
+            });
+        }
+    }
 }

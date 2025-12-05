@@ -15,8 +15,14 @@ async function loadGeoIPPage() {
 // Load GeoIP statistics
 async function loadGeoIPStats() {
     try {
-        const response = await fetch('/api/geoip/stats');
-        const data = await response.json();
+        // Use fetchWithCache if available to track cache status
+        let data;
+        if (typeof fetchWithCache === 'function') {
+            data = await fetchWithCache('/api/geoip/stats', 'geoip');
+        } else {
+            const response = await fetch('/api/geoip/stats');
+            data = await response.json();
+        }
 
         if (data.success && data.stats) {
             const stats = data.stats;

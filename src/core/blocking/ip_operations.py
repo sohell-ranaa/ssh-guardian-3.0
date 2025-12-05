@@ -69,6 +69,22 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     'message': f'IP {ip_address} is already blocked'
                 }
 
+            # MUTUAL EXCLUSIVITY: Remove from whitelist if exists
+            cursor.execute("""
+                UPDATE ip_whitelist
+                SET is_active = FALSE, updated_at = NOW()
+                WHERE ip_address_text = %s AND is_active = TRUE
+            """, (ip_address,))
+            removed_from_whitelist = cursor.rowcount > 0
+
+            # MUTUAL EXCLUSIVITY: Remove from watchlist if exists
+            cursor.execute("""
+                UPDATE ip_watchlist
+                SET is_active = FALSE, updated_at = NOW()
+                WHERE ip_address_text = %s AND is_active = TRUE
+            """, (ip_address,))
+            removed_from_watchlist = cursor.rowcount > 0
+
             # Insert block
             cursor.execute("""
                 INSERT INTO ip_blocks (
@@ -143,13 +159,22 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
 
             conn.commit()
 
+            # Build message with mutual exclusivity info
+            msg = f'IP {ip_address} blocked successfully'
+            if removed_from_whitelist:
+                msg += ' (removed from whitelist)'
+            if removed_from_watchlist:
+                msg += ' (removed from watchlist)'
+
             print(f"🚫 Blocked IP: {ip_address} - {block_reason}")
 
             return {
                 'success': True,
                 'block_id': block_id,
-                'message': f'IP {ip_address} blocked successfully',
-                'unblock_at': unblock_at.isoformat() if unblock_at else None
+                'message': msg,
+                'unblock_at': unblock_at.isoformat() if unblock_at else None,
+                'removed_from_whitelist': removed_from_whitelist,
+                'removed_from_watchlist': removed_from_watchlist
             }
 
         except Exception as e:

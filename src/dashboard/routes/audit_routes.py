@@ -1,5 +1,6 @@
 """
 Audit Routes - API endpoints for audit log management
+With Redis caching for improved performance
 """
 import sys
 from pathlib import Path
@@ -8,10 +9,25 @@ from flask import Blueprint, jsonify, request
 # Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key, cache_key_hash
 
 audit_routes = Blueprint('audit', __name__)
+
+# Cache TTLs - OPTIMIZED FOR PERFORMANCE
+AUDIT_LIST_TTL = 300          # 5 minutes for paginated list
+AUDIT_ACTIONS_TTL = 1800      # 30 minutes for action types (rarely changes)
+AUDIT_RESOURCES_TTL = 1800    # 30 minutes for resource types (rarely changes)
+AUDIT_STATS_TTL = 600         # 10 minutes for stats
+AUDIT_DETAIL_TTL = 900        # 15 minutes for single log detail
+
+
+def invalidate_audit_cache():
+    """Invalidate all audit log caches"""
+    cache = get_cache()
+    cache.delete_pattern('audit')
 
 
 @audit_routes.route('/list', methods=['GET'])
@@ -37,6 +53,22 @@ def list_audit_logs():
         start_date = request.args.get('start_date', '').strip()
         end_date = request.args.get('end_date', '').strip()
         search = request.args.get('search', '').strip()
+
+        # Try cache first
+        cache = get_cache()
+        cache_params = {
+            'page': page, 'per_page': per_page, 'action': action_filter,
+            'user_id': user_id_filter, 'resource_type': resource_type_filter,
+            'start_date': start_date, 'end_date': end_date, 'search': search
+        }
+        cache_k = cache_key_hash('audit', 'list', cache_params)
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -110,15 +142,21 @@ def list_audit_logs():
         cursor.close()
         conn.close()
 
+        result_data = {
+            'logs': logs,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        }
+
+        # Cache the result
+        cache.set(cache_k, result_data, AUDIT_LIST_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'logs': logs,
-                'total': total,
-                'page': page,
-                'per_page': per_page,
-                'total_pages': (total + per_page - 1) // per_page
-            }
+            'data': result_data,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -132,6 +170,17 @@ def list_audit_logs():
 def list_action_types():
     """Get all unique action types for filtering"""
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('audit', 'actions')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': {'actions': cached},
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -147,11 +196,13 @@ def list_action_types():
         cursor.close()
         conn.close()
 
+        # Cache the result
+        cache.set(cache_k, actions, AUDIT_ACTIONS_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'actions': actions
-            }
+            'data': {'actions': actions},
+            'from_cache': False
         })
 
     except Exception as e:
@@ -165,6 +216,17 @@ def list_action_types():
 def list_resource_types():
     """Get all unique resource types for filtering"""
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('audit', 'resource_types')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': {'resource_types': cached},
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -181,11 +243,13 @@ def list_resource_types():
         cursor.close()
         conn.close()
 
+        # Cache the result
+        cache.set(cache_k, resource_types, AUDIT_RESOURCES_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'resource_types': resource_types
-            }
+            'data': {'resource_types': resource_types},
+            'from_cache': False
         })
 
     except Exception as e:
@@ -199,6 +263,17 @@ def list_resource_types():
 def get_audit_stats():
     """Get audit log statistics"""
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('audit', 'stats')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -254,16 +329,22 @@ def get_audit_stats():
         cursor.close()
         conn.close()
 
+        stats_data = {
+            'total': total,
+            'today': today,
+            'this_week': this_week,
+            'top_actions': top_actions,
+            'active_users': active_users,
+            'failed_logins_today': failed_logins
+        }
+
+        # Cache the result
+        cache.set(cache_k, stats_data, AUDIT_STATS_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'total': total,
-                'today': today,
-                'this_week': this_week,
-                'top_actions': top_actions,
-                'active_users': active_users,
-                'failed_logins_today': failed_logins
-            }
+            'data': stats_data,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -277,6 +358,17 @@ def get_audit_stats():
 def get_audit_log(log_id):
     """Get a specific audit log entry"""
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('audit', 'detail', str(log_id))
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -304,9 +396,13 @@ def get_audit_log(log_id):
         if log['created_at']:
             log['created_at'] = log['created_at'].isoformat()
 
+        # Cache the result
+        cache.set(cache_k, log, AUDIT_DETAIL_TTL)
+
         return jsonify({
             'success': True,
-            'data': log
+            'data': log,
+            'from_cache': False
         })
 
     except Exception as e:

@@ -1,17 +1,18 @@
 <!-- SSH Guardian v3.0 - Audit Logs Page -->
 <div id="page-audit" class="page-content" style="display: none;">
-    <div class="page-header">
+    <div class="page-header-with-cache">
         <div>
             <h1 class="page-title">Audit Logs</h1>
             <p class="page-subtitle">View system activity and security events</p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button id="audit-export-btn" class="btn btn-secondary">
-                Export
-            </button>
-            <button id="audit-refresh-btn" class="btn btn-secondary">
-                Refresh
-            </button>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="audit">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadAuditPage()" title="Refresh data">↻</button>
+            </div>
+            <button id="audit-export-btn" class="btn btn-secondary">Export</button>
         </div>
     </div>
 

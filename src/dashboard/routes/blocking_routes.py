@@ -1,6 +1,6 @@
 """
 SSH Guardian v3.0 - Blocking Management Routes
-API endpoints for managing IP blocks, rules, and blocking actions
+API endpoints for managing IP blocks, rules, and blocking actions with Redis caching
 """
 
 from flask import Blueprint, jsonify, request
@@ -15,15 +15,28 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from blocking_engine import BlockingEngine, block_ip_manual, unblock_ip
+from cache import get_cache, cache_key, cache_key_hash
 
 # Create Blueprint
 blocking_routes = Blueprint('blocking_routes', __name__, url_prefix='/api/dashboard/blocking')
+
+# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
+BLOCKS_LIST_TTL = 900     # 15 minutes for blocks list
+BLOCKS_STATS_TTL = 1800   # 30 minutes for stats
+RULES_LIST_TTL = 3600     # 1 hour for rules (less frequently changed)
+BLOCK_CHECK_TTL = 900     # 15 minutes for single IP check
+
+
+def invalidate_blocking_cache():
+    """Invalidate all blocking-related caches"""
+    cache = get_cache()
+    cache.delete_pattern('blocking')
 
 
 @blocking_routes.route('/blocks/list', methods=['GET'])
 def list_blocks():
     """
-    Get list of IP blocks
+    Get list of IP blocks with caching
 
     Query Parameters:
     - limit: Number of blocks (default: 50, max: 500)
@@ -36,6 +49,18 @@ def list_blocks():
         offset = int(request.args.get('offset', 0))
         is_active = request.args.get('is_active')
         block_source = request.args.get('block_source')
+
+        # Generate cache key from parameters
+        cache = get_cache()
+        cache_k = cache_key_hash('blocking', 'blocks_list',
+                                 limit=limit, offset=offset,
+                                 is_active=is_active, block_source=block_source)
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            cached['from_cache'] = True
+            return jsonify(cached), 200
 
         where_clauses = []
         params = []
@@ -133,7 +158,7 @@ def list_blocks():
                 }
                 formatted_blocks.append(formatted_block)
 
-            return jsonify({
+            result = {
                 'success': True,
                 'blocks': formatted_blocks,
                 'pagination': {
@@ -141,8 +166,14 @@ def list_blocks():
                     'limit': limit,
                     'offset': offset,
                     'has_more': (offset + limit) < total
-                }
-            }), 200
+                },
+                'from_cache': False
+            }
+
+            # Cache the result
+            cache.set(cache_k, result, BLOCKS_LIST_TTL)
+
+            return jsonify(result), 200
 
         finally:
             cursor.close()
@@ -192,6 +223,8 @@ def manual_block():
         )
 
         if result['success']:
+            # Invalidate cache
+            invalidate_blocking_cache()
             return jsonify(result), 201
         else:
             return jsonify(result), 400
@@ -235,6 +268,8 @@ def manual_unblock():
         )
 
         if result['success']:
+            # Invalidate cache
+            invalidate_blocking_cache()
             return jsonify(result), 200
         else:
             return jsonify(result), 400
@@ -250,7 +285,7 @@ def manual_unblock():
 @blocking_routes.route('/blocks/check/<ip_address>', methods=['GET'])
 def check_block_status(ip_address):
     """
-    Check if an IP is currently blocked
+    Check if an IP is currently blocked with caching
 
     Returns:
     {
@@ -259,6 +294,15 @@ def check_block_status(ip_address):
     }
     """
     try:
+        cache = get_cache()
+        cache_k = cache_key('blocking', 'check', ip_address)
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            cached['from_cache'] = True
+            return jsonify(cached), 200
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -279,7 +323,7 @@ def check_block_status(ip_address):
             block = cursor.fetchone()
 
             if block:
-                return jsonify({
+                result = {
                     'is_blocked': True,
                     'block_info': {
                         'id': block['id'],
@@ -288,13 +332,20 @@ def check_block_status(ip_address):
                         'blocked_at': block['blocked_at'].isoformat() if block['blocked_at'] else None,
                         'unblock_at': block['unblock_at'].isoformat() if block['unblock_at'] else None,
                         'auto_unblock': bool(block['auto_unblock'])
-                    }
-                }), 200
+                    },
+                    'from_cache': False
+                }
             else:
-                return jsonify({
+                result = {
                     'is_blocked': False,
-                    'block_info': None
-                }), 200
+                    'block_info': None,
+                    'from_cache': False
+                }
+
+            # Cache the result
+            cache.set(cache_k, result, BLOCK_CHECK_TTL)
+
+            return jsonify(result), 200
 
         finally:
             cursor.close()
@@ -310,8 +361,20 @@ def check_block_status(ip_address):
 
 @blocking_routes.route('/rules/list', methods=['GET'])
 def list_rules():
-    """Get list of blocking rules"""
+    """Get list of blocking rules with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('blocking', 'rules_list')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'rules': cached,
+                'from_cache': True
+            }), 200
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -361,9 +424,13 @@ def list_rules():
                 }
                 formatted_rules.append(formatted_rule)
 
+            # Cache the result
+            cache.set(cache_k, formatted_rules, RULES_LIST_TTL)
+
             return jsonify({
                 'success': True,
-                'rules': formatted_rules
+                'rules': formatted_rules,
+                'from_cache': False
             }), 200
 
         finally:
@@ -443,6 +510,9 @@ def create_rule():
             rule_id = cursor.lastrowid
             conn.commit()
 
+            # Invalidate cache
+            invalidate_blocking_cache()
+
             return jsonify({
                 'success': True,
                 'rule_id': rule_id,
@@ -486,6 +556,9 @@ def toggle_rule(rule_id):
                 }), 404
 
             conn.commit()
+
+            # Invalidate cache
+            invalidate_blocking_cache()
 
             return jsonify({
                 'success': True,
@@ -552,6 +625,9 @@ def update_rule(rule_id):
 
             conn.commit()
 
+            # Invalidate cache
+            invalidate_blocking_cache()
+
             return jsonify({
                 'success': True,
                 'message': f'Rule "{data.get("rule_name")}" updated successfully'
@@ -607,6 +683,9 @@ def delete_rule(rule_id):
             cursor.execute("DELETE FROM blocking_rules WHERE id = %s", (rule_id,))
             conn.commit()
 
+            # Invalidate cache
+            invalidate_blocking_cache()
+
             return jsonify({
                 'success': True,
                 'message': f'Rule "{rule["rule_name"]}" deleted successfully'
@@ -628,8 +707,20 @@ def delete_rule(rule_id):
 
 @blocking_routes.route('/stats', methods=['GET'])
 def get_stats():
-    """Get blocking statistics"""
+    """Get blocking statistics with caching"""
     try:
+        cache = get_cache()
+        cache_k = cache_key('blocking', 'stats')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'stats': cached,
+                'from_cache': True
+            }), 200
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -671,15 +762,26 @@ def get_stats():
             """)
             top_blocked_ips = cursor.fetchall()
 
+            # Format timestamps
+            for ip in top_blocked_ips:
+                if ip['last_blocked']:
+                    ip['last_blocked'] = ip['last_blocked'].isoformat()
+
+            stats = {
+                'total_blocks': total_blocks,
+                'active_blocks': active_blocks,
+                'blocks_by_source': blocks_by_source,
+                'recent_24h': recent_24h,
+                'top_blocked_ips': top_blocked_ips
+            }
+
+            # Cache the result
+            cache.set(cache_k, stats, BLOCKS_STATS_TTL)
+
             return jsonify({
                 'success': True,
-                'stats': {
-                    'total_blocks': total_blocks,
-                    'active_blocks': active_blocks,
-                    'blocks_by_source': blocks_by_source,
-                    'recent_24h': recent_24h,
-                    'top_blocked_ips': top_blocked_ips
-                }
+                'stats': stats,
+                'from_cache': False
             }), 200
 
         finally:

@@ -15,6 +15,20 @@ sys.path.append(str(PROJECT_ROOT / "dbs"))
 
 from connection import get_connection, ip_to_binary, get_ip_version
 
+# Enrichment module (lazy loaded)
+_enrichment_module = None
+
+def _get_enrichment_module():
+    """Lazy load enrichment module to avoid circular imports"""
+    global _enrichment_module
+    if _enrichment_module is None:
+        try:
+            from core.enrichment import enrich_event
+            _enrichment_module = enrich_event
+        except ImportError:
+            _enrichment_module = False
+    return _enrichment_module
+
 
 # SSH Log Patterns
 LOG_PATTERNS = {
@@ -174,11 +188,22 @@ def process_log_line(log_line: str, source_type: str = 'agent',
             event_id = cursor.lastrowid
             conn.commit()
 
+            # Trigger enrichment pipeline (GeoIP, Threat Intel, ML)
+            enrichment_result = None
+            try:
+                enrich_event = _get_enrichment_module()
+                if enrich_event:
+                    enrichment_result = enrich_event(event_id, source_ip, verbose=False)
+            except Exception as e:
+                # Don't fail the event if enrichment fails
+                enrichment_result = {'error': str(e)}
+
             return {
                 'success': True,
                 'event_id': event_id,
                 'event_uuid': event_uuid,
-                'event_type': event_type
+                'event_type': event_type,
+                'enrichment': enrichment_result
             }
 
         finally:

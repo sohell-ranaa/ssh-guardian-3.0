@@ -1,17 +1,18 @@
 <!-- SSH Guardian v3.0 - Notification History Page -->
 <div id="page-notif-history" class="page-content" style="display: none;">
-    <div class="page-header">
+    <div class="page-header-with-cache">
         <div>
             <h1 class="page-title">Notification History</h1>
             <p class="page-subtitle">View sent notifications and delivery status</p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button id="notif-history-refresh-btn" class="btn btn-secondary">
-                Refresh
-            </button>
-            <button id="notif-history-export-btn" class="btn btn-secondary">
-                Export
-            </button>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="notifications">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadNotificationHistoryPage()" title="Refresh data">↻</button>
+            </div>
+            <button id="notif-history-export-btn" class="btn btn-secondary">Export</button>
         </div>
     </div>
 

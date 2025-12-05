@@ -1,6 +1,7 @@
 """
 Notification History Routes - API endpoints for notification history/logs
 Separate module for viewing sent notifications history
+With Redis caching for improved performance
 """
 import sys
 from pathlib import Path
@@ -9,10 +10,24 @@ from flask import Blueprint, jsonify, request
 # Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key, cache_key_hash
 
 notification_history_routes = Blueprint('notification_history', __name__)
+
+# Cache TTLs - OPTIMIZED FOR PERFORMANCE
+NOTIF_LIST_TTL = 300          # 5 minutes for paginated list
+NOTIF_DETAIL_TTL = 600        # 10 minutes for single notification detail
+NOTIF_STATS_TTL = 600         # 10 minutes for stats
+NOTIF_TRIGGER_TYPES_TTL = 1800 # 30 minutes for trigger types (rarely changes)
+
+
+def invalidate_notification_history_cache():
+    """Invalidate all notification history caches"""
+    cache = get_cache()
+    cache.delete_pattern('notif_history')
 
 
 @notification_history_routes.route('/list', methods=['GET'])
@@ -42,6 +57,23 @@ def list_notifications():
         start_date = request.args.get('start_date', '').strip()
         end_date = request.args.get('end_date', '').strip()
         search = request.args.get('search', '').strip()
+
+        # Try cache first
+        cache = get_cache()
+        cache_params = {
+            'page': page, 'per_page': per_page, 'status': status_filter,
+            'trigger_type': trigger_type_filter, 'priority': priority_filter,
+            'channel': channel_filter, 'rule_id': rule_id_filter,
+            'start_date': start_date, 'end_date': end_date, 'search': search
+        }
+        cache_k = cache_key_hash('notif_history', 'list', cache_params)
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -130,15 +162,21 @@ def list_notifications():
         cursor.close()
         conn.close()
 
+        result_data = {
+            'notifications': notifications,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page if total > 0 else 0
+        }
+
+        # Cache the result
+        cache.set(cache_k, result_data, NOTIF_LIST_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'notifications': notifications,
-                'total': total,
-                'page': page,
-                'per_page': per_page,
-                'total_pages': (total + per_page - 1) // per_page if total > 0 else 0
-            }
+            'data': result_data,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -204,6 +242,17 @@ def get_notification(notif_id):
 def get_notification_stats():
     """Get notification statistics"""
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('notif_history', 'stats')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -282,18 +331,24 @@ def get_notification_stats():
         cursor.close()
         conn.close()
 
+        stats_data = {
+            'total': total,
+            'today': today,
+            'this_week': this_week,
+            'by_status': by_status,
+            'by_trigger_type': by_trigger_type,
+            'by_priority': by_priority,
+            'failed_recent': failed_recent,
+            'daily_trend': daily_trend
+        }
+
+        # Cache the result
+        cache.set(cache_k, stats_data, NOTIF_STATS_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'total': total,
-                'today': today,
-                'this_week': this_week,
-                'by_status': by_status,
-                'by_trigger_type': by_trigger_type,
-                'by_priority': by_priority,
-                'failed_recent': failed_recent,
-                'daily_trend': daily_trend
-            }
+            'data': stats_data,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -307,6 +362,17 @@ def get_notification_stats():
 def list_trigger_types():
     """Get all unique trigger types for filtering"""
     try:
+        # Try cache first
+        cache = get_cache()
+        cache_k = cache_key('notif_history', 'trigger_types')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': {'trigger_types': cached},
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -322,11 +388,13 @@ def list_trigger_types():
         cursor.close()
         conn.close()
 
+        # Cache the result
+        cache.set(cache_k, trigger_types, NOTIF_TRIGGER_TYPES_TTL)
+
         return jsonify({
             'success': True,
-            'data': {
-                'trigger_types': trigger_types
-            }
+            'data': {'trigger_types': trigger_types},
+            'from_cache': False
         })
 
     except Exception as e:

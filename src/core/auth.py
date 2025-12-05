@@ -25,15 +25,61 @@ sys.path.append(str(PROJECT_ROOT / "dbs"))
 
 from dbs.connection import get_connection
 
-# Email configuration (from environment variables)
-EMAIL_CONFIG = {
-    'smtp_host': os.getenv('SMTP_HOST', 'smtp.gmail.com'),
-    'smtp_port': int(os.getenv('SMTP_PORT', 587)),
-    'smtp_user': os.getenv('SMTP_USER', '').strip('"'),
-    'smtp_password': os.getenv('SMTP_PASSWORD', '').strip('"'),
-    'from_email': os.getenv('FROM_EMAIL', '').strip('"'),
-    'from_name': os.getenv('FROM_NAME', 'SSH Guardian v3.0')
-}
+# Email configuration cache (loaded from database)
+_email_config_cache = None
+_email_config_loaded_at = None
+
+
+def get_email_config():
+    """Get email configuration from database integrations table"""
+    global _email_config_cache, _email_config_loaded_at
+
+    # Cache config for 5 minutes
+    if _email_config_cache and _email_config_loaded_at:
+        if (datetime.now() - _email_config_loaded_at).total_seconds() < 300:
+            return _email_config_cache
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get SMTP integration config directly from integration_config table
+        cursor.execute("""
+            SELECT config_key, config_value
+            FROM integration_config
+            WHERE integration_id = 'smtp'
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        if rows:
+            config = {row['config_key']: row['config_value'] for row in rows}
+            _email_config_cache = {
+                'smtp_host': config.get('host', ''),
+                'smtp_port': int(config.get('port', 587)),
+                'smtp_user': config.get('user', ''),
+                'smtp_password': config.get('password', ''),
+                'from_email': config.get('from_email', ''),
+                'from_name': config.get('from_name', 'SSH Guardian v3.0'),
+                'use_tls': config.get('use_tls', 'true').lower() == 'true'
+            }
+            _email_config_loaded_at = datetime.now()
+            return _email_config_cache
+
+    except Exception as e:
+        print(f"⚠️  Failed to load email config from database: {e}")
+
+    # Fallback to environment variables
+    return {
+        'smtp_host': os.getenv('SMTP_HOST', 'smtp.gmail.com'),
+        'smtp_port': int(os.getenv('SMTP_PORT', 587)),
+        'smtp_user': os.getenv('SMTP_USER', ''),
+        'smtp_password': os.getenv('SMTP_PASSWORD', ''),
+        'from_email': os.getenv('FROM_EMAIL', ''),
+        'from_name': os.getenv('FROM_NAME', 'SSH Guardian v3.0'),
+        'use_tls': True
+    }
 
 # Session configuration
 SESSION_DURATION_DAYS = 30  # Remember me for 30 days (persistent across browser sessions)
@@ -52,17 +98,20 @@ class EmailService:
 
     @staticmethod
     def send_email(to_email, subject, body_html, body_text=None):
-        """Send email using SMTP"""
+        """Send email using SMTP - reads config from database integrations"""
         try:
-            if not EMAIL_CONFIG['smtp_user'] or not EMAIL_CONFIG['smtp_password']:
+            # Get email config from database
+            email_config = get_email_config()
+
+            if not email_config['smtp_user'] or not email_config['smtp_password']:
                 print(f"⚠️  Email not configured. OTP for {to_email}: Would send email")
                 print(f"   Subject: {subject}")
                 print(f"   Body: {body_text or 'See HTML body'}")
-                return True
+                return False  # Return False so OTP is shown in dev mode
 
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
-            msg['From'] = f"{EMAIL_CONFIG['from_name']} <{EMAIL_CONFIG['from_email']}>"
+            msg['From'] = f"{email_config['from_name']} <{email_config['from_email']}>"
             msg['To'] = to_email
 
             if body_text:
@@ -72,15 +121,35 @@ class EmailService:
             part2 = MIMEText(body_html, 'html')
             msg.attach(part2)
 
-            with smtplib.SMTP(EMAIL_CONFIG['smtp_host'], EMAIL_CONFIG['smtp_port']) as server:
-                server.starttls()
-                server.login(EMAIL_CONFIG['smtp_user'], EMAIL_CONFIG['smtp_password'])
-                server.send_message(msg)
+            # Connect to SMTP server
+            smtp_host = email_config['smtp_host']
+            smtp_port = email_config['smtp_port']
+            use_tls = email_config.get('use_tls', True)
 
+            print(f"📧 Sending email to {to_email} via {smtp_host}:{smtp_port} (TLS: {use_tls})")
+
+            if smtp_port == 465:
+                # SSL connection
+                import ssl
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+                    server.login(email_config['smtp_user'], email_config['smtp_password'])
+                    server.send_message(msg)
+            else:
+                # Standard or TLS connection
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+                    if use_tls:
+                        server.starttls()
+                    server.login(email_config['smtp_user'], email_config['smtp_password'])
+                    server.send_message(msg)
+
+            print(f"✅ Email sent successfully to {to_email}")
             return True
 
         except Exception as e:
             print(f"❌ Email send error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     @staticmethod
@@ -552,15 +621,26 @@ def login_required(f):
     """Decorator to require authentication"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        from flask import redirect, url_for
+
         session_token = request.cookies.get('session_token')
 
         if not session_token:
-            return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+            # Check if this is an API request (expects JSON) or browser request
+            if _is_api_request():
+                return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+            else:
+                # Browser request - redirect to login
+                return redirect(url_for('login'))
 
         session_data = SessionManager.validate_session(session_token)
 
         if not session_data:
-            return jsonify({'error': 'Invalid or expired session', 'code': 'INVALID_SESSION'}), 401
+            if _is_api_request():
+                return jsonify({'error': 'Invalid or expired session', 'code': 'INVALID_SESSION'}), 401
+            else:
+                # Browser request - redirect to login
+                return redirect(url_for('login'))
 
         # Add user data to request context
         request.current_user = session_data
@@ -570,26 +650,57 @@ def login_required(f):
     return decorated_function
 
 
+def _is_api_request():
+    """Check if request is an API call (expects JSON) or browser request"""
+    # Check Accept header
+    accept = request.headers.get('Accept', '')
+    if 'application/json' in accept and 'text/html' not in accept:
+        return True
+
+    # Check X-Requested-With header (AJAX requests)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return True
+
+    # Check if request path starts with /api/
+    if request.path.startswith('/api/'):
+        return True
+
+    # Check Content-Type for JSON
+    content_type = request.headers.get('Content-Type', '')
+    if 'application/json' in content_type:
+        return True
+
+    return False
+
+
 def permission_required(permission_name):
     """Decorator to require specific permission"""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            from flask import redirect, url_for, abort
+
             session_token = request.cookies.get('session_token')
 
             if not session_token:
-                return jsonify({'error': 'Authentication required'}), 401
+                if _is_api_request():
+                    return jsonify({'error': 'Authentication required'}), 401
+                return redirect(url_for('login'))
 
             session_data = SessionManager.validate_session(session_token)
 
             if not session_data:
-                return jsonify({'error': 'Invalid session'}), 401
+                if _is_api_request():
+                    return jsonify({'error': 'Invalid session'}), 401
+                return redirect(url_for('login'))
 
             # Check permission
             permissions = json.loads(session_data['permissions']) if isinstance(session_data['permissions'], str) else session_data['permissions']
 
             if not permissions.get(permission_name, False):
-                return jsonify({'error': 'Insufficient permissions'}), 403
+                if _is_api_request():
+                    return jsonify({'error': 'Insufficient permissions'}), 403
+                abort(403)
 
             request.current_user = session_data
 
@@ -605,19 +716,27 @@ def role_required(*role_names):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            from flask import redirect, url_for, abort
+
             session_token = request.cookies.get('session_token')
 
             if not session_token:
-                return jsonify({'error': 'Authentication required'}), 401
+                if _is_api_request():
+                    return jsonify({'error': 'Authentication required'}), 401
+                return redirect(url_for('login'))
 
             session_data = SessionManager.validate_session(session_token)
 
             if not session_data:
-                return jsonify({'error': 'Invalid session'}), 401
+                if _is_api_request():
+                    return jsonify({'error': 'Invalid session'}), 401
+                return redirect(url_for('login'))
 
             # Check role
             if session_data['role_name'] not in role_names:
-                return jsonify({'error': 'Insufficient permissions'}), 403
+                if _is_api_request():
+                    return jsonify({'error': 'Insufficient permissions'}), 403
+                abort(403)
 
             request.current_user = session_data
 

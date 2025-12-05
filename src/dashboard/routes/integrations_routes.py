@@ -19,6 +19,7 @@ from integrations_config import (
     set_integration_enabled,
     update_test_result
 )
+from cache import get_cache, cache_key
 
 integrations_routes = Blueprint('integrations', __name__)
 
@@ -27,14 +28,28 @@ integrations_routes = Blueprint('integrations', __name__)
 def list_integrations():
     """Get all integrations with their status and configuration"""
     try:
+        # Try to get from cache
+        cache = get_cache()
+        key = cache_key('integrations', 'list')
+        cached_data = cache.get(key)
+
+        if cached_data is not None:
+            return jsonify(cached_data)
+
+        # Fetch from database
         integrations = get_all_integrations()
 
-        return jsonify({
+        response_data = {
             'success': True,
             'data': {
                 'integrations': integrations
             }
-        })
+        }
+
+        # Cache the result with 1800s TTL
+        cache.set(key, response_data, 1800)
+
+        return jsonify(response_data)
 
     except Exception as e:
         return jsonify({
@@ -47,6 +62,15 @@ def list_integrations():
 def get_integration_details(integration_id):
     """Get details for a specific integration"""
     try:
+        # Try to get from cache
+        cache = get_cache()
+        key = cache_key('integrations', integration_id)
+        cached_data = cache.get(key)
+
+        if cached_data is not None:
+            return jsonify(cached_data)
+
+        # Fetch from database
         integration = get_integration(integration_id)
 
         if not integration:
@@ -55,10 +79,15 @@ def get_integration_details(integration_id):
                 'error': 'Integration not found'
             }), 404
 
-        return jsonify({
+        response_data = {
             'success': True,
             'data': integration
-        })
+        }
+
+        # Cache the result with 1800s TTL
+        cache.set(key, response_data, 1800)
+
+        return jsonify(response_data)
 
     except Exception as e:
         return jsonify({
@@ -82,6 +111,11 @@ def configure_integration(integration_id):
         # Update configuration
         update_integration_config(integration_id, data)
 
+        # Invalidate cache for this integration and the list
+        cache = get_cache()
+        cache.delete(cache_key('integrations', integration_id))
+        cache.delete(cache_key('integrations', 'list'))
+
         # Get updated integration
         integration = get_integration(integration_id)
 
@@ -104,6 +138,11 @@ def enable_integration(integration_id):
     try:
         set_integration_enabled(integration_id, True)
 
+        # Invalidate cache for this integration and the list
+        cache = get_cache()
+        cache.delete(cache_key('integrations', integration_id))
+        cache.delete(cache_key('integrations', 'list'))
+
         return jsonify({
             'success': True,
             'message': f'{integration_id} enabled successfully'
@@ -121,6 +160,11 @@ def disable_integration(integration_id):
     """Disable an integration"""
     try:
         set_integration_enabled(integration_id, False)
+
+        # Invalidate cache for this integration and the list
+        cache = get_cache()
+        cache.delete(cache_key('integrations', integration_id))
+        cache.delete(cache_key('integrations', 'list'))
 
         return jsonify({
             'success': True,
@@ -153,6 +197,8 @@ def test_integration(integration_id):
             result = test_smtp(test_params)
         elif integration_id == 'ipapi':
             result = test_ipapi(test_params)
+        elif integration_id == 'freeipapi':
+            result = test_freeipapi(test_params)
         else:
             return jsonify({
                 'success': False,
@@ -481,5 +527,43 @@ def test_ipapi(params=None):
             else:
                 return jsonify({'success': False, 'error': data.get('message', 'Invalid IP or rate limited')})
         return jsonify({'success': False, 'error': 'IP-API returned invalid response'})
+    except requests.RequestException as e:
+        return jsonify({'success': False, 'error': f'Connection failed: {str(e)}'})
+
+
+def test_freeipapi(params=None):
+    """Test FreeIPAPI connection"""
+    import requests
+
+    test_ip = (params or {}).get('test_ip', '8.8.8.8')
+
+    try:
+        response = requests.get(
+            f'https://freeipapi.com/api/json/{test_ip}',
+            timeout=10,
+            allow_redirects=True
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({
+                'success': True,
+                'message': f'FreeIPAPI verified - tested IP: {test_ip}',
+                'data': {
+                    'test_ip': test_ip,
+                    'country': data.get('countryName', 'Unknown'),
+                    'country_code': data.get('countryCode', 'N/A'),
+                    'city': data.get('cityName', 'Unknown'),
+                    'region': data.get('regionName', 'Unknown'),
+                    'isp': data.get('asnOrganization', 'Unknown'),
+                    'asn': data.get('asn', 'N/A'),
+                    'is_proxy': data.get('isProxy', False),
+                    'timezone': data.get('timeZones', ['N/A'])[0] if data.get('timeZones') else 'N/A'
+                }
+            })
+        elif response.status_code == 429:
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'})
+        else:
+            return jsonify({'success': False, 'error': f'API returned status {response.status_code}'})
     except requests.RequestException as e:
         return jsonify({'success': False, 'error': f'Connection failed: {str(e)}'})

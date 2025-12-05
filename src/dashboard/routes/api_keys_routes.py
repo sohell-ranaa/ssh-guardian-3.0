@@ -9,10 +9,21 @@ from flask import Blueprint, jsonify, request
 # Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
+from cache import get_cache, cache_key
 
 api_keys_routes = Blueprint('api_keys', __name__)
+
+# Cache TTL
+AGENTS_LIST_TTL = 300
+
+
+def invalidate_api_keys_cache():
+    """Invalidate all api_keys-related caches"""
+    cache = get_cache()
+    cache.delete_pattern('api_keys')
 
 
 @api_keys_routes.route('/create', methods=['POST'])
@@ -67,6 +78,9 @@ def create_api_key():
             cursor.close()
             conn.close()
 
+            # Invalidate cache
+            invalidate_api_keys_cache()
+
             return jsonify({
                 'success': True,
                 'message': 'Agent created successfully',
@@ -99,12 +113,22 @@ def create_api_key():
 @api_keys_routes.route('/list', methods=['GET'])
 def list_api_keys():
     """
-    List all API keys with agent info
+    List all API keys with agent info with caching
     Query params:
     - active_only: If true, only return active agents
     """
     try:
         active_only = request.args.get('active_only', 'false').lower() == 'true'
+
+        # Generate cache key
+        cache = get_cache()
+        cache_k = cache_key('api_keys', 'list', f'active_{active_only}')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            cached['from_cache'] = True
+            return jsonify(cached), 200
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -139,13 +163,19 @@ def list_api_keys():
         cursor.close()
         conn.close()
 
-        return jsonify({
+        result = {
             'success': True,
             'data': {
                 'api_keys': agents,
                 'total': len(agents)
-            }
-        })
+            },
+            'from_cache': False
+        }
+
+        # Cache the result
+        cache.set(cache_k, result, AGENTS_LIST_TTL)
+
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({
@@ -181,6 +211,9 @@ def delete_agent(agent_id):
         conn.commit()
         cursor.close()
         conn.close()
+
+        # Invalidate cache
+        invalidate_api_keys_cache()
 
         return jsonify({
             'success': True,

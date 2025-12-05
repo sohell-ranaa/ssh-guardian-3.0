@@ -1,8 +1,18 @@
 <!-- SSH Guardian v3.0 - Trends Reports Page -->
 <div id="page-reports-trends" class="page-content" style="display: none;">
-    <div class="page-header">
-        <h1 class="page-title">📈 Security Trends</h1>
-        <p class="page-subtitle">Historical analysis and trend visualization</p>
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">Security Trends</h1>
+            <p class="page-subtitle">Historical analysis and trend visualization</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="trends">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadTrendsReportsPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
     </div>
 
     <!-- Period Selection -->

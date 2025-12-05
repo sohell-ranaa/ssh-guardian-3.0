@@ -152,8 +152,14 @@
             if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
             if (currentFilters.search) params.append('search', currentFilters.search);
 
-            const response = await fetch(`/api/dashboard/audit/list?${params}`);
-            const data = await response.json();
+            // Use fetchWithCache if available to track cache status
+            let data;
+            if (typeof fetchWithCache === 'function') {
+                data = await fetchWithCache(`/api/dashboard/audit/list?${params}`, 'audit');
+            } else {
+                const response = await fetch(`/api/dashboard/audit/list?${params}`);
+                data = await response.json();
+            }
 
             if (data.success) {
                 auditLogs = data.data.logs || [];

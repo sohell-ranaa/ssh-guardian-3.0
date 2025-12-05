@@ -1,0 +1,337 @@
+<!-- SSH Guardian v3.0 - ML Model Performance Page -->
+<div id="page-ml-performance" class="page-content" style="display: none;">
+    <div class="page-header-with-cache">
+        <div>
+            <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
+                Model Performance
+            </h2>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
+                Accuracy, precision, recall, F1 score, and feature importance for trained models
+            </p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="ml_performance">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadMLPerformance()" title="Refresh data">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Models Comparison Table -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Models Comparison</h3>
+        <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Model</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Algorithm</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">Accuracy</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">Precision</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">Recall</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">F1 Score</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">ROC-AUC</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">Status</th>
+                        <th style="padding: 12px; text-align: center; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="ml-models-table-body">
+                    <tr>
+                        <td colspan="9" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading models...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Selected Model Details -->
+    <div id="ml-model-details-section" style="display: none;">
+        <!-- Model Info Card -->
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">
+                <span id="ml-detail-model-name">Model Details</span>
+                <span id="ml-detail-status-badge" style="margin-left: 8px; padding: 4px 8px; border-radius: 4px; font-size: 11px;"></span>
+            </h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Algorithm</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-algorithm">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Version</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-version">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Training Samples</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-train-samples">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Test Samples (20%)</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-test-samples">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Predictions Made</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--azure-blue);" id="ml-detail-predictions">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Trained At</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-trained-at">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div class="card" style="padding: 20px; text-align: center;">
+                <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Accuracy</div>
+                <div style="font-size: 28px; font-weight: 600; color: #2EA44F;" id="ml-detail-accuracy">-</div>
+            </div>
+            <div class="card" style="padding: 20px; text-align: center;">
+                <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Precision</div>
+                <div style="font-size: 28px; font-weight: 600; color: var(--azure-blue);" id="ml-detail-precision">-</div>
+            </div>
+            <div class="card" style="padding: 20px; text-align: center;">
+                <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Recall</div>
+                <div style="font-size: 28px; font-weight: 600; color: var(--azure-blue);" id="ml-detail-recall">-</div>
+            </div>
+            <div class="card" style="padding: 20px; text-align: center;">
+                <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">F1 Score</div>
+                <div style="font-size: 28px; font-weight: 600; color: #2EA44F;" id="ml-detail-f1">-</div>
+            </div>
+            <div class="card" style="padding: 20px; text-align: center;">
+                <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">ROC-AUC</div>
+                <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="ml-detail-roc-auc">-</div>
+            </div>
+        </div>
+
+        <!-- Confusion Matrix -->
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Confusion Matrix</h3>
+            <div id="ml-confusion-matrix" style="display: flex; justify-content: center;">
+                <div style="color: var(--text-secondary);">No confusion matrix data</div>
+            </div>
+        </div>
+
+        <!-- Feature Importance -->
+        <div class="card" style="padding: 20px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Top 20 Feature Importance</h3>
+            <div id="ml-feature-importance" style="max-height: 400px; overflow-y: auto;">
+                <div style="color: var(--text-secondary);">No feature importance data</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let mlModelsCache = [];
+
+async function loadMLPerformance() {
+    const CACHE_ENDPOINT = 'ml_performance';
+    if (typeof CacheManager !== 'undefined') {
+        CacheManager.setLoading(CACHE_ENDPOINT);
+    }
+    const startTime = performance.now();
+
+    try {
+        const response = await fetch('/api/ml/models');
+        const data = await response.json();
+
+        const tbody = document.getElementById('ml-models-table-body');
+
+        if (data.success && data.models && data.models.length > 0) {
+            mlModelsCache = data.models;
+
+            tbody.innerHTML = data.models.map(m => {
+                const statusColor = m.status === 'production' ? '#2EA44F' : m.status === 'candidate' ? 'var(--azure-blue)' : '#888';
+                const statusBg = m.status === 'production' ? 'rgba(46, 164, 79, 0.1)' : m.status === 'candidate' ? 'rgba(0, 120, 212, 0.1)' : 'rgba(136, 136, 136, 0.1)';
+
+                return `
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${m.name}</div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">v${m.version}</div>
+                        </td>
+                        <td style="padding: 12px; color: var(--text-primary);">${m.algorithm}</td>
+                        <td style="padding: 12px; text-align: center; font-weight: 600; color: #2EA44F;">${m.metrics.accuracy ? (m.metrics.accuracy * 100).toFixed(1) + '%' : '-'}</td>
+                        <td style="padding: 12px; text-align: center; color: var(--text-primary);">${m.metrics.precision ? (m.metrics.precision * 100).toFixed(1) + '%' : '-'}</td>
+                        <td style="padding: 12px; text-align: center; color: var(--text-primary);">${m.metrics.recall ? (m.metrics.recall * 100).toFixed(1) + '%' : '-'}</td>
+                        <td style="padding: 12px; text-align: center; font-weight: 600; color: #2EA44F;">${m.metrics.f1_score ? (m.metrics.f1_score * 100).toFixed(1) + '%' : '-'}</td>
+                        <td style="padding: 12px; text-align: center; color: var(--text-primary);">${m.metrics.roc_auc ? (m.metrics.roc_auc * 100).toFixed(1) + '%' : '-'}</td>
+                        <td style="padding: 12px; text-align: center;">
+                            <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; background: ${statusBg}; color: ${statusColor};">
+                                ${m.status.toUpperCase()}${m.is_active ? ' (Active)' : ''}
+                            </span>
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
+                            <button onclick="viewModelDetails(${m.id})" style="padding: 4px 8px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-right: 4px;">View</button>
+                            ${m.status === 'candidate' ? `<button onclick="promoteModel(${m.id})" style="padding: 4px 8px; background: #2EA44F; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Promote</button>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center; color: var(--text-secondary);">No models found. Train a model to see performance metrics.</td></tr>';
+        }
+
+        const loadTime = Math.round(performance.now() - startTime);
+        const fromCache = data.from_cache === true;
+        if (typeof CacheManager !== 'undefined') {
+            CacheManager.updateStatus(CACHE_ENDPOINT, fromCache, loadTime);
+            CacheManager.clearLoading(CACHE_ENDPOINT);
+        }
+    } catch (error) {
+        console.error('Error loading models:', error);
+        if (typeof CacheManager !== 'undefined') {
+            CacheManager.setError(CACHE_ENDPOINT, 'Failed to load performance data');
+        }
+    }
+}
+
+async function viewModelDetails(modelId) {
+    try {
+        const response = await fetch(`/api/ml/models/${modelId}`);
+        const data = await response.json();
+
+        if (data.success && data.model) {
+            const m = data.model;
+            const section = document.getElementById('ml-model-details-section');
+            section.style.display = 'block';
+
+            // Scroll to details
+            section.scrollIntoView({ behavior: 'smooth' });
+
+            // Basic info
+            document.getElementById('ml-detail-model-name').textContent = m.model_name;
+            document.getElementById('ml-detail-algorithm').textContent = m.algorithm;
+            document.getElementById('ml-detail-version').textContent = m.version;
+            document.getElementById('ml-detail-train-samples').textContent = m.training_samples?.toLocaleString() || '-';
+            document.getElementById('ml-detail-test-samples').textContent = m.test_samples?.toLocaleString() || '-';
+            document.getElementById('ml-detail-predictions').textContent = m.predictions_made?.toLocaleString() || '0';
+            document.getElementById('ml-detail-trained-at').textContent = m.training_completed_at ? new Date(m.training_completed_at).toLocaleString() : '-';
+
+            // Status badge
+            const badge = document.getElementById('ml-detail-status-badge');
+            const statusColor = m.status === 'production' ? '#2EA44F' : m.status === 'candidate' ? 'var(--azure-blue)' : '#888';
+            badge.textContent = m.status.toUpperCase();
+            badge.style.background = m.status === 'production' ? 'rgba(46, 164, 79, 0.1)' : 'rgba(0, 120, 212, 0.1)';
+            badge.style.color = statusColor;
+
+            // Metrics
+            document.getElementById('ml-detail-accuracy').textContent = m.accuracy ? (m.accuracy * 100).toFixed(1) + '%' : '-';
+            document.getElementById('ml-detail-precision').textContent = m.precision_score ? (m.precision_score * 100).toFixed(1) + '%' : '-';
+            document.getElementById('ml-detail-recall').textContent = m.recall_score ? (m.recall_score * 100).toFixed(1) + '%' : '-';
+            document.getElementById('ml-detail-f1').textContent = m.f1_score ? (m.f1_score * 100).toFixed(1) + '%' : '-';
+            document.getElementById('ml-detail-roc-auc').textContent = m.roc_auc ? (m.roc_auc * 100).toFixed(1) + '%' : '-';
+
+            // Confusion Matrix
+            renderConfusionMatrix(m.confusion_matrix);
+
+            // Feature Importance
+            renderFeatureImportance(m.feature_importance);
+        }
+    } catch (error) {
+        console.error('Error loading model details:', error);
+    }
+}
+
+function renderConfusionMatrix(matrix) {
+    const container = document.getElementById('ml-confusion-matrix');
+
+    if (matrix && matrix.length === 2) {
+        const tn = matrix[0][0];
+        const fp = matrix[0][1];
+        const fn = matrix[1][0];
+        const tp = matrix[1][1];
+
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: auto 1fr 1fr; gap: 2px; max-width: 400px;">
+                <div></div>
+                <div style="text-align: center; padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">Predicted Normal</div>
+                <div style="text-align: center; padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">Predicted Threat</div>
+
+                <div style="padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center;">Actual Normal</div>
+                <div style="background: rgba(46, 164, 79, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;">${tn}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary);">True Negative</div>
+                </div>
+                <div style="background: rgba(209, 52, 56, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: 600; color: #D13438;">${fp}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary);">False Positive</div>
+                </div>
+
+                <div style="padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center;">Actual Threat</div>
+                <div style="background: rgba(209, 52, 56, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: 600; color: #D13438;">${fn}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary);">False Negative</div>
+                </div>
+                <div style="background: rgba(46, 164, 79, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;">${tp}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary);">True Positive</div>
+                </div>
+            </div>
+        `;
+    } else {
+        container.innerHTML = '<div style="color: var(--text-secondary);">No confusion matrix data available</div>';
+    }
+}
+
+function renderFeatureImportance(importance) {
+    const container = document.getElementById('ml-feature-importance');
+
+    if (importance && Object.keys(importance).length > 0) {
+        const sorted = Object.entries(importance).sort((a, b) => b[1] - a[1]).slice(0, 20);
+        const maxValue = sorted[0][1];
+
+        container.innerHTML = sorted.map(([feature, value]) => {
+            const percentage = (value / maxValue * 100).toFixed(0);
+            return `
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <div style="width: 200px; font-size: 12px; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${feature}">${feature}</div>
+                    <div style="flex: 1; height: 20px; background: var(--background); border-radius: 4px; margin: 0 12px; overflow: hidden;">
+                        <div style="width: ${percentage}%; height: 100%; background: var(--azure-blue); border-radius: 4px;"></div>
+                    </div>
+                    <div style="width: 60px; text-align: right; font-size: 12px; color: var(--text-secondary);">${(value * 100).toFixed(2)}%</div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        container.innerHTML = '<div style="color: var(--text-secondary);">No feature importance data available</div>';
+    }
+}
+
+async function promoteModel(modelId) {
+    if (!confirm('Promote this model to production? This will demote the current production model.')) return;
+
+    try {
+        const response = await fetch(`/api/ml/models/${modelId}/promote`, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Model promoted to production successfully!');
+            loadMLPerformance();
+        } else {
+            alert('Failed to promote model: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error promoting model: ' + error.message);
+    }
+}
+
+// Load on page show
+document.addEventListener('DOMContentLoaded', function() {
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.target.id === 'page-ml-performance' && mutation.target.style.display !== 'none') {
+                loadMLPerformance();
+            }
+        });
+    });
+
+    const page = document.getElementById('page-ml-performance');
+    if (page) {
+        observer.observe(page, { attributes: true, attributeFilter: ['style'] });
+    }
+});
+</script>

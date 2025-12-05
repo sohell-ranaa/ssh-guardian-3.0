@@ -1,8 +1,18 @@
 <!-- SSH Guardian v3.0 - GeoIP Lookup Page -->
 <div id="page-ip-geo" class="page-content" style="display: none;">
-    <div class="page-header">
-        <h1 class="page-title">🌍 GeoIP Lookup</h1>
-        <p class="page-subtitle">Lookup geographic information and network details for IP addresses</p>
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">GeoIP Lookup</h1>
+            <p class="page-subtitle">Lookup geographic information and network details for IP addresses</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="geoip">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadGeoIPPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
     </div>
 
     <!-- Statistics -->

@@ -1,8 +1,18 @@
 <!-- SSH Guardian v3.0 - Threat Intelligence Page -->
 <div id="page-ip-threat" class="page-content" style="display: none;">
-    <div class="page-header">
-        <h1 class="page-title">🛡️ Threat Intelligence</h1>
-        <p class="page-subtitle">Monitor threat intelligence data from AbuseIPDB, Shodan, and VirusTotal</p>
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">Threat Intelligence</h1>
+            <p class="page-subtitle">Monitor threat intelligence data from AbuseIPDB, Shodan, and VirusTotal</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="threat_intel">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadThreatIntelPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
     </div>
 
     <!-- Statistics -->

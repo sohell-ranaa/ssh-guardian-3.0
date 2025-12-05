@@ -27,6 +27,9 @@ def login_step1():
     """Step 1: Validate password and check if OTP needed"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Invalid JSON data'}), 400
+
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
 
@@ -63,11 +66,6 @@ def login_step1():
         # Password correct - check if user has valid existing session (trusted device)
         session_token = request.cookies.get('session_token')
 
-        # Debug logging
-        print(f"🔍 Login attempt for {email}")
-        print(f"   Cookies received: {dict(request.cookies)}")
-        print(f"   Session token: {session_token[:20] if session_token else 'None'}...")
-
         if session_token:
             session_data = SessionManager.validate_session(session_token)
 
@@ -78,12 +76,18 @@ def login_step1():
 
                 # Update last login
                 from dbs.connection import get_connection
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user['id'],))
-                conn.commit()
-                cursor.close()
-                conn.close()
+                conn = None
+                cursor = None
+                try:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user['id'],))
+                    conn.commit()
+                finally:
+                    if cursor:
+                        cursor.close()
+                    if conn:
+                        conn.close()
 
                 # Log trusted device login
                 AuditLogger.log_action(user['id'], 'login_trusted_device',
@@ -110,9 +114,7 @@ def login_step1():
         # Send OTP via email
         email_sent = EmailService.send_otp_email(user['email'], otp_code, user['full_name'])
 
-        if not email_sent:
-            # Log but don't fail - print OTP for development
-            print(f"📧 OTP for {email}: {otp_code}")
+        # Email sending handled by EmailService - no debug output needed
 
         # Log login attempt
         AuditLogger.log_action(user['id'], 'login_otp_sent',
@@ -135,7 +137,6 @@ def login_step1():
 @auth_bp.route('/verify-otp', methods=['POST'])
 def verify_otp():
     """Step 2: Verify OTP and create persistent session (30 days)"""
-    print("🔐 OTP verification attempt")
     try:
         data = request.get_json()
         user_id = data.get('user_id')
@@ -161,12 +162,18 @@ def verify_otp():
 
         # Update last login
         from dbs.connection import get_connection
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
+            conn.commit()
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
         # Create session - always 30 days for persistent login
         session_token, expires_at = SessionManager.create_session(
@@ -203,9 +210,6 @@ def verify_otp():
             samesite='Lax',
             path='/'
         )
-
-        print(f"✅ Session cookie set for user {user_id}: {session_token[:20]}...")
-        print(f"   Cookie settings: max_age=30days, httponly=True, samesite=Lax")
 
         return response, 200
 

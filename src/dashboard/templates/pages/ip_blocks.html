@@ -1,8 +1,18 @@
 <!-- SSH Guardian v3.0 - Blocked IPs Page -->
 <div id="page-ip-blocks" class="page-content" style="display: none;">
-    <div class="page-header">
-        <h1 class="page-title">Blocked IPs</h1>
-        <p class="page-subtitle">Manage blocked IP addresses and view block history</p>
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">Blocked IPs</h1>
+            <p class="page-subtitle">Manage blocked IP addresses and view block history</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="blocking">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadBlockedIPsPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
     </div>
 
     <!-- Stats -->

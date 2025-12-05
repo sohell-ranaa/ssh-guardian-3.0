@@ -17,8 +17,6 @@
      * Load and display Notification History page
      */
     window.loadNotificationHistoryPage = async function() {
-        console.log('Loading Notification History page...');
-
         try {
             // Load trigger types for filter dropdown
             await loadTriggerTypes();
@@ -155,8 +153,14 @@
             if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
             if (currentFilters.search) params.append('search', currentFilters.search);
 
-            const response = await fetch(`/api/dashboard/notification-history/list?${params}`);
-            const data = await response.json();
+            // Use fetchWithCache if available to track cache status
+            let data;
+            if (typeof fetchWithCache === 'function') {
+                data = await fetchWithCache(`/api/dashboard/notification-history/list?${params}`, 'notifications');
+            } else {
+                const response = await fetch(`/api/dashboard/notification-history/list?${params}`);
+                data = await response.json();
+            }
 
             if (data.success) {
                 notifications = data.data.notifications || [];

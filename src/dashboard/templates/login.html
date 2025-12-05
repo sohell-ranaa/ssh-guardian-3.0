@@ -570,5 +570,46 @@
             })
             .catch(() => {});
     </script>
+
+    <!-- Login Page Footer -->
+    <footer class="login-footer">
+        <div class="login-footer-content">
+            <span>&copy; 2025 SSH Guardian v3.0</span>
+            <span class="login-footer-sep">|</span>
+            <span>Developed by <a href="mailto:sohell.ranaa@gmail.com">Md Sohel Rana</a></span>
+        </div>
+    </footer>
+
+    <style>
+        .login-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 0;
+            background: rgba(255, 255, 255, 0.95);
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .login-footer-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .login-footer-sep {
+            color: var(--border);
+        }
+        .login-footer a {
+            color: var(--azure-blue);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .login-footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </body>
 </html>

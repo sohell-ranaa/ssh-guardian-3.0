@@ -16,8 +16,6 @@
      * Load and display Trends Reports page
      */
     window.loadTrendsReportsPage = async function() {
-        console.log('Loading Trends Reports page...');
-
         try {
             // Set default period selector
             const periodSelect = document.getElementById('trends-period-select');
@@ -53,8 +51,6 @@
      * Load all trends data
      */
     async function loadTrendsData() {
-        console.log('Loading trends for', selectedDays, 'days');
-
         try {
             await Promise.all([
                 loadTrendsOverview(),
@@ -75,8 +71,14 @@
      */
     async function loadTrendsOverview() {
         try {
-            const response = await fetch(`/api/dashboard/trends-reports/overview?days=${selectedDays}`);
-            const data = await response.json();
+            // Use fetchWithCache if available to track cache status
+            let data;
+            if (typeof fetchWithCache === 'function') {
+                data = await fetchWithCache(`/api/dashboard/trends-reports/overview?days=${selectedDays}`, 'trends');
+            } else {
+                const response = await fetch(`/api/dashboard/trends-reports/overview?days=${selectedDays}`);
+                data = await response.json();
+            }
 
             if (data.success) {
                 renderOverviewStats(data.totals, data.period);

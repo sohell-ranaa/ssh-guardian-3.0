@@ -1,0 +1,226 @@
+<!-- SSH Guardian v3.0 - System Status Page -->
+<div id="page-system-status" class="page-content" style="display: none;">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">System Status</h1>
+            <p class="page-subtitle">Cache management, time settings, and system health</p>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <span id="current-time-display" style="font-size: 14px; color: var(--text-secondary);"></span>
+            <button id="system-refresh-btn" class="btn btn-secondary">
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Time Settings Section -->
+    <div class="settings-section" style="margin-bottom: 24px;">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">Time Settings</h2>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                <!-- Timezone Selection -->
+                <div>
+                    <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                        Display Timezone
+                    </label>
+                    <select id="timezone-select" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                        <option value="local">Browser Local Time</option>
+                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                        <option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (UTC+8)</option>
+                        <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
+                        <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
+                        <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
+                        <option value="Asia/Jakarta">Asia/Jakarta (UTC+7)</option>
+                        <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
+                        <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
+                        <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
+                        <option value="Europe/London">Europe/London (UTC+0/+1)</option>
+                        <option value="Europe/Paris">Europe/Paris (UTC+1/+2)</option>
+                        <option value="Europe/Berlin">Europe/Berlin (UTC+1/+2)</option>
+                        <option value="America/New_York">America/New York (UTC-5/-4)</option>
+                        <option value="America/Los_Angeles">America/Los Angeles (UTC-8/-7)</option>
+                        <option value="America/Chicago">America/Chicago (UTC-6/-5)</option>
+                        <option value="Australia/Sydney">Australia/Sydney (UTC+10/+11)</option>
+                    </select>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        All timestamps in the dashboard will be displayed in this timezone
+                    </p>
+                </div>
+
+                <!-- Time Format -->
+                <div>
+                    <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                        Time Format
+                    </label>
+                    <select id="time-format-select" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                        <option value="24h">24-hour (14:30:00)</option>
+                        <option value="12h">12-hour (2:30:00 PM)</option>
+                    </select>
+                </div>
+
+                <!-- Date Format -->
+                <div>
+                    <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                        Date Format
+                    </label>
+                    <select id="date-format-select" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                        <option value="YYYY-MM-DD">2025-12-05 (ISO)</option>
+                        <option value="DD/MM/YYYY">05/12/2025 (EU)</option>
+                        <option value="MM/DD/YYYY">12/05/2025 (US)</option>
+                        <option value="DD MMM YYYY">05 Dec 2025</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-size: 14px; color: var(--text-secondary);">Preview: </span>
+                        <span id="time-preview" style="font-size: 14px; font-weight: 500; color: var(--text-primary);"></span>
+                    </div>
+                    <button id="save-time-settings-btn" class="btn btn-primary">
+                        Save Time Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cache Management Section -->
+    <div class="settings-section" style="margin-bottom: 24px;">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">Cache Management</h2>
+            <span id="cache-status-badge" class="badge badge-success">Connected</span>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
+            <!-- Cache Stats Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div class="stat-card" style="background: var(--background); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--primary);" id="cache-total-keys">-</div>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Total Keys</div>
+                </div>
+                <div class="stat-card" style="background: var(--background); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--success);" id="cache-memory-used">-</div>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Memory Used</div>
+                </div>
+                <div class="stat-card" style="background: var(--background); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--warning);" id="cache-memory-peak">-</div>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Memory Peak</div>
+                </div>
+                <div class="stat-card" style="background: var(--background); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 700; color: var(--info);" id="cache-hit-rate">-</div>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Status</div>
+                </div>
+            </div>
+
+            <!-- Cache TTL Settings -->
+            <div style="margin-bottom: 24px;">
+                <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Cache TTL Settings</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--background); border-radius: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Events List</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">30 seconds</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--background); border-radius: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Events Count</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">60 seconds</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--background); border-radius: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Dashboard Stats</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">120 seconds</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--background); border-radius: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">GeoIP Data</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">1 hour</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--background); border-radius: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">Threat Intel</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">10 minutes</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--background); border-radius: 6px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">ML Predictions</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">60 seconds</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cache Actions -->
+            <div style="border-top: 1px solid var(--border); padding-top: 20px;">
+                <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Cache Actions</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                    <button id="clear-events-cache-btn" class="btn btn-secondary" style="flex: 1; min-width: 150px;">
+                        Clear Events Cache
+                    </button>
+                    <button id="clear-stats-cache-btn" class="btn btn-secondary" style="flex: 1; min-width: 150px;">
+                        Clear Stats Cache
+                    </button>
+                    <button id="clear-all-cache-btn" class="btn btn-danger" style="flex: 1; min-width: 150px;">
+                        Clear All Cache
+                    </button>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 12px;">
+                    Note: Clearing cache will cause the next page load to fetch fresh data from the database, which may be slower.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Health Section -->
+    <div class="settings-section">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">System Health</h2>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+                <!-- Database Status -->
+                <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--background); border-radius: 8px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--success-bg); display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;" id="db-status-icon">-</span>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Database</div>
+                        <div style="font-size: 13px; color: var(--text-secondary);" id="db-status-text">Checking...</div>
+                    </div>
+                </div>
+
+                <!-- Redis Status -->
+                <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--background); border-radius: 8px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--success-bg); display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;" id="redis-status-icon">-</span>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Redis Cache</div>
+                        <div style="font-size: 13px; color: var(--text-secondary);" id="redis-status-text">Checking...</div>
+                    </div>
+                </div>
+
+                <!-- Server Status -->
+                <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--background); border-radius: 8px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--success-bg); display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;" id="server-status-icon">-</span>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">API Server</div>
+                        <div style="font-size: 13px; color: var(--text-secondary);" id="server-status-text">Checking...</div>
+                    </div>
+                </div>
+
+                <!-- Version Info -->
+                <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--background); border-radius: 8px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--info-bg); display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;">v3</span>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">SSH Guardian</div>
+                        <div style="font-size: 13px; color: var(--text-secondary);" id="version-text">Version 3.0.0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

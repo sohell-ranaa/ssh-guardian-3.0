@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - SSH Guardian</title>
+    <style>
+        /* Azure-style Design System */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Azure Color Palette */
+            --azure-blue: #0078D4;
+            --azure-dark: #004C87;
+            --azure-light: #50E6FF;
+
+            /* Neutral Colors */
+            --background: #F3F2F1;
+            --surface: #FFFFFF;
+            --border: #EDEBE9;
+            --text-primary: #323130;
+            --text-secondary: #605E5C;
+            --text-hint: #A19F9D;
+
+            /* Status Colors */
+            --success: #0B7D43;
+            --warning: #FFB900;
+            --error: #D13438;
+            --info: #0078D4;
+
+            /* Typography */
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: linear-gradient(135deg, #F3F2F1 0%, #E1DFDD 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: var(--text-primary);
+        }
+
+        .error-container {
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+            max-width: 520px;
+            width: 100%;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .error-header {
+            background: linear-gradient(135deg, {{ header_color }} 0%, {{ header_color_dark }} 100%);
+            padding: 40px 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .error-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .error-code {
+            font-size: 96px;
+            font-weight: 700;
+            color: white;
+            line-height: 1;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .error-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            position: relative;
+        }
+
+        .error-body {
+            padding: 32px;
+        }
+
+        .error-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .error-message {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: var(--font-family);
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--azure-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--azure-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--azure-blue);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--background);
+            border-color: var(--azure-blue);
+        }
+
+        .error-details {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .error-details summary {
+            font-size: 12px;
+            color: var(--text-hint);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .error-details summary:hover {
+            color: var(--text-secondary);
+        }
+
+        .error-details-content {
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--background);
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: left;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            word-break: break-all;
+        }
+
+        .logo-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            color: var(--text-hint);
+            text-decoration: none;
+            font-size: 12px;
+            transition: color 0.2s;
+        }
+
+        .logo-link:hover {
+            color: var(--azure-blue);
+        }
+
+        .logo-icon {
+            width: 20px;
+            height: 20px;
+            background: var(--azure-blue);
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        /* Animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .error-icon {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .error-code {
+                font-size: 72px;
+            }
+
+            .error-header {
+                padding: 32px 24px;
+            }
+
+            .error-body {
+                padding: 24px;
+            }
+
+            .error-actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-header">
+            <div class="error-icon">{{ icon }}</div>
+            <div class="error-code">{{ code }}</div>
+        </div>
+        <div class="error-body">
+            <h1 class="error-title">{{ title }}</h1>
+            <p class="error-message">{{ message }}</p>
+
+            <div class="error-actions">
+                {% if show_login %}
+                <a href="/login" class="btn btn-primary">
+                    <span>Sign In</span>
+                </a>
+                {% endif %}
+                <a href="/" class="btn {% if show_login %}btn-secondary{% else %}btn-primary{% endif %}">
+                    <span>Go to Dashboard</span>
+                </a>
+                <button onclick="history.back()" class="btn btn-secondary">
+                    <span>Go Back</span>
+                </button>
+            </div>
+
+            {% if error_id %}
+            <details class="error-details">
+                <summary>Technical Details</summary>
+                <div class="error-details-content">
+                    Error ID: {{ error_id }}<br>
+                    Path: {{ request_path }}<br>
+                    Time: {{ timestamp }}
+                </div>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+
+    <a href="/" class="logo-link">
+        <span class="logo-icon">S</span>
+        <span>SSH Guardian v3.0</span>
+    </a>
+</body>
+</html>

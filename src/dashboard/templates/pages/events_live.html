@@ -1,8 +1,18 @@
 <!-- SSH Guardian v3.0 - Live Events Page -->
 <div id="page-events-live" class="page-content" style="display: none;">
-    <div class="page-header">
-        <h1 class="page-title">Live Events</h1>
-        <p class="page-subtitle">Real-time SSH authentication events with threat intelligence</p>
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">Live Events</h1>
+            <p class="page-subtitle">Real-time SSH authentication events with threat intelligence</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="events">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadEventsLivePage()" title="Refresh data">↻</button>
+            </div>
+        </div>
     </div>
 
     <!-- Filters -->
@@ -27,8 +37,17 @@
                 <option value="critical">Critical</option>
             </select>
 
+            <select id="agentFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                <option value="">All Agents</option>
+                <!-- Agents will be populated dynamically -->
+            </select>
+
+            <button id="autoRefreshToggle" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;" title="Click to enable auto-refresh">
+                ▶ Live
+            </button>
+
             <button id="refreshEvents" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;">
-                🔄 Refresh
+                ↻ Refresh
             </button>
         </div>
     </div>
@@ -71,3 +90,39 @@
         </div>
     </div>
 </div>
+
+<script>
+// Populate agent filter dropdown when page loads
+(function() {
+    async function loadAgentsForFilter() {
+        try {
+            const response = await fetch('/api/agents/list');
+            const data = await response.json();
+
+            if (data.success && data.agents) {
+                const agentFilter = document.getElementById('agentFilter');
+                if (agentFilter) {
+                    // Keep the "All Agents" option
+                    agentFilter.innerHTML = '<option value="">All Agents</option>';
+
+                    data.agents.forEach(agent => {
+                        const option = document.createElement('option');
+                        option.value = agent.id;
+                        option.textContent = agent.display_name || agent.hostname || `Agent ${agent.id}`;
+                        agentFilter.appendChild(option);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error loading agents for filter:', error);
+        }
+    }
+
+    // Load agents when the page is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadAgentsForFilter);
+    } else {
+        loadAgentsForFilter();
+    }
+})();
+</script>

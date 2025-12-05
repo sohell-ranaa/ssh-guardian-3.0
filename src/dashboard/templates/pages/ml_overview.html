@@ -1,0 +1,487 @@
+<!-- SSH Guardian v3.0 - ML Intelligence Overview Page -->
+<div id="page-ml-overview" class="page-content" style="display: none;">
+    <div class="page-header-with-cache">
+        <div>
+            <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
+                ML Intelligence Overview
+            </h2>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
+                Machine learning predictions and threat detection summary
+            </p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="ml">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadMLOverview()" title="Refresh data">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Stats Cards -->
+    <div class="ml-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px;">
+        <div class="card stat-card" style="padding: 20px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Predictions Today</div>
+            <div style="font-size: 28px; font-weight: 600; color: var(--azure-blue);" id="ml-predictions-today">-</div>
+        </div>
+        <div class="card stat-card" style="padding: 20px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Anomalies Detected</div>
+            <div style="font-size: 28px; font-weight: 600; color: #E6A502;" id="ml-anomalies-today">-</div>
+        </div>
+        <div class="card stat-card" style="padding: 20px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">High Risk Events</div>
+            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="ml-high-risk-today">-</div>
+        </div>
+        <div class="card stat-card" style="padding: 20px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Avg Risk Score</div>
+            <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="ml-avg-risk-today">-</div>
+        </div>
+        <div class="card stat-card" style="padding: 20px; text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">ML Blocks</div>
+            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="ml-blocks-today">-</div>
+        </div>
+    </div>
+
+    <!-- Active Model Card -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Active Model</h3>
+        <div id="ml-active-model-info">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Model Name</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); word-break: break-all;" id="ml-model-name">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Algorithm</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-model-algorithm">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Accuracy</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #2EA44F;" id="ml-model-accuracy">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">F1 Score</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #2EA44F;" id="ml-model-f1">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total Predictions</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-model-predictions">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Week Stats & Model Count -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+        <div class="card" style="padding: 20px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">This Week</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total Predictions</div>
+                    <div style="font-size: 24px; font-weight: 600; color: var(--azure-blue);" id="ml-predictions-week">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Anomalies</div>
+                    <div style="font-size: 24px; font-weight: 600; color: #E6A502;" id="ml-anomalies-week">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Models Status</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total</div>
+                    <div style="font-size: 24px; font-weight: 600; color: var(--text-primary);" id="ml-models-total">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Production</div>
+                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;" id="ml-models-production">-</div>
+                </div>
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Candidate</div>
+                    <div style="font-size: 24px; font-weight: 600; color: var(--azure-blue);" id="ml-models-candidate">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Threat Types Breakdown -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Threat Types (Today)</h3>
+        <div id="ml-threat-types-container">
+            <div style="color: var(--text-secondary); font-size: 13px; padding: 12px 0;">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Predictions Timeline Chart -->
+    <div class="card" style="padding: 20px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Predictions Timeline (7 Days)</h3>
+        <div id="ml-timeline-chart" style="min-height: 220px;">
+            <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-secondary); font-size: 13px;">
+                Loading timeline...
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ML Overview Page Styles */
+#page-ml-overview .stat-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#page-ml-overview .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Timeline Chart Styles */
+.ml-timeline-bar-container {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 160px;
+    padding: 0 10px;
+    gap: 8px;
+}
+
+.ml-timeline-bar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    max-width: 70px;
+    min-width: 50px;
+}
+
+.ml-timeline-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 140px;
+}
+
+.ml-timeline-bar {
+    width: 24px;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.3s ease;
+    min-height: 4px;
+}
+
+.ml-timeline-bar.predictions {
+    background: linear-gradient(180deg, var(--azure-blue) 0%, #005a9e 100%);
+}
+
+.ml-timeline-bar.anomalies {
+    background: linear-gradient(180deg, #E6A502 0%, #b8860b 100%);
+    width: 18px;
+}
+
+.ml-timeline-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    white-space: nowrap;
+}
+
+.ml-timeline-value {
+    font-size: 10px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.ml-timeline-legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.ml-timeline-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.ml-timeline-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+/* Threat type row styles */
+.threat-type-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.threat-type-row:last-child {
+    border-bottom: none;
+}
+
+.threat-type-name {
+    color: var(--text-primary);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.threat-type-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--azure-blue);
+}
+
+.threat-type-count {
+    color: var(--azure-blue);
+    font-weight: 600;
+    font-size: 14px;
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    const CACHE_ENDPOINT = 'ml';
+
+    /**
+     * Load ML Overview data
+     */
+    window.loadMLOverview = async function() {
+        console.log('Loading ML Overview...');
+
+        // Set loading state
+        if (typeof CacheManager !== 'undefined') {
+            CacheManager.setLoading(CACHE_ENDPOINT);
+        }
+
+        const startTime = performance.now();
+
+        try {
+            // Load overview and timeline in parallel
+            const [overviewResult, timelineResult] = await Promise.all([
+                loadOverviewData(),
+                loadTimelineData()
+            ]);
+
+            const loadTime = Math.round(performance.now() - startTime);
+            const fromCache = overviewResult?.fromCache || timelineResult?.fromCache;
+
+            // Update cache indicator
+            if (typeof CacheManager !== 'undefined') {
+                CacheManager.updateStatus(CACHE_ENDPOINT, fromCache, loadTime);
+                CacheManager.clearLoading(CACHE_ENDPOINT);
+            }
+
+            console.log(`ML Overview loaded in ${loadTime}ms (from_cache: ${fromCache})`);
+
+        } catch (error) {
+            console.error('Error loading ML Overview:', error);
+
+            if (typeof CacheManager !== 'undefined') {
+                CacheManager.setError(CACHE_ENDPOINT, 'Failed to load ML overview');
+            }
+        }
+    };
+
+    /**
+     * Load overview statistics
+     */
+    async function loadOverviewData() {
+        try {
+            const response = await fetch('/api/ml/overview');
+            const data = await response.json();
+
+            if (data.success && data.overview) {
+                const o = data.overview;
+
+                // Today's stats
+                updateElement('ml-predictions-today', o.today?.predictions ?? 0);
+                updateElement('ml-anomalies-today', o.today?.anomalies ?? 0);
+                updateElement('ml-high-risk-today', o.today?.high_risk_events ?? 0);
+                updateElement('ml-avg-risk-today', (o.today?.avg_risk_score ?? 0).toFixed(1));
+                updateElement('ml-blocks-today', o.today?.ml_blocks ?? 0);
+
+                // Week stats
+                updateElement('ml-predictions-week', o.week?.predictions ?? 0);
+                updateElement('ml-anomalies-week', o.week?.anomalies ?? 0);
+
+                // Active model
+                if (o.active_model) {
+                    updateElement('ml-model-name', o.active_model.name || 'No active model');
+                    updateElement('ml-model-algorithm', formatAlgorithmName(o.active_model.algorithm));
+                    updateElement('ml-model-accuracy', o.active_model.accuracy ? (o.active_model.accuracy * 100).toFixed(1) + '%' : '-');
+                    updateElement('ml-model-f1', o.active_model.f1_score ? (o.active_model.f1_score * 100).toFixed(1) + '%' : '-');
+                    updateElement('ml-model-predictions', (o.active_model.predictions_made ?? 0).toLocaleString());
+                } else {
+                    updateElement('ml-model-name', 'No active model');
+                    updateElement('ml-model-algorithm', '-');
+                    updateElement('ml-model-accuracy', '-');
+                    updateElement('ml-model-f1', '-');
+                    updateElement('ml-model-predictions', '0');
+                }
+
+                // Models count
+                updateElement('ml-models-total', o.models?.total ?? 0);
+                updateElement('ml-models-production', o.models?.production ?? 0);
+                updateElement('ml-models-candidate', o.models?.candidate ?? 0);
+
+                // Threat types
+                renderThreatTypes(o.threat_types);
+
+                return { success: true, fromCache: data.from_cache === true };
+            }
+
+            return { success: false, fromCache: false };
+
+        } catch (error) {
+            console.error('Error loading overview data:', error);
+            return { success: false, fromCache: false };
+        }
+    }
+
+    /**
+     * Load timeline data
+     */
+    async function loadTimelineData() {
+        try {
+            const response = await fetch('/api/ml/predictions/timeline?days=7');
+            const data = await response.json();
+
+            renderTimeline(data.success ? data.timeline : []);
+
+            return { success: data.success, fromCache: data.from_cache === true };
+
+        } catch (error) {
+            console.error('Error loading timeline:', error);
+            renderTimeline([]);
+            return { success: false, fromCache: false };
+        }
+    }
+
+    /**
+     * Render threat types list
+     */
+    function renderThreatTypes(threatTypes) {
+        const container = document.getElementById('ml-threat-types-container');
+        if (!container) return;
+
+        if (!threatTypes || threatTypes.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px; padding: 12px 0;">No threat types detected today</div>';
+            return;
+        }
+
+        const colors = ['#D13438', '#E6A502', '#0078D4', '#2EA44F', '#8764B8'];
+
+        container.innerHTML = threatTypes.map((t, i) => `
+            <div class="threat-type-row">
+                <span class="threat-type-name">
+                    <span class="threat-type-icon" style="background: ${colors[i % colors.length]};"></span>
+                    ${formatThreatType(t.threat_type)}
+                </span>
+                <span class="threat-type-count">${t.count}</span>
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Render timeline chart
+     */
+    function renderTimeline(timeline) {
+        const container = document.getElementById('ml-timeline-chart');
+        if (!container) return;
+
+        if (!timeline || timeline.length === 0) {
+            container.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-secondary); font-size: 13px;">
+                    No prediction data available for the last 7 days
+                </div>
+            `;
+            return;
+        }
+
+        const maxPredictions = Math.max(...timeline.map(t => t.predictions || 0), 1);
+        const maxHeight = 140;
+
+        const barsHtml = timeline.map(t => {
+            const predictions = t.predictions || 0;
+            const anomalies = t.anomalies || 0;
+            const predHeight = Math.max((predictions / maxPredictions) * maxHeight, 4);
+            const anomHeight = Math.max((anomalies / maxPredictions) * maxHeight, anomalies > 0 ? 4 : 0);
+
+            // Format date as MM/DD
+            const dateParts = t.date ? t.date.split('-') : ['', '', ''];
+            const dateLabel = dateParts.length >= 3 ? `${dateParts[1]}/${dateParts[2]}` : t.date;
+
+            return `
+                <div class="ml-timeline-bar-item">
+                    <div class="ml-timeline-bars">
+                        <div class="ml-timeline-bar predictions" style="height: ${predHeight}px;" title="Predictions: ${predictions}"></div>
+                        <div class="ml-timeline-bar anomalies" style="height: ${anomHeight}px;" title="Anomalies: ${anomalies}"></div>
+                    </div>
+                    <div class="ml-timeline-label">${dateLabel}</div>
+                    <div class="ml-timeline-value">${predictions}</div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="ml-timeline-bar-container">
+                ${barsHtml}
+            </div>
+            <div class="ml-timeline-legend">
+                <div class="ml-timeline-legend-item">
+                    <span class="ml-timeline-legend-dot" style="background: var(--azure-blue);"></span>
+                    <span>Predictions</span>
+                </div>
+                <div class="ml-timeline-legend-item">
+                    <span class="ml-timeline-legend-dot" style="background: #E6A502;"></span>
+                    <span>Anomalies</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Helper: Update element text safely
+     */
+    function updateElement(id, value) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = value;
+        }
+    }
+
+    /**
+     * Helper: Format algorithm name
+     */
+    function formatAlgorithmName(name) {
+        if (!name) return '-';
+        return name
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    /**
+     * Helper: Format threat type name
+     */
+    function formatThreatType(type) {
+        if (!type) return 'Unknown';
+        return type
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+})();
+</script>

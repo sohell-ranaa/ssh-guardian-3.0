@@ -1,6 +1,6 @@
 """
 SSH Guardian v3.0 - Threat Intelligence Routes
-Handles threat intelligence lookups and statistics
+Handles threat intelligence lookups and statistics with Redis caching
 """
 
 from flask import Blueprint, request, jsonify
@@ -14,14 +14,41 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from threat_intel import ThreatIntelligence
+from cache import get_cache, cache_key
 
 threat_intel_routes = Blueprint('threat_intel_routes', __name__)
+
+# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
+THREAT_LOOKUP_TTL = 7200   # 2 hours - threat intel from external APIs
+THREAT_STATS_TTL = 3600    # 1 hour for stats
+THREAT_RECENT_TTL = 1800   # 30 minutes for recent list
+THREAT_HIGH_RISK_TTL = 1800 # 30 minutes for high-risk list
+
+
+def invalidate_threat_cache():
+    """Invalidate all threat intelligence caches"""
+    cache = get_cache()
+    cache.delete_pattern('threat')
 
 
 @threat_intel_routes.route('/api/threat-intel/lookup/<ip_address>', methods=['GET'])
 def lookup_threat(ip_address):
-    """Lookup threat intelligence for an IP address"""
+    """Lookup threat intelligence for an IP address with caching"""
+    conn = None
+    cursor = None
     try:
+        cache = get_cache()
+        cache_k = cache_key('threat', 'lookup', ip_address)
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -33,10 +60,11 @@ def lookup_threat(ip_address):
 
         result = cursor.fetchone()
 
-        cursor.close()
-        conn.close()
-
         if result:
+            # Remove binary ip_address field
+            if 'ip_address' in result:
+                del result['ip_address']
+
             # Format timestamps
             for field in ['abuseipdb_last_reported', 'abuseipdb_checked_at', 'shodan_last_update',
                           'shodan_checked_at', 'virustotal_checked_at', 'refresh_after',
@@ -44,9 +72,17 @@ def lookup_threat(ip_address):
                 if result.get(field):
                     result[field] = result[field].isoformat()
 
+            # Convert Decimal fields
+            if result.get('threat_confidence') is not None:
+                result['threat_confidence'] = float(result['threat_confidence'])
+
+            # Cache the result
+            cache.set(cache_k, result, THREAT_LOOKUP_TTL)
+
             return jsonify({
                 'success': True,
-                'data': result
+                'data': result,
+                'from_cache': False
             })
         else:
             return jsonify({
@@ -59,12 +95,31 @@ def lookup_threat(ip_address):
             'success': False,
             'error': f'Lookup failed: {str(e)}'
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @threat_intel_routes.route('/api/threat-intel/stats', methods=['GET'])
 def get_threat_stats():
-    """Get threat intelligence statistics"""
+    """Get threat intelligence statistics with caching"""
+    conn = None
+    cursor = None
     try:
+        cache = get_cache()
+        cache_k = cache_key('threat', 'stats')
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'stats': cached,
+                'from_cache': True
+            })
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -100,17 +155,26 @@ def get_threat_stats():
         """)
         abuseipdb_stats = cursor.fetchone()
 
-        cursor.close()
-        conn.close()
+        # Convert Decimal fields
+        if abuseipdb_stats:
+            for key in abuseipdb_stats:
+                if abuseipdb_stats[key] is not None:
+                    abuseipdb_stats[key] = float(abuseipdb_stats[key])
+
+        stats = {
+            'total_ips': total,
+            'threat_levels': threat_levels,
+            'high_threat_count': high_threat_count,
+            'abuseipdb': abuseipdb_stats
+        }
+
+        # Cache the result
+        cache.set(cache_k, stats, THREAT_STATS_TTL)
 
         return jsonify({
             'success': True,
-            'stats': {
-                'total_ips': total,
-                'threat_levels': threat_levels,
-                'high_threat_count': high_threat_count,
-                'abuseipdb': abuseipdb_stats
-            }
+            'stats': stats,
+            'from_cache': False
         })
 
     except Exception as e:
@@ -118,13 +182,33 @@ def get_threat_stats():
             'success': False,
             'error': f'Failed to get stats: {str(e)}'
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @threat_intel_routes.route('/api/threat-intel/recent', methods=['GET'])
 def get_recent_threats():
-    """Get recently checked threat intelligence"""
+    """Get recently checked threat intelligence with caching"""
+    conn = None
+    cursor = None
     try:
         limit = request.args.get('limit', 50, type=int)
+
+        cache = get_cache()
+        cache_k = cache_key('threat', 'recent', str(limit))
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached['data'],
+                'total': cached['total'],
+                'from_cache': True
+            })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -146,18 +230,21 @@ def get_recent_threats():
 
         results = cursor.fetchall()
 
-        # Format timestamps
+        # Format timestamps and convert Decimal
         for row in results:
             if row['updated_at']:
                 row['updated_at'] = row['updated_at'].isoformat()
+            if row.get('threat_confidence') is not None:
+                row['threat_confidence'] = float(row['threat_confidence'])
 
-        cursor.close()
-        conn.close()
+        cache_data = {'data': results, 'total': len(results)}
+        cache.set(cache_k, cache_data, THREAT_RECENT_TTL)
 
         return jsonify({
             'success': True,
             'data': results,
-            'total': len(results)
+            'total': len(results),
+            'from_cache': False
         })
 
     except Exception as e:
@@ -165,13 +252,33 @@ def get_recent_threats():
             'success': False,
             'error': f'Failed to get recent threats: {str(e)}'
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @threat_intel_routes.route('/api/threat-intel/high-risk', methods=['GET'])
 def get_high_risk():
-    """Get high-risk IPs"""
+    """Get high-risk IPs with caching"""
+    conn = None
+    cursor = None
     try:
         limit = request.args.get('limit', 100, type=int)
+
+        cache = get_cache()
+        cache_k = cache_key('threat', 'high-risk', str(limit))
+
+        # Try cache first
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached['data'],
+                'total': cached['total'],
+                'from_cache': True
+            })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -192,18 +299,21 @@ def get_high_risk():
 
         results = cursor.fetchall()
 
-        # Format timestamps
+        # Format timestamps and convert Decimal
         for row in results:
             if row['updated_at']:
                 row['updated_at'] = row['updated_at'].isoformat()
+            if row.get('threat_confidence') is not None:
+                row['threat_confidence'] = float(row['threat_confidence'])
 
-        cursor.close()
-        conn.close()
+        cache_data = {'data': results, 'total': len(results)}
+        cache.set(cache_k, cache_data, THREAT_HIGH_RISK_TTL)
 
         return jsonify({
             'success': True,
             'data': results,
-            'total': len(results)
+            'total': len(results),
+            'from_cache': False
         })
 
     except Exception as e:
@@ -211,6 +321,11 @@ def get_high_risk():
             'success': False,
             'error': f'Failed to get high-risk IPs: {str(e)}'
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @threat_intel_routes.route('/api/threat-intel/enrich/<ip_address>', methods=['POST'])
@@ -222,6 +337,13 @@ def enrich_threat(ip_address):
         threat_data = threat_intel.lookup_ip_threat(ip_address)
 
         if threat_data:
+            # Invalidate related caches
+            cache = get_cache()
+            cache.delete(cache_key('threat', 'lookup', ip_address))
+            cache.delete_pattern('threat:stats')
+            cache.delete_pattern('threat:recent')
+            cache.delete_pattern('threat:high-risk')
+
             return jsonify({
                 'success': True,
                 'message': f'Successfully enriched threat data for IP {ip_address}'
