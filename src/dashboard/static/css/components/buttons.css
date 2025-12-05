@@ -1,0 +1,222 @@
+/**
+ * Buttons Component Styles
+ * Azure/Fluent Design inspired button styles
+ */
+
+/* Base button styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    text-decoration: none;
+    font-family: inherit;
+}
+
+.btn:focus {
+    outline: 2px solid #0078D4;
+    outline-offset: 2px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Primary button - Azure blue */
+.btn-primary {
+    background: #0078D4;
+    color: #ffffff;
+    border-color: #0078D4;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #106EBE;
+    border-color: #106EBE;
+}
+
+.btn-primary:active:not(:disabled) {
+    background: #005A9E;
+    border-color: #005A9E;
+}
+
+/* Secondary button - outline style */
+.btn-secondary {
+    background: #FFFFFF;
+    color: #323130;
+    border-color: #EDEBE9;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #F3F2F1;
+    border-color: #605E5C;
+}
+
+.btn-secondary:active:not(:disabled) {
+    background: #EDEBE9;
+}
+
+/* Success button - green */
+.btn-success {
+    background: #107C10;
+    color: #ffffff;
+    border-color: #107C10;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: #0F6D0F;
+    border-color: #0F6D0F;
+}
+
+/* Danger button - red */
+.btn-danger {
+    background: #D13438;
+    color: #ffffff;
+    border-color: #D13438;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #A80000;
+    border-color: #A80000;
+}
+
+/* Warning button - orange */
+.btn-warning {
+    background: #FF8C00;
+    color: #ffffff;
+    border-color: #FF8C00;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: #D83B01;
+    border-color: #D83B01;
+}
+
+/* Ghost/text button */
+.btn-ghost {
+    background: transparent;
+    color: #323130;
+    border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background: #F3F2F1;
+}
+
+/* Link button */
+.btn-link {
+    background: transparent;
+    color: #0078D4;
+    border-color: transparent;
+    padding: 0;
+}
+
+.btn-link:hover:not(:disabled) {
+    color: #106EBE;
+    text-decoration: underline;
+}
+
+/* Button sizes */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.btn-lg {
+    padding: 14px 28px;
+    font-size: 16px;
+}
+
+/* Icon-only button */
+.btn-icon {
+    padding: 8px;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.btn-icon.btn-sm {
+    padding: 6px;
+    min-width: 28px;
+    min-height: 28px;
+}
+
+/* Button group */
+.btn-group {
+    display: inline-flex;
+    gap: 0;
+}
+
+.btn-group .btn {
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.btn-group .btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.btn-group .btn:not(:last-child) {
+    border-right: none;
+}
+
+/* Loading state */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+}
+
+.btn-loading::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: btn-spin 0.75s linear infinite;
+}
+
+.btn-primary.btn-loading::after {
+    border-color: rgba(255, 255, 255, 0.3);
+    border-right-color: transparent;
+}
+
+@keyframes btn-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Full width button */
+.btn-block {
+    display: flex;
+    width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .btn {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+
+    .btn-lg {
+        padding: 12px 24px;
+        font-size: 14px;
+    }
+}

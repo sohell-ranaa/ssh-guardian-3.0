@@ -23,10 +23,21 @@ load_dotenv(PROJECT_ROOT / ".env")
 from routes.auth_routes import auth_bp
 from routes.events_routes import events_routes
 from routes.blocking_routes import blocking_routes
-from routes.actions_routes import actions_routes
 from routes.agents import agent_routes  # Updated to use modular package
 from routes.geoip_routes import geoip_routes
 from routes.threat_intel_routes import threat_intel_routes
+from routes.ip_stats_routes import ip_stats_routes
+from routes.events_analysis_routes import events_analysis_routes
+from routes.settings_routes import settings_routes
+from routes.integrations_routes import integrations_routes
+from routes.api_keys_routes import api_keys_routes
+from routes.users_routes import users_routes
+from routes.audit_routes import audit_routes
+from routes.notification_rules_routes import notification_rules_routes
+from routes.notification_history_routes import notification_history_routes
+from routes.notification_channels_routes import notification_channels_routes
+from routes.daily_reports_routes import daily_reports_routes
+from routes.trends_reports_routes import trends_reports_routes
 from auth import SessionManager, login_required
 
 # Import API blueprints
@@ -48,10 +59,21 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 2592000  # 30 days in seconds
 app.register_blueprint(auth_bp)
 app.register_blueprint(events_routes)  # Dashboard events API
 app.register_blueprint(blocking_routes)  # Blocking management API
-app.register_blueprint(actions_routes, url_prefix='/api/dashboard/blocking')  # Actions/Audit API
 app.register_blueprint(agent_routes, url_prefix='/api')  # Agent management API
 app.register_blueprint(geoip_routes)  # GeoIP lookup API
 app.register_blueprint(threat_intel_routes)  # Threat Intelligence API
+app.register_blueprint(ip_stats_routes, url_prefix='/api/dashboard/ip-stats')  # IP Statistics API
+app.register_blueprint(events_analysis_routes, url_prefix='/api/dashboard/events-analysis')  # Events Analysis API
+app.register_blueprint(settings_routes, url_prefix='/api/dashboard/settings')  # Settings API
+app.register_blueprint(integrations_routes, url_prefix='/api/dashboard/integrations')  # Integrations API
+app.register_blueprint(api_keys_routes, url_prefix='/api/dashboard/api-keys')  # API Keys management
+app.register_blueprint(users_routes, url_prefix='/api/dashboard/users')  # Users management
+app.register_blueprint(audit_routes, url_prefix='/api/dashboard/audit')  # Audit logs
+app.register_blueprint(notification_rules_routes, url_prefix='/api/dashboard/notification-rules')  # Notification rules
+app.register_blueprint(notification_history_routes, url_prefix='/api/dashboard/notification-history')  # Notification history
+app.register_blueprint(notification_channels_routes, url_prefix='/api/dashboard/notification-channels')  # Notification channels
+app.register_blueprint(daily_reports_routes, url_prefix='/api/dashboard/daily-reports')  # Daily reports
+app.register_blueprint(trends_reports_routes, url_prefix='/api/dashboard/trends-reports')  # Trends reports
 app.register_blueprint(events_api)  # API for agent event submission
 
 

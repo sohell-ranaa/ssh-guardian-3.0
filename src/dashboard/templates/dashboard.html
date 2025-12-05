@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSH Guardian v3.0</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/css/components/buttons.css">
     <link rel="stylesheet" href="/static/css/components/agents.css">
     <link rel="stylesheet" href="/static/css/components/agent_search.css">
     <link rel="stylesheet" href="/static/css/components/agent_details_modal.css">
@@ -134,6 +135,154 @@
 
         .btn-logout:hover {
             background: var(--background);
+        }
+
+        /* Button Styles */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 32px;
+            padding: 0 16px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn:hover {
+            background: var(--background);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #0078D4;
+            color: #FFFFFF;
+            border-color: #0078D4;
+        }
+
+        .btn-primary:hover {
+            background: #106EBE;
+            border-color: #106EBE;
+        }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text-primary);
+            border-color: var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--background);
+        }
+
+        .btn-sm {
+            height: 28px;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+
+        /* Form Controls */
+        .form-control {
+            height: 32px;
+            padding: 0 10px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-primary);
+            font-size: 13px;
+            border-radius: 4px;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .form-control:focus {
+            border-color: #0078D4;
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        /* Data Table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #605E5C;
+            background: #FAF9F8;
+            border-bottom: 1px solid #EDEBE9;
+        }
+
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #EDEBE9;
+            color: #323130;
+            font-size: 13px;
+        }
+
+        .data-table tr:hover {
+            background: #FAF9F8;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #C8C6C4;
+            transition: 0.3s;
+            border-radius: 22px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #0078D4;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(18px);
         }
 
         /* Sidebar */
@@ -402,6 +551,139 @@
             white-space: nowrap;
         }
 
+        /* Risk Badge Styles */
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .risk-badge.risk-high {
+            background: rgba(209, 52, 56, 0.1);
+            color: #D13438;
+        }
+
+        .risk-badge.risk-medium {
+            background: rgba(230, 165, 2, 0.1);
+            color: #E6A502;
+        }
+
+        .risk-badge.risk-low {
+            background: rgba(46, 164, 79, 0.1);
+            color: #2EA44F;
+        }
+
+        /* Badge Styles */
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 6px;
+        }
+
+        .badge-danger {
+            background: rgba(209, 52, 56, 0.1);
+            color: #D13438;
+        }
+
+        .badge-success {
+            background: rgba(46, 164, 79, 0.1);
+            color: #2EA44F;
+        }
+
+        .badge-warning {
+            background: rgba(230, 165, 2, 0.1);
+            color: #E6A502;
+        }
+
+        .badge-info {
+            background: rgba(0, 120, 212, 0.1);
+            color: #0078D4;
+        }
+
+        .badge-secondary {
+            background: rgba(96, 94, 92, 0.1);
+            color: #605E5C;
+        }
+
+        .badge-outline {
+            background: transparent;
+            border: 1px solid #EDEBE9;
+            color: #605E5C;
+        }
+
+        /* Event Type Badge Styles */
+        .event-type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .event-type-danger {
+            background: rgba(209, 52, 56, 0.1);
+            color: #D13438;
+        }
+
+        .event-type-success {
+            background: rgba(46, 164, 79, 0.1);
+            color: #2EA44F;
+        }
+
+        .event-type-warning {
+            background: rgba(230, 165, 2, 0.1);
+            color: #E6A502;
+        }
+
+        .event-type-default {
+            background: rgba(128, 128, 128, 0.1);
+            color: #808080;
+        }
+
+        /* Pagination Styles */
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .pagination-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--card-background);
+            color: var(--text-primary);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .pagination-btn:hover {
+            background: var(--background);
+        }
+
+        .pagination-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .pagination-ellipsis {
+            padding: 6px 8px;
+            color: var(--text-secondary);
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
             /* Hide sidebar by default on mobile */
@@ -562,11 +844,6 @@
             <a href="#rules" class="nav-item" data-page="rules">
                 <span class="nav-item-icon">🚫</span>
                 <span class="nav-item-text">Blocking Rules</span>
-            </a>
-
-            <a href="#actions" class="nav-item" data-page="actions">
-                <span class="nav-item-icon">⚡</span>
-                <span class="nav-item-text">Blocking Actions</span>
             </a>
         </div>
 
@@ -1240,6 +1517,1061 @@
                 </div>
             </div>
 
+            <!-- IP Statistics Page -->
+            <div id="page-ip-stats" class="page-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div>
+                        <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
+                            IP Statistics
+                        </h2>
+                        <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
+                            Detailed statistics and analysis for all tracked IP addresses
+                        </p>
+                    </div>
+                    <button id="ip-stats-refresh-btn" style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total IPs</div>
+                        <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="ip-stats-total-ips">0</div>
+                    </div>
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Events</div>
+                        <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="ip-stats-total-events">0</div>
+                    </div>
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Failed Events</div>
+                        <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="ip-stats-failed-events">0</div>
+                    </div>
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Blocked IPs</div>
+                        <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="ip-stats-blocked-ips">0</div>
+                    </div>
+                </div>
+
+                <!-- Risk Distribution -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Risk Distribution</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">High Risk (≥70)</div>
+                            <div style="font-size: 20px; font-weight: 600; color: #D13438;" id="ip-stats-high-risk">0</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Medium Risk (40-69)</div>
+                            <div style="font-size: 20px; font-weight: 600; color: #E6A502;" id="ip-stats-medium-risk">0</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Low Risk (<40)</div>
+                            <div style="font-size: 20px; font-weight: 600; color: #2EA44F;" id="ip-stats-low-risk">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Countries -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Top Countries by Failed Events</h3>
+                    <div class="table-wrapper">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Country</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">IP Count</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Failed Events</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ip-stats-top-countries-body">
+                                <tr>
+                                    <td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card" style="padding: 20px; margin-bottom: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Search IP</label>
+                            <input type="text" id="ip-stats-search" placeholder="Search IP address..." style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Risk Level</label>
+                            <select id="ip-stats-risk-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="">All Risk Levels</option>
+                                <option value="high">High Risk (≥70)</option>
+                                <option value="medium">Medium Risk (40-69)</option>
+                                <option value="low">Low Risk (<40)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Blocked Status</label>
+                            <select id="ip-stats-blocked-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="">All IPs</option>
+                                <option value="true">Blocked Only</option>
+                                <option value="false">Not Blocked</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Sort By</label>
+                            <select id="ip-stats-sort" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="last_seen">Last Seen</option>
+                                <option value="total_events">Total Events</option>
+                                <option value="failed_events">Failed Events</option>
+                                <option value="avg_risk_score">Risk Score</option>
+                                <option value="times_blocked">Times Blocked</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IP Statistics Table -->
+                <div class="card">
+                    <div class="table-wrapper">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">IP Address</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Location</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Total Events</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Failed</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Successful</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Servers</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Risk Score</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Anomalies</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Times Blocked</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Last Seen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ip-stats-table-body">
+                                <tr>
+                                    <td colspan="10" style="padding: 40px; text-align: center; color: var(--text-secondary);">Loading IP statistics...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="ip-stats-pagination" style="padding: 16px; border-top: 1px solid var(--border);"></div>
+                </div>
+            </div>
+
+            <!-- Events Analysis Page -->
+            <div id="page-events-analysis" class="page-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div>
+                        <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
+                            Events Analysis
+                        </h2>
+                        <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
+                            Detailed analysis and statistics for authentication events
+                        </p>
+                    </div>
+                    <button id="events-refresh-btn" style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Events</div>
+                        <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="events-total-count">0</div>
+                    </div>
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Failed Events</div>
+                        <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="events-failed-count">0</div>
+                    </div>
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Anomalies</div>
+                        <div style="font-size: 28px; font-weight: 600; color: #E6A502;" id="events-anomaly-count">0</div>
+                    </div>
+                    <div class="card" style="padding: 20px;">
+                        <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Blocked</div>
+                        <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="events-blocked-count">0</div>
+                    </div>
+                </div>
+
+                <!-- Additional Metrics -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Event Metrics</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Unique IPs</div>
+                            <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);" id="events-unique-ips">0</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Unique Usernames</div>
+                            <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);" id="events-unique-usernames">0</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Avg Risk Score</div>
+                            <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);" id="events-avg-risk">0.0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Distribution -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Risk Distribution</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">High Risk (≥70)</div>
+                            <div style="font-size: 20px; font-weight: 600; color: #D13438;" id="events-high-risk">0</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Medium Risk (40-69)</div>
+                            <div style="font-size: 20px; font-weight: 600; color: #E6A502;" id="events-medium-risk">0</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Low Risk (<40)</div>
+                            <div style="font-size: 20px; font-weight: 600; color: #2EA44F;" id="events-low-risk">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Failure Reasons -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Top Failure Reasons</h3>
+                    <div class="table-wrapper">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Reason</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="events-failure-reasons-body">
+                                <tr>
+                                    <td colspan="2" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top Targeted Usernames -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Top Targeted Usernames</h3>
+                    <div class="table-wrapper">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Total</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Failed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="events-top-usernames-body">
+                                <tr>
+                                    <td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Events Timeline -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Events Timeline (Last 7 Days)</h3>
+                    <div id="events-timeline-chart">
+                        <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading timeline...</p>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card" style="padding: 20px; margin-bottom: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Search IP or Username</label>
+                            <input type="text" id="events-search" placeholder="Search..." style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Event Type</label>
+                            <select id="events-type-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="">All Types</option>
+                                <option value="failed">Failed</option>
+                                <option value="successful">Successful</option>
+                                <option value="invalid">Invalid</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Risk Level</label>
+                            <select id="events-risk-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="">All Risk Levels</option>
+                                <option value="high">High Risk (≥70)</option>
+                                <option value="medium">Medium Risk (40-69)</option>
+                                <option value="low">Low Risk (<40)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Anomaly Status</label>
+                            <select id="events-anomaly-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="">All Events</option>
+                                <option value="true">Anomalies Only</option>
+                                <option value="false">Normal Events</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Sort By</label>
+                            <select id="events-sort" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="event_timestamp">Latest First</option>
+                                <option value="ml_risk_score">Risk Score</option>
+                                <option value="source_ip_text">IP Address</option>
+                                <option value="target_username">Username</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Events Table -->
+                <div class="card" style="padding: 20px;">
+                    <div class="table-wrapper">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Timestamp</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Type</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">IP Address</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Location</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Server</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Risk</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Auth Method</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="events-table-body">
+                                <tr>
+                                    <td colspan="9" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading events...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div id="events-pagination" style="margin-top: 16px; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 8px;"></div>
+                </div>
+            </div>
+
+            <!-- Events Timeline Page -->
+            <div id="page-events-timeline" class="page-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div>
+                        <h2 style="margin: 0 0 4px 0; font-size: 24px; font-weight: 600;">Events Timeline</h2>
+                        <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Visualize authentication events over time</p>
+                    </div>
+                    <button id="timeline-refresh-btn" style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        ↻ Refresh
+                    </button>
+                </div>
+
+                <!-- Filters -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Interval</label>
+                            <select id="timeline-interval" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="hour">Hourly</option>
+                                <option value="day" selected>Daily</option>
+                                <option value="week">Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Range</label>
+                            <select id="timeline-days" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                                <option value="1">Last 24 Hours</option>
+                                <option value="3">Last 3 Days</option>
+                                <option value="7" selected>Last 7 Days</option>
+                                <option value="14">Last 14 Days</option>
+                                <option value="30">Last 30 Days</option>
+                                <option value="60">Last 60 Days</option>
+                                <option value="90">Last 90 Days</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeline Visualization -->
+                <div class="card" style="padding: 20px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600;">Timeline Visualization</h3>
+                    <div id="timeline-chart-container">
+                        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Loading timeline...</p>
+                    </div>
+                </div>
+
+                <!-- Timeline Data Table -->
+                <div class="card" style="padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Timeline Data</h3>
+                    <div class="table-wrapper">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Total</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Failed</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Successful</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Invalid</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Anomalies</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Avg Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timeline-table-body">
+                                <tr>
+                                    <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings General Page -->
+            <div id="page-settings-general" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">General Settings</h1>
+                        <p class="page-subtitle">Configure system-wide settings and preferences</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="settings-save-all-btn" class="btn btn-primary">
+                            💾 Save All
+                        </button>
+                        <button id="settings-refresh-btn" class="btn btn-secondary">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="filter-bar">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                        <label style="font-size: 14px; color: var(--text-secondary);">Category:</label>
+                        <select id="settings-category-filter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-primary); font-size: 14px;">
+                            <option value="all">All Categories</option>
+                            <option value="general">General</option>
+                            <option value="security">Security</option>
+                            <option value="notifications">Notifications</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Settings Container -->
+                <div id="settings-categories-container" style="margin-top: 24px;">
+                    <!-- Settings will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Settings Integrations Page -->
+            <div id="page-settings-integrations" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Integrations</h1>
+                        <p class="page-subtitle">Configure third-party service integrations</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="integrations-refresh-btn" class="btn btn-secondary">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Integrations Container -->
+                <div id="integrations-container" style="margin-top: 24px;">
+                    <!-- Integrations will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Settings API Keys Page -->
+            <div id="page-settings-api" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">API Keys</h1>
+                        <p class="page-subtitle">Manage API keys for agent authentication</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="api-keys-create-btn" class="btn btn-primary">
+                            + Create API Key
+                        </button>
+                        <button id="api-keys-refresh-btn" class="btn btn-secondary">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- API Keys Container -->
+                <div id="api-keys-container" style="margin-top: 24px;">
+                    <!-- API Keys will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div id="page-users" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Users</h1>
+                        <p class="page-subtitle">Manage dashboard users and roles</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="users-create-btn" class="btn btn-primary">
+                            + Create User
+                        </button>
+                        <button id="users-refresh-btn" class="btn btn-secondary">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Users Container -->
+                <div id="users-container" style="margin-top: 24px;">
+                    <!-- Users will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Audit Logs Page -->
+            <div id="page-audit" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Audit Logs</h1>
+                        <p class="page-subtitle">View system activity and security events</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="audit-export-btn" class="btn btn-secondary">
+                            Export
+                        </button>
+                        <button id="audit-refresh-btn" class="btn btn-secondary">
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Audit Stats -->
+                <div id="audit-stats-container">
+                    <!-- Stats will be loaded here -->
+                </div>
+
+                <!-- Filters -->
+                <div style="background: #FFFFFF; border: 1px solid #EDEBE9; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">Action</label>
+                            <select id="audit-action-filter" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+                                <option value="">All Actions</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">Start Date</label>
+                            <input type="date" id="audit-start-date" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+                        </div>
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">End Date</label>
+                            <input type="date" id="audit-end-date" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">Per Page</label>
+                            <select id="audit-per-page" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="audit-apply-filters-btn" class="btn btn-primary" style="padding: 8px 16px;">Apply</button>
+                            <button id="audit-clear-filters-btn" class="btn btn-secondary" style="padding: 8px 16px;">Clear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audit Logs Container -->
+                <div id="audit-logs-container">
+                    <!-- Audit logs will be loaded here -->
+                </div>
+
+                <!-- Pagination -->
+                <div id="audit-pagination">
+                    <!-- Pagination will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Notification Rules Page -->
+            <div id="page-notif-rules" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Notification Rules</h1>
+                        <p class="page-subtitle">Configure automated notification triggers</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="notif-rules-create-btn" class="btn btn-primary">
+                            + Create Rule
+                        </button>
+                        <button id="notif-rules-refresh-btn" class="btn btn-secondary">
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Notification Rules Container -->
+                <div id="notification-rules-container" style="margin-top: 24px;">
+                    <!-- Rules will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Notification History Page -->
+            <div id="page-notif-history" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Notification History</h1>
+                        <p class="page-subtitle">View sent notifications and delivery status</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="notif-history-refresh-btn" class="btn btn-secondary">
+                            Refresh
+                        </button>
+                        <button id="notif-history-export-btn" class="btn btn-secondary">
+                            Export
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div id="notif-history-stats" class="stats-grid" style="margin-top: 24px;">
+                    <!-- Stats will be loaded here -->
+                </div>
+
+                <!-- Filters -->
+                <div class="card" style="margin-top: 24px; padding: 16px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+                        <select id="notif-filter-status" class="form-control" style="width: 140px;">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="sent">Sent</option>
+                            <option value="failed">Failed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                        <select id="notif-filter-priority" class="form-control" style="width: 140px;">
+                            <option value="">All Priority</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="normal">Normal</option>
+                            <option value="low">Low</option>
+                        </select>
+                        <select id="notif-filter-channel" class="form-control" style="width: 140px;">
+                            <option value="">All Channels</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="email">Email</option>
+                            <option value="webhook">Webhook</option>
+                        </select>
+                        <select id="notif-filter-trigger" class="form-control" style="width: 160px;">
+                            <option value="">All Triggers</option>
+                        </select>
+                        <input type="date" id="notif-filter-start" class="form-control" style="width: 150px;" placeholder="Start Date">
+                        <input type="date" id="notif-filter-end" class="form-control" style="width: 150px;" placeholder="End Date">
+                        <input type="text" id="notif-filter-search" class="form-control" style="width: 200px;" placeholder="Search...">
+                        <button id="notif-filter-apply-btn" class="btn btn-primary">Apply</button>
+                        <button id="notif-filter-clear-btn" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+
+                <!-- Notifications Table -->
+                <div class="card" style="margin-top: 24px; overflow-x: auto;">
+                    <table class="data-table" id="notif-history-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Time</th>
+                                <th>Rule</th>
+                                <th>Trigger</th>
+                                <th>Title</th>
+                                <th>Channels</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="notif-history-tbody">
+                            <!-- Notifications will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div id="notif-history-pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;">
+                    <!-- Pagination will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Notification Channels Page -->
+            <div id="page-notif-channels" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Notification Channels</h1>
+                        <p class="page-subtitle">Configure Telegram, Email, and other notification channels</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="notif-channels-refresh-btn" class="btn btn-secondary">
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Channels Container -->
+                <div id="notif-channels-container" style="margin-top: 24px;">
+                    <!-- Channels will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Daily Reports Page -->
+            <div id="page-reports-daily" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">📊 Daily Security Report</h1>
+                    <p class="page-subtitle">Comprehensive daily security analysis and statistics</p>
+                </div>
+
+                <!-- Actions Bar -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                        <input type="date" id="report-date-picker" class="form-control" style="width: 160px;"
+                               onchange="onReportDateChange(this.value)">
+                        <button onclick="refreshDailyReport()" class="btn btn-secondary">
+                            🔄 Refresh
+                        </button>
+                        <button onclick="exportDailyReport()" style="padding: 8px 16px; background: #107C10; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;">
+                            📥 Export CSV
+                        </button>
+                        <button onclick="printDailyReport()" class="btn btn-secondary">
+                            🖨️ Print
+                        </button>
+                        <div style="flex: 1;"></div>
+                        <span style="color: var(--text-secondary); font-size: 13px;">📅 Quick select:</span>
+                        <div id="available-dates-list" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            <span style="color: var(--text-hint);">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="stats-grid" id="report-summary-cards">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Events</div>
+                        <div class="stat-value" id="report-total-events">-</div>
+                        <div class="stat-change" id="report-events-detail">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">High Risk Events</div>
+                        <div class="stat-value" id="report-high-risk" style="color: #D13438;">-</div>
+                        <div class="stat-change" id="report-risk-detail">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Unique IPs</div>
+                        <div class="stat-value" id="report-unique-ips" style="color: #E6A502;">-</div>
+                        <div class="stat-change" id="report-blocked-detail">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ML Anomalies</div>
+                        <div class="stat-value" id="report-anomalies" style="color: #0078D4;">-</div>
+                        <div class="stat-change" id="report-risk-score">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Day-over-Day Comparison -->
+                <div class="card">
+                    <div class="card-title">📈 Day-over-Day Comparison</div>
+                    <div id="comparison-container" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                        <div style="text-align: center; padding: 16px; background: var(--background); border-radius: 4px;">
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Total Events</div>
+                            <div id="comp-events-current" style="font-size: 24px; font-weight: 600;">-</div>
+                            <div id="comp-events-change" style="font-size: 12px; color: var(--text-hint);">vs yesterday</div>
+                        </div>
+                        <div style="text-align: center; padding: 16px; background: var(--background); border-radius: 4px;">
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">High Risk</div>
+                            <div id="comp-risk-current" style="font-size: 24px; font-weight: 600; color: #D13438;">-</div>
+                            <div id="comp-risk-change" style="font-size: 12px; color: var(--text-hint);">vs yesterday</div>
+                        </div>
+                        <div style="text-align: center; padding: 16px; background: var(--background); border-radius: 4px;">
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Unique IPs</div>
+                            <div id="comp-ips-current" style="font-size: 24px; font-weight: 600; color: #E6A502;">-</div>
+                            <div id="comp-ips-change" style="font-size: 12px; color: var(--text-hint);">vs yesterday</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <!-- Hourly Breakdown Chart -->
+                    <div class="card">
+                        <div class="card-title">📊 Hourly Activity</div>
+                        <div style="height: 280px;">
+                            <canvas id="hourly-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Threat Types Chart -->
+                    <div class="card">
+                        <div class="card-title">🛡️ Threat Types</div>
+                        <div style="height: 280px;">
+                            <canvas id="threat-types-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Tables Row -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <!-- Top Threats Table -->
+                    <div class="card">
+                        <div class="card-title">⚠️ Top Threat IPs</div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>IP Address</th>
+                                        <th>Location</th>
+                                        <th>Attempts</th>
+                                        <th>Usernames</th>
+                                        <th>Max Risk</th>
+                                        <th>Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="top-threats-tbody">
+                                    <tr>
+                                        <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Targeted Usernames -->
+                    <div class="card">
+                        <div class="card-title">👤 Targeted Usernames</div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Attempts</th>
+                                        <th>IPs</th>
+                                        <th>Risk</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usernames-tbody">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Geographic Breakdown Row -->
+                <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 16px;">
+                    <!-- Geographic Chart -->
+                    <div class="card">
+                        <div class="card-title">🌍 Attack Origins</div>
+                        <div style="height: 280px;">
+                            <canvas id="geo-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Geographic Table -->
+                    <div class="card">
+                        <div class="card-title">🗺️ Countries Breakdown</div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Country</th>
+                                        <th>Attempts</th>
+                                        <th>Unique IPs</th>
+                                        <th>Anomalies</th>
+                                        <th>Avg Risk</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="geo-table-tbody">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Trends Page -->
+            <div id="page-reports-trends" class="page-content" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">📈 Security Trends</h1>
+                    <p class="page-subtitle">Historical analysis and trend visualization</p>
+                </div>
+
+                <!-- Period Selection -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                        <span style="font-weight: 600;">Time Period:</span>
+                        <select id="trends-period-select" class="form-control" style="width: 150px;"
+                                onchange="onTrendsPeriodChange(this.value)">
+                            <option value="7">Last 7 days</option>
+                            <option value="14">Last 14 days</option>
+                            <option value="30" selected>Last 30 days</option>
+                            <option value="60">Last 60 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                        <button onclick="refreshTrends()" class="btn btn-secondary">
+                            🔄 Refresh
+                        </button>
+                        <div style="flex: 1;"></div>
+                        <span id="trends-risk-totals" style="font-size: 12px;"></span>
+                    </div>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Events</div>
+                        <div class="stat-value" id="trends-total-events">-</div>
+                        <div class="stat-change" id="trends-total-detail">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Failed Logins</div>
+                        <div class="stat-value" id="trends-failed-events" style="color: #D13438;">-</div>
+                        <div class="stat-change" id="trends-failed-detail">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">High Risk Events</div>
+                        <div class="stat-value" id="trends-high-risk" style="color: #E6A502;">-</div>
+                        <div class="stat-change" id="trends-high-risk-detail">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Failure Rate</div>
+                        <div class="stat-value" id="trends-fail-rate" style="color: #0078D4;">-</div>
+                        <div class="stat-change" id="trends-fail-rate-detail">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Period Comparison -->
+                <div class="card">
+                    <div class="card-title">📊 Period Comparison (vs Previous Period)</div>
+                    <div id="trends-comparison-container">
+                        <div style="text-align: center; padding: 24px; color: var(--text-hint);">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Events Timeline Chart -->
+                <div class="card">
+                    <div class="card-title">📉 Events Timeline</div>
+                    <div style="height: 300px;">
+                        <canvas id="trends-events-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Risk Distribution Chart -->
+                <div class="card">
+                    <div class="card-title">🎯 Risk Distribution Over Time</div>
+                    <div style="height: 280px;">
+                        <canvas id="trends-risk-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Data Tables Row -->
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <!-- Top Attackers -->
+                    <div class="card">
+                        <div class="card-title">⚠️ Top Attackers</div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>IP Address</th>
+                                        <th>Attempts</th>
+                                        <th>Active</th>
+                                        <th>Usernames</th>
+                                        <th>Risk</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trends-attackers-tbody">
+                                    <tr>
+                                        <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Targeted Usernames -->
+                    <div class="card">
+                        <div class="card-title">👤 Most Targeted Usernames</div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Attempts</th>
+                                        <th>IPs</th>
+                                        <th>Active</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trends-usernames-tbody">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Country Analysis Row -->
+                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px;">
+                    <!-- Country Chart -->
+                    <div class="card">
+                        <div class="card-title">🌍 Attack Sources by Country</div>
+                        <div style="height: 260px;">
+                            <canvas id="trends-country-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Country Table -->
+                    <div class="card">
+                        <div class="card-title">🗺️ Country Breakdown</div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Country</th>
+                                        <th>Attempts</th>
+                                        <th>IPs</th>
+                                        <th>Risk</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trends-country-tbody">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Other pages will be loaded dynamically -->
             <div id="dynamic-content" style="display: none;"></div>
         </div>
@@ -1373,6 +2705,58 @@
                 } else if (pageName === 'ip-blocks') {
                     if (typeof loadBlocks === 'function') {
                         loadBlocks();
+                    }
+                } else if (pageName === 'ip-stats') {
+                    if (typeof loadIPStatsPage === 'function') {
+                        loadIPStatsPage();
+                    }
+                } else if (pageName === 'events-analysis') {
+                    if (typeof loadEventsAnalysisPage === 'function') {
+                        loadEventsAnalysisPage();
+                    }
+                } else if (pageName === 'events-timeline') {
+                    if (typeof loadEventsTimelinePage === 'function') {
+                        loadEventsTimelinePage();
+                    }
+                } else if (pageName === 'settings-general') {
+                    if (typeof loadSettingsGeneralPage === 'function') {
+                        loadSettingsGeneralPage();
+                    }
+                } else if (pageName === 'settings-integrations') {
+                    if (typeof loadSettingsIntegrationsPage === 'function') {
+                        loadSettingsIntegrationsPage();
+                    }
+                } else if (pageName === 'settings-api') {
+                    if (typeof loadSettingsApiPage === 'function') {
+                        loadSettingsApiPage();
+                    }
+                } else if (pageName === 'users') {
+                    if (typeof loadUsersPage === 'function') {
+                        loadUsersPage();
+                    }
+                } else if (pageName === 'audit') {
+                    if (typeof loadAuditPage === 'function') {
+                        loadAuditPage();
+                    }
+                } else if (pageName === 'notif-rules') {
+                    if (typeof loadNotificationRulesPage === 'function') {
+                        loadNotificationRulesPage();
+                    }
+                } else if (pageName === 'notif-history') {
+                    if (typeof loadNotificationHistoryPage === 'function') {
+                        loadNotificationHistoryPage();
+                    }
+                } else if (pageName === 'notif-channels') {
+                    if (typeof loadNotificationChannelsPage === 'function') {
+                        loadNotificationChannelsPage();
+                    }
+                } else if (pageName === 'reports-daily') {
+                    if (typeof loadDailyReportsPage === 'function') {
+                        loadDailyReportsPage();
+                    }
+                } else if (pageName === 'reports-trends') {
+                    if (typeof loadTrendsReportsPage === 'function') {
+                        loadTrendsReportsPage();
                     }
                 }
             }
@@ -2081,5 +3465,18 @@
     <script src="/static/js/modules/threat_intel_page.js"></script>
     <script src="/static/js/modules/blocking_rules_page.js"></script>
     <script src="/static/js/modules/blocked_ips_page.js"></script>
+    <script src="/static/js/modules/ip_stats_page.js"></script>
+    <script src="/static/js/modules/events_analysis_page.js"></script>
+    <script src="/static/js/modules/events_timeline_page.js"></script>
+    <script src="/static/js/modules/settings_general_page.js"></script>
+    <script src="/static/js/modules/settings_integrations_page.js"></script>
+    <script src="/static/js/modules/settings_api_page.js"></script>
+    <script src="/static/js/modules/users_page.js"></script>
+    <script src="/static/js/modules/audit_page.js"></script>
+    <script src="/static/js/modules/notification_rules_page.js"></script>
+    <script src="/static/js/modules/notification_history_page.js"></script>
+    <script src="/static/js/modules/notification_channels_page.js"></script>
+    <script src="/static/js/modules/daily_reports_page.js"></script>
+    <script src="/static/js/modules/trends_reports_page.js"></script>
 </body>
 </html>

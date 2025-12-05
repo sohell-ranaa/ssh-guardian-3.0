@@ -28,7 +28,8 @@ def list_agents():
                 agent_type, ip_address_primary, environment,
                 status, health_status, last_heartbeat,
                 version, is_active, is_approved,
-                total_events_sent, created_at, updated_at
+                total_events_sent, created_at, updated_at,
+                api_key
             FROM agents
             ORDER BY created_at DESC
         """)
@@ -249,4 +250,86 @@ def get_agent_details(agent_id):
         return jsonify({
             'success': False,
             'error': f'Failed to get agent details: {str(e)}'
+        }), 500
+
+
+@agent_routes.route('/agents/<int:agent_id>/regenerate-key', methods=['POST'])
+def regenerate_api_key(agent_id):
+    """Regenerate API key for an agent"""
+    import uuid
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Generate new API key
+        new_api_key = str(uuid.uuid4())
+
+        cursor.execute("""
+            UPDATE agents
+            SET api_key = %s,
+                updated_at = NOW()
+            WHERE id = %s
+        """, (new_api_key, agent_id))
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'API key regenerated successfully',
+            'api_key': new_api_key
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to regenerate API key: {str(e)}'
+        }), 500
+
+
+@agent_routes.route('/agents/<int:agent_id>/revoke-key', methods=['POST'])
+def revoke_api_key(agent_id):
+    """Revoke API key for an agent (set to NULL)"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE agents
+            SET api_key = NULL,
+                is_active = FALSE,
+                status = 'offline',
+                updated_at = NOW()
+            WHERE id = %s
+        """, (agent_id,))
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'API key revoked and agent deactivated'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to revoke API key: {str(e)}'
         }), 500
