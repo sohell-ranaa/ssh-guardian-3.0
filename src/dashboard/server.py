@@ -38,6 +38,7 @@ from routes.notification_history_routes import notification_history_routes
 from routes.notification_channels_routes import notification_channels_routes
 from routes.daily_reports_routes import daily_reports_routes
 from routes.trends_reports_routes import trends_reports_routes
+from routes.simulation_routes import simulation_routes
 from auth import SessionManager, login_required
 
 # Import API blueprints
@@ -74,6 +75,7 @@ app.register_blueprint(notification_history_routes, url_prefix='/api/dashboard/n
 app.register_blueprint(notification_channels_routes, url_prefix='/api/dashboard/notification-channels')  # Notification channels
 app.register_blueprint(daily_reports_routes, url_prefix='/api/dashboard/daily-reports')  # Daily reports
 app.register_blueprint(trends_reports_routes, url_prefix='/api/dashboard/trends-reports')  # Trends reports
+app.register_blueprint(simulation_routes, url_prefix='/api/simulation')  # Simulation API
 app.register_blueprint(events_api)  # API for agent event submission
 
 
@@ -108,7 +110,7 @@ def login():
 @login_required
 def dashboard():
     """Main dashboard page"""
-    return render_template('dashboard.html')
+    return render_template('dashboard_modular.html')
 
 
 @app.route('/agents-test')

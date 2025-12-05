@@ -1,0 +1,73 @@
+<!-- SSH Guardian v3.0 - Live Events Page -->
+<div id="page-events-live" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">Live Events</h1>
+        <p class="page-subtitle">Real-time SSH authentication events with threat intelligence</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <input type="text" id="eventSearch" placeholder="Search IP or username..."
+                   style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+
+            <select id="eventTypeFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                <option value="">All Event Types</option>
+                <option value="failed">Failed</option>
+                <option value="successful">Successful</option>
+                <option value="invalid">Invalid</option>
+            </select>
+
+            <select id="threatLevelFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                <option value="">All Threat Levels</option>
+                <option value="clean">Clean</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+            </select>
+
+            <button id="refreshEvents" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Events Table -->
+    <div class="card">
+        <div id="eventsLoading" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            Loading events...
+        </div>
+        <div id="eventsTable" style="display: none;">
+            <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Time</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">IP Address</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Location</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Threat Level</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Details</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="eventsTableBody">
+                    <!-- Events will be inserted here -->
+                </tbody>
+            </table>
+            </div>
+            <div id="eventsPagination" style="padding: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border);">
+                <div id="eventsInfo" style="color: var(--text-secondary); font-size: 13px;"></div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="prevPage" style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 2px; cursor: pointer; font-size: 13px;">Previous</button>
+                    <button id="nextPage" style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 2px; cursor: pointer; font-size: 13px;">Next</button>
+                </div>
+            </div>
+        </div>
+        <div id="eventsError" style="display: none; text-align: center; padding: 40px; color: #D13438;">
+            Error loading events
+        </div>
+    </div>
+</div>

@@ -1,0 +1,197 @@
+<!-- SSH Guardian v3.0 - Events Analysis Page -->
+<div id="page-events-analysis" class="page-content" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div>
+            <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
+                Events Analysis
+            </h2>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
+                Detailed analysis and statistics for authentication events
+            </p>
+        </div>
+        <button id="events-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+            Refresh
+        </button>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px;">
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Events</div>
+            <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="events-total-count">0</div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Failed Events</div>
+            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="events-failed-count">0</div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Anomalies</div>
+            <div style="font-size: 28px; font-weight: 600; color: #E6A502;" id="events-anomaly-count">0</div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Blocked</div>
+            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="events-blocked-count">0</div>
+        </div>
+    </div>
+
+    <!-- Additional Metrics -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Event Metrics</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div>
+                <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Unique IPs</div>
+                <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);" id="events-unique-ips">0</div>
+            </div>
+            <div>
+                <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Unique Usernames</div>
+                <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);" id="events-unique-usernames">0</div>
+            </div>
+            <div>
+                <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Avg Risk Score</div>
+                <div style="font-size: 20px; font-weight: 600; color: var(--text-primary);" id="events-avg-risk">0.0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Distribution -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Risk Distribution</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div>
+                <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">High Risk (≥70)</div>
+                <div style="font-size: 20px; font-weight: 600; color: #D13438;" id="events-high-risk">0</div>
+            </div>
+            <div>
+                <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Medium Risk (40-69)</div>
+                <div style="font-size: 20px; font-weight: 600; color: #E6A502;" id="events-medium-risk">0</div>
+            </div>
+            <div>
+                <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Low Risk (<40)</div>
+                <div style="font-size: 20px; font-weight: 600; color: #2EA44F;" id="events-low-risk">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Failure Reasons -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Top Failure Reasons</h3>
+        <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Reason</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Count</th>
+                    </tr>
+                </thead>
+                <tbody id="events-failure-reasons-body">
+                    <tr>
+                        <td colspan="2" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Top Targeted Usernames -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Top Targeted Usernames</h3>
+        <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Total</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Failed</th>
+                    </tr>
+                </thead>
+                <tbody id="events-top-usernames-body">
+                    <tr>
+                        <td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Events Timeline -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Events Timeline (Last 7 Days)</h3>
+        <div id="events-timeline-chart">
+            <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading timeline...</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="padding: 20px; margin-bottom: 16px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Search IP or Username</label>
+                <input type="text" id="events-search" placeholder="Search..." style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Event Type</label>
+                <select id="events-type-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="">All Types</option>
+                    <option value="failed">Failed</option>
+                    <option value="successful">Successful</option>
+                    <option value="invalid">Invalid</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Risk Level</label>
+                <select id="events-risk-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="">All Risk Levels</option>
+                    <option value="high">High Risk (≥70)</option>
+                    <option value="medium">Medium Risk (40-69)</option>
+                    <option value="low">Low Risk (<40)</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Anomaly Status</label>
+                <select id="events-anomaly-filter" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="">All Events</option>
+                    <option value="true">Anomalies Only</option>
+                    <option value="false">Normal Events</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Sort By</label>
+                <select id="events-sort" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--background);">
+                    <option value="event_timestamp">Latest First</option>
+                    <option value="ml_risk_score">Risk Score</option>
+                    <option value="source_ip_text">IP Address</option>
+                    <option value="target_username">Username</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Events Table -->
+    <div class="card" style="padding: 20px;">
+        <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Timestamp</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Type</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">IP Address</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Location</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Server</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Risk</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Auth Method</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="events-table-body">
+                    <tr>
+                        <td colspan="9" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading events...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div id="events-pagination" style="margin-top: 16px; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 8px;"></div>
+    </div>
+</div>

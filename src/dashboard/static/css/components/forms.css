@@ -1,0 +1,52 @@
+/* SSH Guardian v3.0 - Form Controls */
+
+.form-control {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 13px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.form-control:focus {
+    border-color: #0078D4;
+}
+
+select.form-control {
+    cursor: pointer;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.form-help {
+    font-size: 11px;
+    color: var(--text-hint);
+    margin-top: 4px;
+}
+
+.form-error {
+    font-size: 11px;
+    color: #D13438;
+    margin-top: 4px;
+}
+
+textarea.form-control {
+    height: auto;
+    min-height: 80px;
+    padding: 10px;
+    resize: vertical;
+}

@@ -1,0 +1,558 @@
+<!-- SSH Guardian v3.0 - Simulation Page -->
+<div id="page-simulation" class="page-content" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div>
+            <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
+                Attack Simulation
+            </h2>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
+                Generate realistic SSH attack scenarios to test detection and response
+            </p>
+        </div>
+    </div>
+
+    <!-- Simulation Statistics -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Simulations</div>
+            <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="sim-total-count">0</div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Events Generated</div>
+            <div style="font-size: 28px; font-weight: 600; color: var(--azure-blue);" id="sim-events-count">0</div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">IPs Blocked</div>
+            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="sim-blocked-count">0</div>
+        </div>
+        <div class="card" style="padding: 20px;">
+            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Templates</div>
+            <div style="font-size: 28px; font-weight: 600; color: #2EA44F;" id="sim-templates-count">0</div>
+        </div>
+    </div>
+
+    <!-- Run Simulation Section -->
+    <div class="card" style="padding: 20px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Run New Simulation</h3>
+
+        <!-- Template Selection -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Select Attack Template</label>
+            <div id="sim-templates-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                <div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading templates...</div>
+            </div>
+        </div>
+
+        <!-- Selected Template Details -->
+        <div id="sim-template-details" style="display: none; margin-bottom: 20px; padding: 16px; background: var(--background); border-radius: 8px; border: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                <div>
+                    <h4 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;" id="sim-selected-name">-</h4>
+                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary);" id="sim-selected-desc">-</p>
+                </div>
+                <span id="sim-selected-severity" style="padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase;">-</span>
+            </div>
+
+            <!-- Customization Options -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;">
+                <div>
+                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Number of Attempts</label>
+                    <input type="number" id="sim-param-attempts" value="10" min="1" max="100" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Time Window (seconds)</label>
+                    <input type="number" id="sim-param-timewindow" value="60" min="10" max="600" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Target Username</label>
+                    <input type="text" id="sim-param-username" placeholder="root" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Target Server</label>
+                    <input type="text" id="sim-param-server" placeholder="prod-web-01" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
+                </div>
+            </div>
+        </div>
+
+        <!-- Execute Button -->
+        <button id="sim-execute-btn" disabled style="padding: 12px 24px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+            <span>Run Simulation</span>
+        </button>
+    </div>
+
+    <!-- Execution Progress -->
+    <div id="sim-progress" class="card" style="padding: 20px; margin-bottom: 24px; display: none;">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Simulation Progress</h3>
+        <div style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span style="font-size: 13px; color: var(--text-secondary);">Processing...</span>
+                <span id="sim-progress-percent" style="font-size: 13px; font-weight: 600;">0%</span>
+            </div>
+            <div style="height: 8px; background: var(--background); border-radius: 4px; overflow: hidden;">
+                <div id="sim-progress-bar" style="height: 100%; background: var(--azure-blue); border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
+            </div>
+        </div>
+        <div id="sim-progress-log" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px;"></div>
+    </div>
+
+    <!-- Simulation History -->
+    <div class="card" style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Simulation History</h3>
+            <button id="sim-refresh-btn" style="padding: 6px 12px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px;">
+                Refresh
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+            <select id="sim-filter-type" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--background); min-width: 180px;">
+                <option value="">All Attack Types</option>
+            </select>
+        </div>
+
+        <!-- History Table -->
+        <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">ID</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Attack Type</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Events</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Blocked</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Duration</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Executed</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="sim-history-body">
+                    <tr>
+                        <td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div id="sim-pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"></div>
+    </div>
+
+    <!-- Simulation Details Modal -->
+    <div id="sim-details-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--card-bg); border-radius: 8px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; margin: 20px;">
+            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Simulation Details</h3>
+                <button id="sim-modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+            </div>
+            <div id="sim-modal-content" style="padding: 20px;">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let selectedTemplate = null;
+    let currentPage = 1;
+    const pageSize = 10;
+
+    // Initialize when page becomes visible
+    function initSimulation() {
+        loadTemplates();
+        loadHistory();
+        loadStats();
+        loadAttackTypes();
+    }
+
+    // Load templates
+    async function loadTemplates() {
+        try {
+            const response = await fetch('/api/simulation/templates', { credentials: 'same-origin' });
+            const data = await response.json();
+
+            if (data.success && data.templates) {
+                document.getElementById('sim-templates-count').textContent = data.templates.length;
+                renderTemplates(data.templates);
+            }
+        } catch (error) {
+            console.error('Error loading templates:', error);
+        }
+    }
+
+    function renderTemplates(templates) {
+        const grid = document.getElementById('sim-templates-grid');
+        grid.innerHTML = templates.map(t => `
+            <div class="sim-template-card" data-template="${t.id}"
+                 style="padding: 16px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                    <span style="font-weight: 600; font-size: 14px;">${t.name}</span>
+                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+                          background: ${getSeverityColor(t.severity)}20; color: ${getSeverityColor(t.severity)};">${t.severity}</span>
+                </div>
+                <p style="margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${t.description}</p>
+                <div style="margin-top: 8px; font-size: 11px; color: var(--text-tertiary);">Category: ${t.category}</div>
+            </div>
+        `).join('');
+
+        // Add click handlers
+        grid.querySelectorAll('.sim-template-card').forEach(card => {
+            card.addEventListener('click', () => selectTemplate(card.dataset.template, templates));
+        });
+    }
+
+    function getSeverityColor(severity) {
+        const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
+        return colors[severity] || '#666';
+    }
+
+    function selectTemplate(templateId, templates) {
+        selectedTemplate = templates.find(t => t.id === templateId);
+        if (!selectedTemplate) return;
+
+        // Update UI
+        document.querySelectorAll('.sim-template-card').forEach(card => {
+            card.style.borderColor = card.dataset.template === templateId ? 'var(--azure-blue)' : 'var(--border)';
+            card.style.background = card.dataset.template === templateId ? 'var(--azure-blue)10' : 'transparent';
+        });
+
+        // Show details
+        const details = document.getElementById('sim-template-details');
+        details.style.display = 'block';
+        document.getElementById('sim-selected-name').textContent = selectedTemplate.name;
+        document.getElementById('sim-selected-desc').textContent = selectedTemplate.description;
+
+        const severitySpan = document.getElementById('sim-selected-severity');
+        severitySpan.textContent = selectedTemplate.severity;
+        severitySpan.style.background = getSeverityColor(selectedTemplate.severity) + '20';
+        severitySpan.style.color = getSeverityColor(selectedTemplate.severity);
+
+        // Set default params from template
+        const tpl = selectedTemplate.template;
+        document.getElementById('sim-param-attempts').value = tpl.attempts || tpl.attempts_per_ip * 5 || 10;
+        document.getElementById('sim-param-timewindow').value = tpl.time_window_seconds || 60;
+        document.getElementById('sim-param-username').value = Array.isArray(tpl.username) ? tpl.username[0] : (tpl.username || 'root');
+        document.getElementById('sim-param-server').value = tpl.server_hostname || 'prod-web-01';
+
+        // Enable execute button
+        document.getElementById('sim-execute-btn').disabled = false;
+    }
+
+    // Execute simulation
+    document.getElementById('sim-execute-btn').addEventListener('click', async () => {
+        if (!selectedTemplate) return;
+
+        const btn = document.getElementById('sim-execute-btn');
+        const progress = document.getElementById('sim-progress');
+        const progressBar = document.getElementById('sim-progress-bar');
+        const progressPercent = document.getElementById('sim-progress-percent');
+        const progressLog = document.getElementById('sim-progress-log');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span>Running...</span>';
+        progress.style.display = 'block';
+        progressLog.innerHTML = '';
+        progressBar.style.width = '0%';
+
+        const params = {
+            attempts: parseInt(document.getElementById('sim-param-attempts').value),
+            time_window_seconds: parseInt(document.getElementById('sim-param-timewindow').value),
+            username: document.getElementById('sim-param-username').value || undefined,
+            server_hostname: document.getElementById('sim-param-server').value || undefined
+        };
+
+        try {
+            addLog(progressLog, 'Starting simulation: ' + selectedTemplate.name);
+            progressBar.style.width = '10%';
+            progressPercent.textContent = '10%';
+
+            const response = await fetch('/api/simulation/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    template_name: selectedTemplate.id,
+                    parameters: params
+                })
+            });
+
+            progressBar.style.width = '50%';
+            progressPercent.textContent = '50%';
+
+            const data = await response.json();
+
+            if (data.success) {
+                progressBar.style.width = '100%';
+                progressPercent.textContent = '100%';
+                addLog(progressLog, 'Simulation completed successfully!', 'success');
+                addLog(progressLog, `Events: ${data.summary.successful_submissions}/${data.summary.total_events}`);
+                addLog(progressLog, `Unique IPs: ${data.summary.unique_ips}`);
+                addLog(progressLog, `Completion: ${data.summary.completion_rate.toFixed(1)}%`);
+
+                // Reload history and stats
+                loadHistory();
+                loadStats();
+            } else {
+                addLog(progressLog, 'Error: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            addLog(progressLog, 'Error: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span>Run Simulation</span>';
+        }
+    });
+
+    function addLog(container, message, type = 'info') {
+        const colors = { info: '#d4d4d4', success: '#4ec9b0', error: '#f14c4c', warning: '#cca700' };
+        const timestamp = new Date().toLocaleTimeString();
+        container.innerHTML += `<div style="color: ${colors[type]};">[${timestamp}] ${message}</div>`;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // Load history
+    async function loadHistory() {
+        try {
+            const filter = document.getElementById('sim-filter-type').value;
+            const url = `/api/simulation/history?limit=${pageSize}&offset=${(currentPage-1)*pageSize}` +
+                        (filter ? `&attack_type=${encodeURIComponent(filter)}` : '');
+
+            const response = await fetch(url, { credentials: 'same-origin' });
+            const data = await response.json();
+
+            if (data.success) {
+                renderHistory(data.history);
+                renderPagination(data.total);
+                updateStats(data);
+            }
+        } catch (error) {
+            console.error('Error loading history:', error);
+        }
+    }
+
+    function renderHistory(history) {
+        const tbody = document.getElementById('sim-history-body');
+
+        if (!history || history.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);">No simulations found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = history.map(sim => `
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px;">#${sim.id}</td>
+                <td style="padding: 12px;">${sim.template_display_name || sim.template_name}</td>
+                <td style="padding: 12px;">
+                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
+                          background: ${getStatusColor(sim.status)}20; color: ${getStatusColor(sim.status)};">
+                        ${sim.status}
+                    </span>
+                </td>
+                <td style="padding: 12px;">${sim.events_generated || 0}</td>
+                <td style="padding: 12px;">${sim.ips_blocked || 0}</td>
+                <td style="padding: 12px;">${sim.duration_seconds ? sim.duration_seconds + 's' : '-'}</td>
+                <td style="padding: 12px;">${formatDate(sim.started_at)}</td>
+                <td style="padding: 12px;">
+                    <button onclick="viewSimDetails(${sim.id})" style="padding: 4px 8px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                        View
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function getStatusColor(status) {
+        const colors = { completed: '#2EA44F', running: '#0078D4', failed: '#D13438', pending: '#E6A502' };
+        return colors[status] || '#666';
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleString();
+    }
+
+    function renderPagination(total) {
+        const container = document.getElementById('sim-pagination');
+        const totalPages = Math.ceil(total / pageSize);
+
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        for (let i = 1; i <= totalPages; i++) {
+            html += `<button onclick="goToPage(${i})" style="padding: 6px 12px; border: 1px solid var(--border);
+                     background: ${i === currentPage ? 'var(--azure-blue)' : 'var(--background)'};
+                     color: ${i === currentPage ? 'white' : 'var(--text-primary)'};
+                     border-radius: 4px; cursor: pointer;">${i}</button>`;
+        }
+        container.innerHTML = html;
+    }
+
+    window.goToPage = function(page) {
+        currentPage = page;
+        loadHistory();
+    };
+
+    // Load stats
+    async function loadStats() {
+        try {
+            const response = await fetch('/api/simulation/history?limit=1000', { credentials: 'same-origin' });
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('sim-total-count').textContent = data.total;
+
+                let totalEvents = 0, totalBlocked = 0;
+                data.history.forEach(sim => {
+                    totalEvents += sim.events_generated || 0;
+                    totalBlocked += sim.ips_blocked || 0;
+                });
+
+                document.getElementById('sim-events-count').textContent = totalEvents;
+                document.getElementById('sim-blocked-count').textContent = totalBlocked;
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    function updateStats(data) {
+        document.getElementById('sim-total-count').textContent = data.total;
+    }
+
+    // Load attack types for filter
+    async function loadAttackTypes() {
+        try {
+            const response = await fetch('/api/simulation/attack-types', { credentials: 'same-origin' });
+            const data = await response.json();
+
+            if (data.success && data.attack_types) {
+                const select = document.getElementById('sim-filter-type');
+                data.attack_types.forEach(at => {
+                    const option = document.createElement('option');
+                    option.value = at.template_name;
+                    option.textContent = at.template_display_name || at.template_name;
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading attack types:', error);
+        }
+    }
+
+    // View simulation details
+    window.viewSimDetails = async function(simId) {
+        const modal = document.getElementById('sim-details-modal');
+        const content = document.getElementById('sim-modal-content');
+
+        modal.style.display = 'flex';
+        content.innerHTML = '<p style="text-align: center;">Loading...</p>';
+
+        try {
+            const [detailsRes, logsRes, analyticsRes] = await Promise.all([
+                fetch(`/api/simulation/history/${simId}`, { credentials: 'same-origin' }),
+                fetch(`/api/simulation/logs/${simId}`, { credentials: 'same-origin' }),
+                fetch(`/api/simulation/analytics/${simId}`, { credentials: 'same-origin' })
+            ]);
+
+            const details = await detailsRes.json();
+            const logs = await logsRes.json();
+            const analytics = await analyticsRes.json();
+
+            if (details.success) {
+                content.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 8px 0;">${details.simulation.template_display_name}</h4>
+                        <p style="margin: 0; color: var(--text-secondary); font-size: 13px;">
+                            Status: <span style="color: ${getStatusColor(details.simulation.status)}">${details.simulation.status}</span> |
+                            Duration: ${details.simulation.duration_seconds || 0}s |
+                            Events: ${details.simulation.events_generated || 0}
+                        </p>
+                    </div>
+
+                    ${analytics.success && analytics.ip_statistics ? `
+                    <div style="margin-bottom: 20px;">
+                        <h5 style="margin: 0 0 12px 0; font-size: 14px;">IP Statistics</h5>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                            ${analytics.ip_statistics.slice(0, 6).map(ip => `
+                                <div style="padding: 12px; background: var(--background); border-radius: 6px;">
+                                    <div style="font-weight: 600; font-size: 13px;">${ip.ip_address}</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">
+                                        Events: ${ip.event_count} | Risk: ${Math.round(ip.avg_risk_score || 0)}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <div>
+                        <h5 style="margin: 0 0 12px 0; font-size: 14px;">Execution Logs</h5>
+                        <div style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 11px; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px;">
+                            ${logs.success && logs.logs ? logs.logs.map(log => `
+                                <div style="color: ${log.level === 'SUCCESS' ? '#4ec9b0' : log.level === 'ERROR' ? '#f14c4c' : '#d4d4d4'};">
+                                    [${log.stage}] ${log.message}
+                                </div>
+                            `).join('') : 'No logs available'}
+                        </div>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = '<p style="color: var(--text-secondary);">Failed to load details</p>';
+            }
+        } catch (error) {
+            content.innerHTML = '<p style="color: #D13438;">Error loading details: ' + error.message + '</p>';
+        }
+    };
+
+    // Modal close
+    document.getElementById('sim-modal-close').addEventListener('click', () => {
+        document.getElementById('sim-details-modal').style.display = 'none';
+    });
+
+    document.getElementById('sim-details-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'sim-details-modal') {
+            document.getElementById('sim-details-modal').style.display = 'none';
+        }
+    });
+
+    // Refresh button
+    document.getElementById('sim-refresh-btn').addEventListener('click', () => {
+        loadHistory();
+        loadStats();
+    });
+
+    // Filter change
+    document.getElementById('sim-filter-type').addEventListener('change', () => {
+        currentPage = 1;
+        loadHistory();
+    });
+
+    // Initialize on page load
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.target.id === 'page-simulation' && mutation.target.style.display !== 'none') {
+                initSimulation();
+            }
+        });
+    });
+
+    const simPage = document.getElementById('page-simulation');
+    if (simPage) {
+        observer.observe(simPage, { attributes: true, attributeFilter: ['style'] });
+        // Also init if already visible
+        if (simPage.style.display !== 'none') {
+            initSimulation();
+        }
+    }
+
+    // Check hash on load
+    if (window.location.hash === '#simulation') {
+        setTimeout(initSimulation, 100);
+    }
+})();
+</script>

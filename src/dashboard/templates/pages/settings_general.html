@@ -1,0 +1,35 @@
+<!-- SSH Guardian v3.0 - General Settings Page -->
+<div id="page-settings-general" class="page-content" style="display: none;">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">General Settings</h1>
+            <p class="page-subtitle">Configure system-wide settings and preferences</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button id="settings-save-all-btn" class="btn btn-primary">
+                💾 Save All
+            </button>
+            <button id="settings-refresh-btn" class="btn btn-secondary">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="filter-bar">
+        <div style="display: flex; gap: 16px; align-items: center;">
+            <label style="font-size: 14px; color: var(--text-secondary);">Category:</label>
+            <select id="settings-category-filter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-primary); font-size: 14px;">
+                <option value="all">All Categories</option>
+                <option value="general">General</option>
+                <option value="security">Security</option>
+                <option value="notifications">Notifications</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Settings Container -->
+    <div id="settings-categories-container" style="margin-top: 24px;">
+        <!-- Settings will be loaded here -->
+    </div>
+</div>

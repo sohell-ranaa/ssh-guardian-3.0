@@ -1,0 +1,135 @@
+/* SSH Guardian v3.0 - Mobile Responsive Styles */
+
+@media (max-width: 768px) {
+    /* Hide sidebar by default on mobile */
+    .sidebar {
+        transform: translateX(calc(-1 * var(--sidebar-width)));
+        box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    }
+
+    .sidebar:not(.collapsed) {
+        transform: translateX(0);
+    }
+
+    /* Main content takes full width on mobile */
+    .main-content {
+        margin-left: 0 !important;
+    }
+
+    .main-content.expanded {
+        margin-left: 0;
+    }
+
+    /* Add overlay when sidebar is open */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: var(--topbar-height);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 998;
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+    }
+
+    /* Adjust stats grid for mobile */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    /* Make cards more compact on mobile */
+    .card {
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+
+    /* Adjust table font size for mobile */
+    table {
+        font-size: 12px !important;
+    }
+
+    table th,
+    table td {
+        padding: 8px !important;
+    }
+
+    /* Make buttons stack on mobile */
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 12px;
+    }
+
+    /* Full width inputs on mobile */
+    input[type="text"],
+    input[type="search"],
+    select,
+    textarea {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Adjust content wrapper padding */
+    .content-wrapper {
+        padding: 16px;
+    }
+
+    /* Filter bar adjustments */
+    .filter-bar {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .filter-bar .btn {
+        width: 100%;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+    .app-title {
+        display: none;
+    }
+
+    /* Hide less important columns */
+    table th:nth-child(n+5),
+    table td:nth-child(n+5) {
+        display: none;
+    }
+
+    /* Smaller page title */
+    .page-title {
+        font-size: 20px;
+    }
+
+    /* Compact stat cards */
+    .stat-card {
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    /* Modal full width on small screens */
+    .modal {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    /* Pagination adjustments */
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .pagination-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+}

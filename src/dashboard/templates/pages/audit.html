@@ -1,0 +1,64 @@
+<!-- SSH Guardian v3.0 - Audit Logs Page -->
+<div id="page-audit" class="page-content" style="display: none;">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Audit Logs</h1>
+            <p class="page-subtitle">View system activity and security events</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button id="audit-export-btn" class="btn btn-secondary">
+                Export
+            </button>
+            <button id="audit-refresh-btn" class="btn btn-secondary">
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Audit Stats -->
+    <div id="audit-stats-container">
+        <!-- Stats will be loaded here -->
+    </div>
+
+    <!-- Filters -->
+    <div style="background: #FFFFFF; border: 1px solid #EDEBE9; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+            <div style="flex: 1; min-width: 150px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">Action</label>
+                <select id="audit-action-filter" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+                    <option value="">All Actions</option>
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 150px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">Start Date</label>
+                <input type="date" id="audit-start-date" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+            </div>
+            <div style="flex: 1; min-width: 150px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">End Date</label>
+                <input type="date" id="audit-end-date" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+            </div>
+            <div style="flex: 1; min-width: 100px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #605E5C; margin-bottom: 4px;">Per Page</label>
+                <select id="audit-per-page" style="width: 100%; padding: 8px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button id="audit-apply-filters-btn" class="btn btn-primary" style="padding: 8px 16px;">Apply</button>
+                <button id="audit-clear-filters-btn" class="btn btn-secondary" style="padding: 8px 16px;">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Logs Container -->
+    <div id="audit-logs-container">
+        <!-- Audit logs will be loaded here -->
+    </div>
+
+    <!-- Pagination -->
+    <div id="audit-pagination">
+        <!-- Pagination will be loaded here -->
+    </div>
+</div>

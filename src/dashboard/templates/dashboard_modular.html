@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Guardian v3.0</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard-modular.css">
+</head>
+<body>
+    <!-- Top Bar -->
+    {% include 'components/topbar.html' %}
+
+    <!-- Sidebar -->
+    {% include 'components/sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        <div class="content-wrapper">
+            <!-- Page Templates -->
+            {% include 'pages/dashboard_home.html' %}
+            {% include 'pages/events_live.html' %}
+            {% include 'pages/events_analysis.html' %}
+            {% include 'pages/events_timeline.html' %}
+            {% include 'pages/agents_page.html' %}
+            {% include 'pages/ip_blocks.html' %}
+            {% include 'pages/ip_geo.html' %}
+            {% include 'pages/ip_threat.html' %}
+            {% include 'pages/ip_stats.html' %}
+            {% include 'pages/rules.html' %}
+            {% include 'pages/settings_general.html' %}
+            {% include 'pages/settings_integrations.html' %}
+            {% include 'pages/settings_api.html' %}
+            {% include 'pages/users.html' %}
+            {% include 'pages/audit.html' %}
+            {% include 'pages/notif_rules.html' %}
+            {% include 'pages/notif_history.html' %}
+            {% include 'pages/notif_channels.html' %}
+            {% include 'pages/reports_daily.html' %}
+            {% include 'pages/reports_trends.html' %}
+            {% include 'pages/simulation.html' %}
+
+            <!-- Other pages will be loaded dynamically -->
+            <div id="dynamic-content" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Load user info
+        fetch('/auth/me', {
+            credentials: 'same-origin'
+        })
+            .then(res => {
+                if (!res.ok) {
+                    window.location.href = '/login';
+                    throw new Error('Not authenticated');
+                }
+                return res.json();
+            })
+            .then(data => {
+                document.getElementById('userName').textContent = data.user.full_name;
+            })
+            .catch(error => {
+                console.error('Error loading user:', error);
+            });
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
+                });
+
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+
+        // Sidebar toggle
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('mainContent');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+        // Check if mobile
+        function isMobile() {
+            return window.innerWidth <= 768;
+        }
+
+        // Toggle sidebar
+        function toggleSidebar() {
+            const isCollapsed = sidebar.classList.toggle('collapsed');
+
+            // When sidebar is collapsed, content expands (margin-left: 0)
+            // When sidebar is visible, content has margin (margin-left: 240px)
+            if (isCollapsed) {
+                mainContent.classList.add('expanded');
+            } else {
+                mainContent.classList.remove('expanded');
+            }
+
+            // On mobile, also toggle overlay
+            if (isMobile()) {
+                sidebarOverlay.classList.toggle('active');
+            }
+        }
+
+        // Close sidebar
+        function closeSidebar() {
+            if (isMobile()) {
+                sidebar.classList.add('collapsed');
+                mainContent.classList.add('expanded');
+                sidebarOverlay.classList.remove('active');
+            }
+        }
+
+        // Menu toggle button
+        menuToggle.addEventListener('click', toggleSidebar);
+
+        // Close sidebar when clicking overlay (mobile)
+        sidebarOverlay.addEventListener('click', closeSidebar);
+
+        // Close sidebar when clicking nav items (mobile)
+        document.querySelectorAll('.nav-item[data-page], .nav-subitem[data-page]').forEach(item => {
+            item.addEventListener('click', () => {
+                if (isMobile()) {
+                    closeSidebar();
+                }
+            });
+        });
+
+        // Submenu toggle
+        document.querySelectorAll('.nav-item[data-submenu]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const submenuId = 'submenu-' + item.dataset.submenu;
+                const submenu = document.getElementById(submenuId);
+
+                if (submenu) {
+                    // Toggle expanded state
+                    item.classList.toggle('expanded');
+                    submenu.classList.toggle('show');
+                }
+            });
+        });
+
+        // Page navigation
+        function showPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.style.display = 'none';
+                page.classList.remove('active');
+            });
+
+            // Map old-style names to new page IDs
+            const pageMap = {
+                'dashboard': 'page-dashboard',
+                'home': 'page-dashboard',
+                'events-live': 'page-events-live',
+                'events-analysis': 'page-events-analysis',
+                'events-timeline': 'page-events-timeline',
+                'agents': 'page-agents',
+                'ip-blocks': 'page-ip-blocks',
+                'ip-geo': 'page-ip-geo',
+                'ip-threat': 'page-ip-threat',
+                'ip-stats': 'page-ip-stats',
+                'rules': 'page-rules',
+                'settings-general': 'page-settings-general',
+                'settings-integrations': 'page-settings-integrations',
+                'settings-api': 'page-settings-api',
+                'users': 'page-users',
+                'audit': 'page-audit',
+                'notif-rules': 'page-notif-rules',
+                'notif-history': 'page-notif-history',
+                'notif-channels': 'page-notif-channels',
+                'reports-daily': 'page-reports-daily',
+                'reports-trends': 'page-reports-trends'
+            };
+
+            const pageId = pageMap[pageName] || `page-${pageName}`;
+            const page = document.getElementById(pageId);
+
+            if (page) {
+                page.style.display = 'block';
+                page.classList.add('active');
+
+                // Update nav active state
+                document.querySelectorAll('.nav-item, .nav-subitem').forEach(nav => {
+                    nav.classList.remove('active');
+                });
+
+                // Find and activate the corresponding nav item
+                const navItem = document.querySelector(`[data-page="${pageName}"]`);
+                if (navItem) {
+                    navItem.classList.add('active');
+
+                    // If it's a submenu item, expand its parent
+                    const parentSubmenu = navItem.closest('.nav-submenu');
+                    if (parentSubmenu) {
+                        parentSubmenu.classList.add('show');
+                        const parentId = parentSubmenu.id.replace('submenu-', '');
+                        const parentItem = document.querySelector(`[data-submenu="${parentId}"]`);
+                        if (parentItem) {
+                            parentItem.classList.add('expanded');
+                        }
+                    }
+                }
+
+                // Call page-specific load functions
+                if (pageName === 'events-live') {
+                    if (typeof loadEventsLivePage === 'function') {
+                        loadEventsLivePage();
+                    }
+                } else if (pageName === 'agents') {
+                    if (typeof loadAgentsPage === 'function') {
+                        loadAgentsPage();
+                    }
+                } else if (pageName === 'ip-geo') {
+                    if (typeof loadGeoIPPage === 'function') {
+                        loadGeoIPPage();
+                    }
+                } else if (pageName === 'ip-threat') {
+                    if (typeof loadThreatIntelPage === 'function') {
+                        loadThreatIntelPage();
+                    }
+                } else if (pageName === 'ip-blocks') {
+                    if (typeof loadBlockedIPsPage === 'function') {
+                        loadBlockedIPsPage();
+                    }
+                } else if (pageName === 'ip-stats') {
+                    if (typeof loadIPStatsPage === 'function') {
+                        loadIPStatsPage();
+                    }
+                } else if (pageName === 'rules') {
+                    if (typeof loadBlockingRulesPage === 'function') {
+                        loadBlockingRulesPage();
+                    }
+                } else if (pageName === 'events-analysis') {
+                    if (typeof loadEventsAnalysisPage === 'function') {
+                        loadEventsAnalysisPage();
+                    }
+                } else if (pageName === 'events-timeline') {
+                    if (typeof loadEventsTimelinePage === 'function') {
+                        loadEventsTimelinePage();
+                    }
+                } else if (pageName === 'settings-general') {
+                    if (typeof loadSettingsGeneralPage === 'function') {
+                        loadSettingsGeneralPage();
+                    }
+                } else if (pageName === 'settings-integrations') {
+                    if (typeof loadSettingsIntegrationsPage === 'function') {
+                        loadSettingsIntegrationsPage();
+                    }
+                } else if (pageName === 'settings-api') {
+                    if (typeof loadSettingsApiPage === 'function') {
+                        loadSettingsApiPage();
+                    }
+                } else if (pageName === 'users') {
+                    if (typeof loadUsersPage === 'function') {
+                        loadUsersPage();
+                    }
+                } else if (pageName === 'audit') {
+                    if (typeof loadAuditPage === 'function') {
+                        loadAuditPage();
+                    }
+                } else if (pageName === 'notif-rules') {
+                    if (typeof loadNotificationRulesPage === 'function') {
+                        loadNotificationRulesPage();
+                    }
+                } else if (pageName === 'notif-history') {
+                    if (typeof loadNotificationHistoryPage === 'function') {
+                        loadNotificationHistoryPage();
+                    }
+                } else if (pageName === 'notif-channels') {
+                    if (typeof loadNotificationChannelsPage === 'function') {
+                        loadNotificationChannelsPage();
+                    }
+                } else if (pageName === 'reports-daily') {
+                    if (typeof loadDailyReportsPage === 'function') {
+                        loadDailyReportsPage();
+                    }
+                } else if (pageName === 'reports-trends') {
+                    if (typeof loadTrendsReportsPage === 'function') {
+                        loadTrendsReportsPage();
+                    }
+                }
+            }
+        }
+
+        document.querySelectorAll('.nav-item[data-page], .nav-subitem[data-page]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                // Update active state
+                document.querySelectorAll('.nav-item, .nav-subitem').forEach(nav => {
+                    nav.classList.remove('active');
+                });
+                item.classList.add('active');
+
+                // Get page name and show it
+                const pageName = item.dataset.page || 'dashboard';
+
+                // Update URL hash (use page name directly)
+                window.location.hash = pageName;
+
+                showPage(pageName);
+            });
+        });
+
+        // Handle initial hash and hash changes
+        function handleHash() {
+            const hash = window.location.hash.substring(1) || 'dashboard';
+            showPage(hash);
+        }
+
+        // Listen for hash changes
+        window.addEventListener('hashchange', handleHash);
+
+        // Initial page load
+        handleHash();
+
+        // Quick action functions
+        async function quickBlock(ipAddress, reason = 'Blocked from events view') {
+            if (!confirm(`Block IP ${ipAddress}?\n\nReason: ${reason}`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/dashboard/blocking/blocks/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ip_address: ipAddress,
+                        reason: reason,
+                        duration_minutes: 1440
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`IP ${ipAddress} blocked successfully!\n\nBlock ID: ${data.block_id}\nUnblock at: ${new Date(data.unblock_at).toLocaleString()}`);
+                    const currentHash = window.location.hash.substring(1);
+                    if (currentHash === 'ip-blocks') {
+                        if (typeof loadBlockedIPsPage === 'function') {
+                            loadBlockedIPsPage();
+                        }
+                    }
+                } else {
+                    if (data.message && data.message.includes('already blocked')) {
+                        const viewBlock = confirm(`IP ${ipAddress} is already blocked!\n\nBlock ID: ${data.block_id}\n\nWould you like to view blocked IPs?`);
+                        if (viewBlock) {
+                            window.location.hash = 'ip-blocks';
+                            showPage('ip-blocks');
+                        }
+                    } else {
+                        alert(`Failed to block IP: ${data.message || data.error || 'Unknown error'}`);
+                    }
+                }
+            } catch (error) {
+                console.error('Error blocking IP:', error);
+                alert('Error blocking IP. Please try again.');
+            }
+        }
+
+        async function quickUnblock(ipAddress) {
+            if (!confirm(`Unblock IP ${ipAddress}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/dashboard/blocking/blocks/unblock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ip_address: ipAddress,
+                        reason: 'Quick unblock from dashboard'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`${data.message}`);
+                    if (typeof loadBlockedIPsPage === 'function') {
+                        loadBlockedIPsPage();
+                    }
+                } else {
+                    alert(`Failed to unblock IP: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error unblocking IP:', error);
+                alert('Error unblocking IP. Please try again.');
+            }
+        }
+    </script>
+
+    <!-- Agent Details Modal -->
+    {% include 'components/agent_details_modal.html' %}
+
+    <!-- JavaScript Modules -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/js/modules/timezone_utils.js"></script>
+    <script src="/static/js/modules/agent_search.js"></script>
+    <script src="/static/js/modules/agent_details.js"></script>
+    <script src="/static/js/modules/agents_page.js"></script>
+    <script src="/static/js/modules/geoip_page.js"></script>
+    <script src="/static/js/modules/threat_intel_page.js"></script>
+    <script src="/static/js/modules/blocking_rules_page.js"></script>
+    <script src="/static/js/modules/blocked_ips_page.js"></script>
+    <script src="/static/js/modules/ip_stats_page.js"></script>
+    <script src="/static/js/modules/events_live_page.js"></script>
+    <script src="/static/js/modules/events_analysis_page.js"></script>
+    <script src="/static/js/modules/events_timeline_page.js"></script>
+    <script src="/static/js/modules/settings_general_page.js"></script>
+    <script src="/static/js/modules/settings_integrations_page.js"></script>
+    <script src="/static/js/modules/settings_api_page.js"></script>
+    <script src="/static/js/modules/users_page.js"></script>
+    <script src="/static/js/modules/audit_page.js"></script>
+    <script src="/static/js/modules/notification_rules_page.js"></script>
+    <script src="/static/js/modules/notification_history_page.js"></script>
+    <script src="/static/js/modules/notification_channels_page.js"></script>
+    <script src="/static/js/modules/daily_reports_page.js"></script>
+    <script src="/static/js/modules/trends_reports_page.js"></script>
+</body>
+</html>

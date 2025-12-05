@@ -1,0 +1,62 @@
+/* SSH Guardian v3.0 - Data Tables */
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th {
+    padding: 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #605E5C;
+    background: #FAF9F8;
+    border-bottom: 1px solid #EDEBE9;
+}
+
+.data-table td {
+    padding: 12px;
+    border-bottom: 1px solid #EDEBE9;
+    color: #323130;
+    font-size: 13px;
+}
+
+.data-table tr:hover {
+    background: #FAF9F8;
+}
+
+/* Table Wrapper for Horizontal Scroll */
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-wrapper table {
+    min-width: 100%;
+    white-space: nowrap;
+}
+
+/* Table Actions */
+.table-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Empty State */
+.table-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Loading State */
+.table-loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-hint);
+    font-size: 14px;
+}

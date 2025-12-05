@@ -1,0 +1,126 @@
+<!-- SSH Guardian v3.0 - Blocking Rules Page -->
+<div id="page-rules" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">Blocking Rules</h1>
+        <p class="page-subtitle">Manage automatic blocking rules and thresholds</p>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <button id="showCreateRuleForm" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;">
+                ➕ Create Rule
+            </button>
+            <button id="refreshRules" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; font-size: 13px;">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Create Rule Form (Hidden by default) -->
+    <div id="createRuleForm" class="card" style="display: none; margin-bottom: 20px;">
+        <div class="card-title">Create Blocking Rule</div>
+        <div style="display: grid; gap: 12px; max-width: 700px;">
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Rule Name *</label>
+                <input type="text" id="ruleName" placeholder="Brute Force Protection" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Rule Type *</label>
+                <select id="ruleType" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                    <option value="">Select type...</option>
+                    <option value="brute_force">Brute Force Detection</option>
+                    <option value="api_reputation">API Reputation Threshold</option>
+                </select>
+            </div>
+
+            <!-- Brute Force Conditions -->
+            <div id="bruteForceConditions" style="display: none; padding: 16px; background: var(--background); border-radius: 4px;">
+                <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px;">Brute Force Conditions</div>
+                <div style="display: grid; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; margin-bottom: 4px;">Failed Attempts Threshold</label>
+                        <input type="number" id="failedAttempts" value="5" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; margin-bottom: 4px;">Time Window (minutes)</label>
+                        <input type="number" id="timeWindow" value="10" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Threat Conditions -->
+            <div id="threatConditions" style="display: none; padding: 16px; background: var(--background); border-radius: 4px;">
+                <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px;">Threat Intelligence Conditions</div>
+                <div style="display: grid; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; margin-bottom: 4px;">Minimum Threat Level</label>
+                        <select id="minThreatLevel" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high" selected>High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; margin-bottom: 4px;">Minimum Confidence (0-1)</label>
+                        <input type="number" id="minConfidence" value="0.5" step="0.1" min="0" max="1" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Block Duration (minutes)</label>
+                <input type="number" id="ruleBlockDuration" value="1440" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Default: 1440 minutes (24 hours)</div>
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Priority (higher = evaluated first)</label>
+                <input type="number" id="rulePriority" value="50" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">Description</label>
+                <textarea id="ruleDescription" placeholder="Describe when this rule should trigger..." style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px; min-height: 80px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button id="submitCreateRule" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;">
+                    Create Rule
+                </button>
+                <button id="cancelRuleForm" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; font-size: 13px;">
+                    Cancel
+                </button>
+            </div>
+            <div id="ruleFormMessage" style="display: none; padding: 8px 12px; border-radius: 2px; font-size: 13px;"></div>
+        </div>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="card">
+        <div id="rulesLoading" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            Loading blocking rules...
+        </div>
+        <div id="rulesTable" style="display: none;">
+            <div class="table-wrapper">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Rule Name</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Type</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Priority</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Conditions</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Statistics</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
+                        <th style="padding: 12px; text-align: left; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rulesTableBody">
+                    <!-- Rules will be inserted here -->
+                </tbody>
+            </table>
+            </div>
+        </div>
+        <div id="rulesError" style="display: none; text-align: center; padding: 40px; color: #D13438;">
+            Error loading blocking rules
+        </div>
+    </div>
+</div>

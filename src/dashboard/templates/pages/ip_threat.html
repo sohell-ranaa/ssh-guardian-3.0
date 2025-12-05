@@ -1,0 +1,74 @@
+<!-- SSH Guardian v3.0 - Threat Intelligence Page -->
+<div id="page-ip-threat" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">🛡️ Threat Intelligence</h1>
+        <p class="page-subtitle">Monitor threat intelligence data from AbuseIPDB, Shodan, and VirusTotal</p>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid" id="threat-stats">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total-threats">-</div>
+            <div class="stat-label">IPs Tracked</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-high-threat">-</div>
+            <div class="stat-label">High Risk IPs</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-avg-score">-</div>
+            <div class="stat-label">Avg Abuse Score</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total-reports">-</div>
+            <div class="stat-label">Total Reports</div>
+        </div>
+    </div>
+
+    <!-- IP Lookup Search -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+            <div class="card-title">🔍 Threat Lookup</div>
+        </div>
+        <div style="padding: 20px;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <input
+                    type="text"
+                    id="threat-search-input"
+                    placeholder="Enter IP address to check threat level"
+                    style="flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 3px; font-size: 14px;"
+                >
+                <button
+                    onclick="lookupThreat()"
+                    style="padding: 10px 24px; background: var(--azure-blue); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 14px; font-weight: 600;"
+                >
+                    Check Threat
+                </button>
+            </div>
+            <div id="threat-lookup-result" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- High Risk IPs -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+            <div class="card-title">⚠️ High Risk IPs</div>
+        </div>
+        <div id="threat-high-risk-list" style="padding: 20px;">
+            <div class="loading-message">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Recent Checks -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">📋 Recent Threat Checks</div>
+            <button class="btn-refresh" onclick="loadThreatIntelPage()" title="Refresh">
+                <span>🔄</span>
+            </button>
+        </div>
+        <div id="threat-recent-list" style="padding: 20px;">
+            <div class="loading-message">Loading...</div>
+        </div>
+    </div>
+</div>

@@ -84,7 +84,9 @@ def parse_log_line(log_line: str) -> Optional[Dict]:
 
 def process_log_line(log_line: str, source_type: str = 'agent',
                     agent_id: Optional[int] = None,
-                    agent_batch_id: Optional[int] = None) -> Dict:
+                    agent_batch_id: Optional[int] = None,
+                    simulation_run_id: Optional[int] = None,
+                    target_server_override: Optional[str] = None) -> Dict:
     """
     Process a single log line and create auth_event
 
@@ -93,6 +95,8 @@ def process_log_line(log_line: str, source_type: str = 'agent',
         source_type: Source type ('agent', 'synthetic', 'simulation')
         agent_id: Agent ID if from agent
         agent_batch_id: Batch ID if from agent batch
+        simulation_run_id: Simulation run ID if from simulation
+        target_server_override: Override target server name (for simulations)
 
     Returns:
         dict with success status and event_id or error
@@ -134,9 +138,11 @@ def process_log_line(log_line: str, source_type: str = 'agent',
         cursor = conn.cursor()
 
         try:
-            # Get or create hostname (use agent's hostname if available)
+            # Get or create hostname (use override, agent's hostname, or default)
             target_server = 'unknown'
-            if agent_id:
+            if target_server_override:
+                target_server = target_server_override
+            elif agent_id:
                 cursor.execute("SELECT hostname FROM agents WHERE id = %s", (agent_id,))
                 agent_row = cursor.fetchone()
                 if agent_row:
@@ -146,20 +152,20 @@ def process_log_line(log_line: str, source_type: str = 'agent',
             cursor.execute("""
                 INSERT INTO auth_events (
                     event_uuid, timestamp, source_type, agent_id, agent_batch_id,
-                    event_type, auth_method,
+                    simulation_run_id, event_type, auth_method,
                     source_ip, source_ip_text, source_port,
                     target_server, target_username, failure_reason,
                     raw_log_line, processing_status
                 ) VALUES (
                     %s, NOW(), %s, %s, %s,
-                    %s, %s,
+                    %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, 'pending'
                 )
             """, (
                 event_uuid, source_type, agent_id, agent_batch_id,
-                event_type, auth_method,
+                simulation_run_id, event_type, auth_method,
                 ip_binary, source_ip, source_port,
                 target_server, username, failure_reason,
                 log_line

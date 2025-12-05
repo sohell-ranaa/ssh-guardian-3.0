@@ -1,0 +1,119 @@
+<!-- SSH Guardian v3.0 - Sidebar Navigation Component -->
+<div class="sidebar" id="sidebar">
+    <!-- Overview -->
+    <div class="nav-section">
+        <a href="#dashboard" class="nav-item active" data-page="dashboard">
+            <span class="nav-item-icon">📊</span>
+            <span class="nav-item-text">Dashboard</span>
+        </a>
+    </div>
+
+    <!-- Monitoring -->
+    <div class="nav-section">
+        <div class="nav-section-title">Monitoring</div>
+
+        <div class="nav-item" data-submenu="events">
+            <span class="nav-item-icon">🔐</span>
+            <span class="nav-item-text">Auth Events</span>
+            <span class="nav-item-arrow">▶</span>
+        </div>
+        <div class="nav-submenu" id="submenu-events">
+            <a href="#events-live" class="nav-subitem" data-page="events-live">Live Events</a>
+            <a href="#events-analysis" class="nav-subitem" data-page="events-analysis">Analysis</a>
+            <a href="#events-timeline" class="nav-subitem" data-page="events-timeline">Timeline</a>
+        </div>
+
+        <a href="#agents" class="nav-item" data-page="agents">
+            <span class="nav-item-icon">🖥️</span>
+            <span class="nav-item-text">Agents</span>
+        </a>
+    </div>
+
+    <!-- Security -->
+    <div class="nav-section">
+        <div class="nav-section-title">Security</div>
+
+        <div class="nav-item" data-submenu="ip">
+            <span class="nav-item-icon">🌐</span>
+            <span class="nav-item-text">IP Management</span>
+            <span class="nav-item-arrow">▶</span>
+        </div>
+        <div class="nav-submenu" id="submenu-ip">
+            <a href="#ip-geo" class="nav-subitem" data-page="ip-geo">GeoIP Lookup</a>
+            <a href="#ip-threat" class="nav-subitem" data-page="ip-threat">Threat Intelligence</a>
+            <a href="#ip-blocks" class="nav-subitem" data-page="ip-blocks">Blocked IPs</a>
+            <a href="#ip-stats" class="nav-subitem" data-page="ip-stats">IP Statistics</a>
+        </div>
+
+        <a href="#rules" class="nav-item" data-page="rules">
+            <span class="nav-item-icon">🚫</span>
+            <span class="nav-item-text">Blocking Rules</span>
+        </a>
+    </div>
+
+    <!-- Notifications -->
+    <div class="nav-section">
+        <div class="nav-section-title">Notifications</div>
+
+        <div class="nav-item" data-submenu="notifications">
+            <span class="nav-item-icon">📢</span>
+            <span class="nav-item-text">Notifications</span>
+            <span class="nav-item-arrow">▶</span>
+        </div>
+        <div class="nav-submenu" id="submenu-notifications">
+            <a href="#notif-rules" class="nav-subitem" data-page="notif-rules">Rules</a>
+            <a href="#notif-history" class="nav-subitem" data-page="notif-history">History</a>
+            <a href="#notif-channels" class="nav-subitem" data-page="notif-channels">Channels</a>
+        </div>
+    </div>
+
+    <!-- Analytics -->
+    <div class="nav-section">
+        <div class="nav-section-title">Analytics</div>
+
+        <div class="nav-item" data-submenu="reports">
+            <span class="nav-item-icon">📈</span>
+            <span class="nav-item-text">Reports</span>
+            <span class="nav-item-arrow">▶</span>
+        </div>
+        <div class="nav-submenu" id="submenu-reports">
+            <a href="#reports-daily" class="nav-subitem" data-page="reports-daily">Daily Statistics</a>
+            <a href="#reports-trends" class="nav-subitem" data-page="reports-trends">Trends</a>
+            <a href="#reports-export" class="nav-subitem" data-page="reports-export">Export Data</a>
+        </div>
+
+        <a href="#simulation" class="nav-item" data-page="simulation">
+            <span class="nav-item-icon">🧪</span>
+            <span class="nav-item-text">Simulation</span>
+        </a>
+    </div>
+
+    <!-- System -->
+    <div class="nav-section">
+        <div class="nav-section-title">System</div>
+
+        <div class="nav-item" data-submenu="settings">
+            <span class="nav-item-icon">⚙️</span>
+            <span class="nav-item-text">Settings</span>
+            <span class="nav-item-arrow">▶</span>
+        </div>
+        <div class="nav-submenu" id="submenu-settings">
+            <a href="#settings-general" class="nav-subitem" data-page="settings-general">General</a>
+            <a href="#settings-integrations" class="nav-subitem" data-page="settings-integrations">Integrations</a>
+            <a href="#settings-api" class="nav-subitem" data-page="settings-api">API Keys</a>
+        </div>
+
+        <a href="#users" class="nav-item" data-page="users">
+            <span class="nav-item-icon">👥</span>
+            <span class="nav-item-text">User Management</span>
+        </a>
+
+        <a href="#audit" class="nav-item" data-page="audit">
+            <span class="nav-item-icon">📝</span>
+            <span class="nav-item-text">Audit Logs</span>
+        </a>
+    </div>
+</div>
+
+<!-- Sidebar Overlay for Mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>

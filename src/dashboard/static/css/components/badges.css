@@ -1,0 +1,121 @@
+/* SSH Guardian v3.0 - Badges */
+
+/* Risk Badge Styles */
+.risk-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.risk-badge.risk-high {
+    background: rgba(209, 52, 56, 0.1);
+    color: #D13438;
+}
+
+.risk-badge.risk-medium {
+    background: rgba(230, 165, 2, 0.1);
+    color: #E6A502;
+}
+
+.risk-badge.risk-low {
+    background: rgba(46, 164, 79, 0.1);
+    color: #2EA44F;
+}
+
+/* Generic Badge Styles */
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 6px;
+}
+
+.badge-danger {
+    background: rgba(209, 52, 56, 0.1);
+    color: #D13438;
+}
+
+.badge-success {
+    background: rgba(46, 164, 79, 0.1);
+    color: #2EA44F;
+}
+
+.badge-warning {
+    background: rgba(230, 165, 2, 0.1);
+    color: #E6A502;
+}
+
+.badge-info {
+    background: rgba(0, 120, 212, 0.1);
+    color: #0078D4;
+}
+
+.badge-secondary {
+    background: rgba(96, 94, 92, 0.1);
+    color: #605E5C;
+}
+
+.badge-outline {
+    background: transparent;
+    border: 1px solid #EDEBE9;
+    color: #605E5C;
+}
+
+/* Event Type Badge Styles */
+.event-type-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.event-type-danger {
+    background: rgba(209, 52, 56, 0.1);
+    color: #D13438;
+}
+
+.event-type-success {
+    background: rgba(46, 164, 79, 0.1);
+    color: #2EA44F;
+}
+
+.event-type-warning {
+    background: rgba(230, 165, 2, 0.1);
+    color: #E6A502;
+}
+
+.event-type-default {
+    background: rgba(128, 128, 128, 0.1);
+    color: #808080;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-badge.status-online {
+    background: rgba(46, 164, 79, 0.1);
+    color: #2EA44F;
+}
+
+.status-badge.status-offline {
+    background: rgba(96, 94, 92, 0.1);
+    color: #605E5C;
+}
+
+.status-badge.status-error {
+    background: rgba(209, 52, 56, 0.1);
+    color: #D13438;
+}

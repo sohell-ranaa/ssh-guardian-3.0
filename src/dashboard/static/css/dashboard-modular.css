@@ -10,3 +10,14 @@
 @import url('components/cards.css');
 @import url('components/stats.css');
 @import url('components/scrollbar.css');
+@import url('components/buttons.css');
+@import url('components/forms.css');
+@import url('components/tables.css');
+@import url('components/badges.css');
+@import url('components/pagination.css');
+@import url('components/toggle.css');
+@import url('components/modals.css');
+@import url('components/agents.css');
+@import url('components/agent_search.css');
+@import url('components/agent_details_modal.css');
+@import url('components/responsive.css');

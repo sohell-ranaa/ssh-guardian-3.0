@@ -1,0 +1,184 @@
+<!-- SSH Guardian v3.0 - Daily Reports Page -->
+<div id="page-reports-daily" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">📊 Daily Security Report</h1>
+        <p class="page-subtitle">Comprehensive daily security analysis and statistics</p>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <input type="date" id="report-date-picker" class="form-control" style="width: 160px;"
+                   onchange="onReportDateChange(this.value)">
+            <button onclick="refreshDailyReport()" class="btn btn-secondary">
+                🔄 Refresh
+            </button>
+            <button onclick="exportDailyReport()" style="padding: 8px 16px; background: #107C10; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 13px;">
+                📥 Export CSV
+            </button>
+            <button onclick="printDailyReport()" class="btn btn-secondary">
+                🖨️ Print
+            </button>
+            <div style="flex: 1;"></div>
+            <span style="color: var(--text-secondary); font-size: 13px;">📅 Quick select:</span>
+            <div id="available-dates-list" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                <span style="color: var(--text-hint);">Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-grid" id="report-summary-cards">
+        <div class="stat-card">
+            <div class="stat-label">Total Events</div>
+            <div class="stat-value" id="report-total-events">-</div>
+            <div class="stat-change" id="report-events-detail">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">High Risk Events</div>
+            <div class="stat-value" id="report-high-risk" style="color: #D13438;">-</div>
+            <div class="stat-change" id="report-risk-detail">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Unique IPs</div>
+            <div class="stat-value" id="report-unique-ips" style="color: #E6A502;">-</div>
+            <div class="stat-change" id="report-blocked-detail">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">ML Anomalies</div>
+            <div class="stat-value" id="report-anomalies" style="color: #0078D4;">-</div>
+            <div class="stat-change" id="report-risk-score">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Day-over-Day Comparison -->
+    <div class="card">
+        <div class="card-title">📈 Day-over-Day Comparison</div>
+        <div id="comparison-container" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+            <div style="text-align: center; padding: 16px; background: var(--background); border-radius: 4px;">
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Total Events</div>
+                <div id="comp-events-current" style="font-size: 24px; font-weight: 600;">-</div>
+                <div id="comp-events-change" style="font-size: 12px; color: var(--text-hint);">vs yesterday</div>
+            </div>
+            <div style="text-align: center; padding: 16px; background: var(--background); border-radius: 4px;">
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">High Risk</div>
+                <div id="comp-risk-current" style="font-size: 24px; font-weight: 600; color: #D13438;">-</div>
+                <div id="comp-risk-change" style="font-size: 12px; color: var(--text-hint);">vs yesterday</div>
+            </div>
+            <div style="text-align: center; padding: 16px; background: var(--background); border-radius: 4px;">
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Unique IPs</div>
+                <div id="comp-ips-current" style="font-size: 24px; font-weight: 600; color: #E6A502;">-</div>
+                <div id="comp-ips-change" style="font-size: 12px; color: var(--text-hint);">vs yesterday</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <!-- Hourly Breakdown Chart -->
+        <div class="card">
+            <div class="card-title">📊 Hourly Activity</div>
+            <div style="height: 280px;">
+                <canvas id="hourly-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Threat Types Chart -->
+        <div class="card">
+            <div class="card-title">🛡️ Threat Types</div>
+            <div style="height: 280px;">
+                <canvas id="threat-types-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Tables Row -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <!-- Top Threats Table -->
+        <div class="card">
+            <div class="card-title">⚠️ Top Threat IPs</div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>IP Address</th>
+                            <th>Location</th>
+                            <th>Attempts</th>
+                            <th>Usernames</th>
+                            <th>Max Risk</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top-threats-tbody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                Loading...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Targeted Usernames -->
+        <div class="card">
+            <div class="card-title">👤 Targeted Usernames</div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Attempts</th>
+                            <th>IPs</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usernames-tbody">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                Loading...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Geographic Breakdown Row -->
+    <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 16px;">
+        <!-- Geographic Chart -->
+        <div class="card">
+            <div class="card-title">🌍 Attack Origins</div>
+            <div style="height: 280px;">
+                <canvas id="geo-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Geographic Table -->
+        <div class="card">
+            <div class="card-title">🗺️ Countries Breakdown</div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Country</th>
+                            <th>Attempts</th>
+                            <th>Unique IPs</th>
+                            <th>Anomalies</th>
+                            <th>Avg Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="geo-table-tbody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                Loading...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

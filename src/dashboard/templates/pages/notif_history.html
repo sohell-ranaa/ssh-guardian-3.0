@@ -1,0 +1,83 @@
+<!-- SSH Guardian v3.0 - Notification History Page -->
+<div id="page-notif-history" class="page-content" style="display: none;">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Notification History</h1>
+            <p class="page-subtitle">View sent notifications and delivery status</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button id="notif-history-refresh-btn" class="btn btn-secondary">
+                Refresh
+            </button>
+            <button id="notif-history-export-btn" class="btn btn-secondary">
+                Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div id="notif-history-stats" class="stats-grid" style="margin-top: 24px;">
+        <!-- Stats will be loaded here -->
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-top: 24px; padding: 16px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+            <select id="notif-filter-status" class="form-control" style="width: 140px;">
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="sent">Sent</option>
+                <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+            <select id="notif-filter-priority" class="form-control" style="width: 140px;">
+                <option value="">All Priority</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+            </select>
+            <select id="notif-filter-channel" class="form-control" style="width: 140px;">
+                <option value="">All Channels</option>
+                <option value="telegram">Telegram</option>
+                <option value="email">Email</option>
+                <option value="webhook">Webhook</option>
+            </select>
+            <select id="notif-filter-trigger" class="form-control" style="width: 160px;">
+                <option value="">All Triggers</option>
+            </select>
+            <input type="date" id="notif-filter-start" class="form-control" style="width: 150px;" placeholder="Start Date">
+            <input type="date" id="notif-filter-end" class="form-control" style="width: 150px;" placeholder="End Date">
+            <input type="text" id="notif-filter-search" class="form-control" style="width: 200px;" placeholder="Search...">
+            <button id="notif-filter-apply-btn" class="btn btn-primary">Apply</button>
+            <button id="notif-filter-clear-btn" class="btn btn-secondary">Clear</button>
+        </div>
+    </div>
+
+    <!-- Notifications Table -->
+    <div class="card" style="margin-top: 24px; overflow-x: auto;">
+        <table class="data-table" id="notif-history-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Time</th>
+                    <th>Rule</th>
+                    <th>Trigger</th>
+                    <th>Title</th>
+                    <th>Channels</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="notif-history-tbody">
+                <!-- Notifications will be loaded here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div id="notif-history-pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;">
+        <!-- Pagination will be loaded here -->
+    </div>
+</div>

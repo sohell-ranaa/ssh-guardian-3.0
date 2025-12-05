@@ -1,0 +1,163 @@
+<!-- SSH Guardian v3.0 - Trends Reports Page -->
+<div id="page-reports-trends" class="page-content" style="display: none;">
+    <div class="page-header">
+        <h1 class="page-title">📈 Security Trends</h1>
+        <p class="page-subtitle">Historical analysis and trend visualization</p>
+    </div>
+
+    <!-- Period Selection -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <span style="font-weight: 600;">Time Period:</span>
+            <select id="trends-period-select" class="form-control" style="width: 150px;"
+                    onchange="onTrendsPeriodChange(this.value)">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="60">Last 60 days</option>
+                <option value="90">Last 90 days</option>
+            </select>
+            <button onclick="refreshTrends()" class="btn btn-secondary">
+                🔄 Refresh
+            </button>
+            <div style="flex: 1;"></div>
+            <span id="trends-risk-totals" style="font-size: 12px;"></span>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total Events</div>
+            <div class="stat-value" id="trends-total-events">-</div>
+            <div class="stat-change" id="trends-total-detail">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Failed Logins</div>
+            <div class="stat-value" id="trends-failed-events" style="color: #D13438;">-</div>
+            <div class="stat-change" id="trends-failed-detail">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">High Risk Events</div>
+            <div class="stat-value" id="trends-high-risk" style="color: #E6A502;">-</div>
+            <div class="stat-change" id="trends-high-risk-detail">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Failure Rate</div>
+            <div class="stat-value" id="trends-fail-rate" style="color: #0078D4;">-</div>
+            <div class="stat-change" id="trends-fail-rate-detail">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Period Comparison -->
+    <div class="card">
+        <div class="card-title">📊 Period Comparison (vs Previous Period)</div>
+        <div id="trends-comparison-container">
+            <div style="text-align: center; padding: 24px; color: var(--text-hint);">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Events Timeline Chart -->
+    <div class="card">
+        <div class="card-title">📉 Events Timeline</div>
+        <div style="height: 300px;">
+            <canvas id="trends-events-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- Risk Distribution Chart -->
+    <div class="card">
+        <div class="card-title">🎯 Risk Distribution Over Time</div>
+        <div style="height: 280px;">
+            <canvas id="trends-risk-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- Data Tables Row -->
+    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <!-- Top Attackers -->
+        <div class="card">
+            <div class="card-title">⚠️ Top Attackers</div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>IP Address</th>
+                            <th>Attempts</th>
+                            <th>Active</th>
+                            <th>Usernames</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trends-attackers-tbody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                Loading...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Targeted Usernames -->
+        <div class="card">
+            <div class="card-title">👤 Most Targeted Usernames</div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Attempts</th>
+                            <th>IPs</th>
+                            <th>Active</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trends-usernames-tbody">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                Loading...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Country Analysis Row -->
+    <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px;">
+        <!-- Country Chart -->
+        <div class="card">
+            <div class="card-title">🌍 Attack Sources by Country</div>
+            <div style="height: 260px;">
+                <canvas id="trends-country-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Country Table -->
+        <div class="card">
+            <div class="card-title">🗺️ Country Breakdown</div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Country</th>
+                            <th>Attempts</th>
+                            <th>IPs</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trends-country-tbody">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-hint);">
+                                Loading...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
