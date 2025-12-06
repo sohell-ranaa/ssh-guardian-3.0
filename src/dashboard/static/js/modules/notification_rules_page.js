@@ -69,6 +69,7 @@
 
             if (data.success) {
                 rules = data.data.rules || [];
+                updateStats(rules);
                 renderRules(rules);
             } else {
                 throw new Error(data.error || 'Failed to load rules');
@@ -82,6 +83,27 @@
     }
 
     /**
+     * Update statistics cards
+     */
+    function updateStats(rulesList) {
+        const totalRules = rulesList.length;
+        const activeRules = rulesList.filter(r => r.is_enabled).length;
+        const totalTriggered = rulesList.reduce((sum, r) => sum + (r.times_triggered || 0), 0);
+
+        // Count unique channels
+        const channelsSet = new Set();
+        rulesList.forEach(rule => {
+            const channels = parseJSON(rule.channels, []);
+            channels.forEach(ch => channelsSet.add(ch));
+        });
+
+        document.getElementById('stat-total-rules').textContent = totalRules;
+        document.getElementById('stat-active-rules').textContent = activeRules;
+        document.getElementById('stat-total-triggered').textContent = totalTriggered.toLocaleString();
+        document.getElementById('stat-channels-count').textContent = channelsSet.size;
+    }
+
+    /**
      * Render notification rules
      */
     function renderRules(rulesList) {
@@ -90,11 +112,11 @@
 
         if (!rulesList || rulesList.length === 0) {
             container.innerHTML = `
-                <div style="text-align: center; padding: 60px 20px; color: #605E5C;">
+                <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
                     <div style="font-size: 48px; margin-bottom: 16px;">🔔</div>
-                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #323130;">No Notification Rules</h3>
-                    <p style="font-size: 14px; margin-bottom: 24px;">Create your first notification rule to get alerts</p>
-                    <button onclick="showCreateRuleModal()" class="btn btn-primary" style="padding: 10px 20px;">
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">No Notification Rules</h3>
+                    <p style="font-size: 14px; margin-bottom: 24px;">Create your first notification rule to receive automated alerts</p>
+                    <button onclick="showCreateRuleModal()" style="padding: 10px 24px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">
                         + Create Rule
                     </button>
                 </div>
@@ -102,7 +124,7 @@
             return;
         }
 
-        let html = '<div style="display: grid; gap: 16px;">';
+        let html = '<div style="display: grid; gap: 14px;">';
 
         rulesList.forEach(rule => {
             const channels = parseJSON(rule.channels, []);
@@ -112,56 +134,56 @@
             const statusText = rule.is_enabled ? 'Enabled' : 'Disabled';
 
             html += `
-                <div style="background: #FFFFFF; border: 1px solid #EDEBE9; border-radius: 8px; padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 18px; transition: box-shadow 0.2s ease;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
                         <div style="flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                                <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #323130;">${escapeHtml(rule.rule_name)}</h3>
-                                <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; background: ${statusBg}; color: ${statusColor};">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">${escapeHtml(rule.rule_name)}</h3>
+                                <span style="padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: ${statusBg}; color: ${statusColor};">
                                     ${statusText}
                                 </span>
                             </div>
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                                <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 4px; font-size: 12px; background: ${triggerInfo.bgColor}; color: ${triggerInfo.color};">
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                                <span style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 4px; font-size: 12px; font-weight: 500; background: ${triggerInfo.bgColor}; color: ${triggerInfo.color};">
                                     ${triggerInfo.icon} ${triggerInfo.label}
                                 </span>
                                 ${channels.map(ch => {
                                     const channelInfo = CHANNELS.find(c => c.value === ch) || { icon: '📌', label: ch };
-                                    return `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #F3F2F1; color: #605E5C;">${channelInfo.icon} ${channelInfo.label}</span>`;
+                                    return `<span style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 4px; font-size: 12px; background: var(--background); color: var(--text-secondary); border: 1px solid var(--border-light);">${channelInfo.icon} ${channelInfo.label}</span>`;
                                 }).join('')}
                             </div>
                         </div>
-                        <div style="display: flex; gap: 8px;">
-                            <button onclick="testRule(${rule.id})" title="Test Rule" style="background: none; border: 1px solid #EDEBE9; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px; color: #0078D4;">
-                                Test
+                        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                            <button onclick="testRule(${rule.id})" title="Test Rule" style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; color: var(--azure-blue); font-weight: 500; transition: all 0.2s;">
+                                ▶ Test
                             </button>
-                            <button onclick="toggleRule(${rule.id})" title="${rule.is_enabled ? 'Disable' : 'Enable'}" style="background: none; border: 1px solid #EDEBE9; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px; color: ${rule.is_enabled ? '#D13438' : '#107C10'};">
-                                ${rule.is_enabled ? 'Disable' : 'Enable'}
+                            <button onclick="toggleRule(${rule.id})" title="${rule.is_enabled ? 'Disable' : 'Enable'}" style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; color: ${rule.is_enabled ? '#D13438' : '#107C10'}; font-weight: 500; transition: all 0.2s;">
+                                ${rule.is_enabled ? '⏸ Disable' : '▶ Enable'}
                             </button>
-                            <button onclick="showEditRuleModal(${rule.id})" title="Edit" style="background: none; border: 1px solid #EDEBE9; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px; color: #323130;">
-                                Edit
+                            <button onclick="showEditRuleModal(${rule.id})" title="Edit" style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; color: var(--text-primary); transition: all 0.2s;">
+                                ✏️ Edit
                             </button>
-                            <button onclick="deleteRule(${rule.id})" title="Delete" style="background: none; border: 1px solid #EDEBE9; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px; color: #D13438;">
-                                Delete
+                            <button onclick="deleteRule(${rule.id})" title="Delete" style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; color: #D13438; transition: all 0.2s;">
+                                🗑️
                             </button>
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; padding-top: 16px; border-top: 1px solid #EDEBE9;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; padding-top: 14px; border-top: 1px solid var(--border-light);">
                         <div>
-                            <div style="font-size: 11px; color: #605E5C; text-transform: uppercase; margin-bottom: 4px;">Rate Limit</div>
-                            <div style="font-size: 14px; color: #323130;">${rule.rate_limit_minutes} min</div>
+                            <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600;">Rate Limit</div>
+                            <div style="font-size: 14px; color: var(--text-primary); font-weight: 600;">${rule.rate_limit_minutes} min</div>
                         </div>
                         <div>
-                            <div style="font-size: 11px; color: #605E5C; text-transform: uppercase; margin-bottom: 4px;">Times Triggered</div>
-                            <div style="font-size: 14px; color: #323130;">${rule.times_triggered || 0}</div>
+                            <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600;">Triggered</div>
+                            <div style="font-size: 14px; color: var(--text-primary); font-weight: 600;">${(rule.times_triggered || 0).toLocaleString()}</div>
                         </div>
                         <div>
-                            <div style="font-size: 11px; color: #605E5C; text-transform: uppercase; margin-bottom: 4px;">Last Triggered</div>
-                            <div style="font-size: 14px; color: #323130;">${rule.last_triggered_at ? formatDateTime(rule.last_triggered_at) : 'Never'}</div>
+                            <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600;">Last Triggered</div>
+                            <div style="font-size: 13px; color: var(--text-primary);">${rule.last_triggered_at ? formatDateTime(rule.last_triggered_at) : 'Never'}</div>
                         </div>
                         <div>
-                            <div style="font-size: 11px; color: #605E5C; text-transform: uppercase; margin-bottom: 4px;">Format</div>
-                            <div style="font-size: 14px; color: #323130;">${rule.message_format || 'markdown'}</div>
+                            <div style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600;">Format</div>
+                            <div style="font-size: 13px; color: var(--text-primary); text-transform: capitalize;">${rule.message_format || 'markdown'}</div>
                         </div>
                     </div>
                 </div>

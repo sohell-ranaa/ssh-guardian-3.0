@@ -304,13 +304,13 @@
         const btn = document.getElementById('autoRefreshToggle');
         if (btn) {
             if (autoRefreshEnabled) {
-                btn.innerHTML = '⏸ Pause';
+                btn.innerHTML = '⏸';
                 btn.style.background = '#107C10';
-                btn.title = 'Click to pause auto-refresh (refreshes every 30s)';
+                btn.title = 'Pause auto-refresh (refreshes every 30s)';
             } else {
-                btn.innerHTML = '▶ Live';
+                btn.innerHTML = '▶';
                 btn.style.background = 'var(--azure-blue)';
-                btn.title = 'Click to enable auto-refresh';
+                btn.title = 'Enable auto-refresh';
             }
         }
     }
@@ -321,11 +321,13 @@
      */
     async function loadEvents(forceRefresh = false) {
         const searchInput = document.getElementById('eventSearch');
+        const ipFilter = document.getElementById('ipFilter');
         const typeFilter = document.getElementById('eventTypeFilter');
         const threatFilter = document.getElementById('threatLevelFilter');
         const agentFilter = document.getElementById('agentFilter');
 
         const search = searchInput ? searchInput.value : '';
+        const ipFilterValue = ipFilter ? ipFilter.value : '';
         const eventType = typeFilter ? typeFilter.value : '';
         const threatLevel = threatFilter ? threatFilter.value : '';
         const agentId = agentFilter ? agentFilter.value : '';
@@ -341,6 +343,7 @@
         }
 
         if (search) params.append('search', search);
+        if (ipFilterValue) params.append('ip', ipFilterValue);
         if (eventType) params.append('event_type', eventType);
         if (threatLevel) params.append('threat_level', threatLevel);
         if (agentId) params.append('agent_id', agentId);
@@ -372,6 +375,9 @@
             if (!data || !data.success) {
                 throw new Error(data?.error || 'Failed to load events');
             }
+
+            // Update overview statistics
+            updateOverviewStats(data.events || []);
 
             const tbody = document.getElementById('eventsTableBody');
             if (!tbody) return;
@@ -516,6 +522,43 @@
     }
 
     /**
+     * Update overview statistics based on current filtered events
+     */
+    function updateOverviewStats(events) {
+        const totalEl = document.getElementById('overviewTotal');
+        const failedEl = document.getElementById('overviewFailed');
+        const successfulEl = document.getElementById('overviewSuccessful');
+        const uniqueIPsEl = document.getElementById('overviewUniqueIPs');
+        const highThreatEl = document.getElementById('overviewHighThreat');
+
+        if (!events || events.length === 0) {
+            if (totalEl) totalEl.textContent = '0';
+            if (failedEl) failedEl.textContent = '0';
+            if (successfulEl) successfulEl.textContent = '0';
+            if (uniqueIPsEl) uniqueIPsEl.textContent = '0';
+            if (highThreatEl) highThreatEl.textContent = '0';
+            return;
+        }
+
+        // Calculate statistics
+        const total = events.length;
+        const failed = events.filter(e => e.event_type === 'failed').length;
+        const successful = events.filter(e => e.event_type === 'successful').length;
+        const uniqueIPs = new Set(events.map(e => e.ip)).size;
+        const highThreat = events.filter(e => {
+            const level = e.threat?.level || e.threat_level;
+            return level === 'high' || level === 'critical';
+        }).length;
+
+        // Update DOM
+        if (totalEl) totalEl.textContent = total.toLocaleString();
+        if (failedEl) failedEl.textContent = failed.toLocaleString();
+        if (successfulEl) successfulEl.textContent = successful.toLocaleString();
+        if (uniqueIPsEl) uniqueIPsEl.textContent = uniqueIPs.toLocaleString();
+        if (highThreatEl) highThreatEl.textContent = highThreat.toLocaleString();
+    }
+
+    /**
      * Update IP status indicators for all visible IPs
      */
     async function updateIpStatusIndicators() {
@@ -571,13 +614,13 @@
             let endpoint = '';
             switch(listType) {
                 case 'blocklist':
-                    endpoint = '/api/dashboard/firewall/blocklist';
+                    endpoint = '/api/dashboard/blocking/blocks/list';
                     break;
                 case 'whitelist':
-                    endpoint = '/api/dashboard/firewall/whitelist';
+                    endpoint = '/api/dashboard/blocking/whitelist';
                     break;
                 case 'watchlist':
-                    endpoint = '/api/dashboard/watchlist';
+                    endpoint = '/api/dashboard/blocking/watchlist';
                     break;
                 default:
                     return false;
@@ -589,8 +632,9 @@
             if (!data.success) return false;
 
             // Check if IP exists in the results
-            const items = data.items || data.watchlist || [];
-            return items.some(item => item.ip === ip);
+            // Different endpoints return different field names
+            const items = data.blocks || data.items || data.watchlist || [];
+            return items.some(item => item.ip_address === ip || item.ip === ip);
         } catch (error) {
             console.error(`Error checking ${listType} for IP ${ip}:`, error);
             return false;
@@ -598,17 +642,34 @@
     }
 
     /**
-     * Format timestamp for display using saved time settings
+     * Format timestamp for display using saved time settings (with seconds)
      */
     function formatTimestamp(timestamp) {
         if (!timestamp) return 'N/A';
+
+        const date = new Date(timestamp);
+
         // Use TimeSettings module if available for consistent formatting
         if (window.TimeSettings && window.TimeSettings.isLoaded()) {
-            return window.TimeSettings.format(timestamp, 'short');
+            const formatted = window.TimeSettings.format(timestamp, 'short');
+            // Add seconds if not already included
+            if (!formatted.match(/:\d{2}$/)) {
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                return formatted + ':' + seconds;
+            }
+            return formatted;
         }
-        // Fallback to browser locale
-        const date = new Date(timestamp);
-        return date.toLocaleString();
+
+        // Fallback to browser locale with seconds
+        return date.toLocaleString(undefined, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
     }
 
     /**
@@ -722,6 +783,7 @@
      * Setup event listeners
      */
     function setupEventsEventListeners() {
+
         // Refresh button - force cache bypass to get fresh data
         const refreshBtn = document.getElementById('refreshEvents');
         if (refreshBtn) {
@@ -741,6 +803,17 @@
         const searchInput = document.getElementById('eventSearch');
         if (searchInput) {
             searchInput.onkeyup = (e) => {
+                if (e.key === 'Enter') {
+                    currentPage = 0;
+                    loadEvents();
+                }
+            };
+        }
+
+        // IP Filter on Enter
+        const ipFilter = document.getElementById('ipFilter');
+        if (ipFilter) {
+            ipFilter.onkeyup = (e) => {
                 if (e.key === 'Enter') {
                     currentPage = 0;
                     loadEvents();

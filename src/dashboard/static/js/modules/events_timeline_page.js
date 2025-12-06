@@ -11,6 +11,7 @@
     let currentInterval = 'day';
     let currentDays = 7;
     let listenersSetup = false;
+    let timelineChart = null;
 
     /**
      * Escape HTML to prevent XSS attacks
@@ -131,10 +132,11 @@
      */
     async function loadTimelineData() {
         try {
-            const response = await fetch(`/api/dashboard/events-analysis/timeline?interval=${currentInterval}&days=${currentDays}`);
+            const response = await fetch(`/api/dashboard/events/timeline?interval=${currentInterval}&days=${currentDays}`);
             const data = await response.json();
 
             if (data.success) {
+                updateSummaryStats(data.data.timeline);
                 renderTimelineVisualization(data.data.timeline, data.data.interval);
                 renderTimelineTable(data.data.timeline);
                 return { success: true, fromCache: data.from_cache === true };
@@ -149,86 +151,212 @@
     }
 
     /**
-     * Render timeline visualization (bar chart)
+     * Update summary statistics
+     */
+    function updateSummaryStats(timeline) {
+        if (!timeline || timeline.length === 0) {
+            document.getElementById('timeline-stat-total').textContent = '0';
+            document.getElementById('timeline-stat-failed').textContent = '0';
+            document.getElementById('timeline-stat-successful').textContent = '0';
+            document.getElementById('timeline-stat-anomalies').textContent = '0';
+            return;
+        }
+
+        // Calculate totals - parse as integers to avoid string concatenation
+        let totalEvents = 0;
+        let totalFailed = 0;
+        let totalSuccessful = 0;
+        let totalAnomalies = 0;
+
+        timeline.forEach(point => {
+            totalEvents += parseInt(point.total_events) || 0;
+            totalFailed += parseInt(point.failed) || 0;
+            totalSuccessful += parseInt(point.successful) || 0;
+            totalAnomalies += parseInt(point.anomalies) || 0;
+        });
+
+        // Update UI
+        document.getElementById('timeline-stat-total').textContent = totalEvents.toLocaleString();
+        document.getElementById('timeline-stat-failed').textContent = totalFailed.toLocaleString();
+        document.getElementById('timeline-stat-successful').textContent = totalSuccessful.toLocaleString();
+        document.getElementById('timeline-stat-anomalies').textContent = totalAnomalies.toLocaleString();
+    }
+
+    /**
+     * Render timeline visualization (line chart with Chart.js)
      */
     function renderTimelineVisualization(timeline, interval) {
-        const container = document.getElementById('timeline-chart-container');
+        const canvas = document.getElementById('timeline-chart');
 
-        if (!container) return;
+        if (!canvas) return;
 
         if (!timeline || timeline.length === 0) {
+            const container = canvas.parentElement;
             container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No timeline data available</p>';
             return;
         }
 
-        // Find max value for scaling
-        const maxValue = Math.max(...timeline.map(t => t.total_events || 0), 1);
+        // Destroy existing chart
+        if (timelineChart) {
+            timelineChart.destroy();
+        }
 
-        let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+        // Reverse timeline to show chronological order (oldest to newest)
+        const reversedTimeline = [...timeline].reverse();
 
-        timeline.forEach(point => {
-            const total = point.total_events || 0;
-            const failed = point.failed || 0;
-            const successful = point.successful || 0;
-            const invalid = point.invalid || 0;
-            const anomalies = point.anomalies || 0;
+        // Prepare data
+        const labels = reversedTimeline.map(point => formatTimelineDate(point.time_period, interval));
+        const totalData = reversedTimeline.map(point => parseInt(point.total_events) || 0);
+        const failedData = reversedTimeline.map(point => parseInt(point.failed) || 0);
+        const successfulData = reversedTimeline.map(point => parseInt(point.successful) || 0);
+        const anomaliesData = reversedTimeline.map(point => parseInt(point.anomalies) || 0);
 
-            // Calculate percentages for stacked bar
-            const failedPercent = total > 0 ? (failed / total) * 100 : 0;
-            const successfulPercent = total > 0 ? (successful / total) * 100 : 0;
-            const invalidPercent = total > 0 ? (invalid / total) * 100 : 0;
-
-            // Calculate bar width relative to max
-            const barWidth = Math.max((total / maxValue) * 100, 2);
-
-            const formattedDate = escapeHtml(formatTimelineDate(point.time_period, interval));
-
-            html += `
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="min-width: 120px; font-size: 13px; color: var(--text-secondary);">
-                        ${formattedDate}
-                    </div>
-                    <div style="flex: 1; position: relative;">
-                        <div style="display: flex; height: 32px; background: var(--background); border-radius: 4px; overflow: hidden; width: ${barWidth}%; min-width: 2px;">
-                            ${successful > 0 ? `<div style="width: ${successfulPercent}%; background: #10b981;" title="Successful: ${successful.toLocaleString()}"></div>` : ''}
-                            ${failed > 0 ? `<div style="width: ${failedPercent}%; background: #ef4444;" title="Failed: ${failed.toLocaleString()}"></div>` : ''}
-                            ${invalid > 0 ? `<div style="width: ${invalidPercent}%; background: #6b7280;" title="Invalid: ${invalid.toLocaleString()}"></div>` : ''}
-                        </div>
-                        ${anomalies > 0 ? `<div style="position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 6px; height: 6px; background: #f59e0b; border-radius: 50%;" title="Anomalies: ${anomalies.toLocaleString()}"></div>` : ''}
-                    </div>
-                    <div style="min-width: 80px; text-align: right; font-weight: 600; font-size: 14px;">
-                        ${total.toLocaleString()}
-                        ${anomalies > 0 ? `<span style="color: #f59e0b; font-size: 11px; margin-left: 4px;">(${anomalies})</span>` : ''}
-                    </div>
-                </div>
-            `;
+        // Create chart
+        const ctx = canvas.getContext('2d');
+        timelineChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Total Events',
+                        data: totalData,
+                        borderColor: '#0078D4',
+                        backgroundColor: 'rgba(0, 120, 212, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        hidden: false
+                    },
+                    {
+                        label: 'Failed',
+                        data: failedData,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        hidden: false
+                    },
+                    {
+                        label: 'Successful',
+                        data: successfulData,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        hidden: false
+                    },
+                    {
+                        label: 'Anomalies',
+                        data: anomaliesData,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        hidden: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        titleFont: {
+                            size: 14,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            size: 13
+                        },
+                        bodySpacing: 6,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 0,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            },
+                            callback: function(value) {
+                                return value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
         });
 
-        html += '</div>';
+        // Setup toggle checkboxes
+        setupChartToggles();
+    }
 
-        // Add legend
-        html += `
-            <div style="display: flex; justify-content: center; gap: 24px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 16px; height: 16px; background: #10b981; border-radius: 2px;"></div>
-                    <span style="font-size: 13px; color: var(--text-secondary);">Successful</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 16px; height: 16px; background: #ef4444; border-radius: 2px;"></div>
-                    <span style="font-size: 13px; color: var(--text-secondary);">Failed</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 16px; height: 16px; background: #6b7280; border-radius: 2px;"></div>
-                    <span style="font-size: 13px; color: var(--text-secondary);">Invalid</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 6px; height: 6px; background: #f59e0b; border-radius: 50%;"></div>
-                    <span style="font-size: 13px; color: var(--text-secondary);">Anomalies</span>
-                </div>
-            </div>
-        `;
+    /**
+     * Setup chart toggle checkboxes
+     */
+    function setupChartToggles() {
+        const toggles = [
+            { id: 'chart-show-total', datasetIndex: 0 },
+            { id: 'chart-show-failed', datasetIndex: 1 },
+            { id: 'chart-show-successful', datasetIndex: 2 },
+            { id: 'chart-show-anomalies', datasetIndex: 3 }
+        ];
 
-        container.innerHTML = html;
+        toggles.forEach(toggle => {
+            const checkbox = document.getElementById(toggle.id);
+            if (checkbox && !checkbox.hasAttribute('data-listener-attached')) {
+                checkbox.setAttribute('data-listener-attached', 'true');
+                checkbox.addEventListener('change', function() {
+                    if (timelineChart) {
+                        timelineChart.data.datasets[toggle.datasetIndex].hidden = !this.checked;
+                        timelineChart.update();
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -236,24 +364,48 @@
      */
     function renderTimelineTable(timeline) {
         const tbody = document.getElementById('timeline-table-body');
+        const rowCountEl = document.getElementById('timeline-row-count');
 
         if (!tbody) return;
 
         if (!timeline || timeline.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                    <td colspan="8" style="padding: 40px; text-align: center; color: var(--text-secondary);">
                         No timeline data available
                     </td>
                 </tr>
             `;
+            if (rowCountEl) rowCountEl.textContent = '0';
             return;
         }
 
-        tbody.innerHTML = timeline.map(point => {
+        // Update row count
+        if (rowCountEl) rowCountEl.textContent = timeline.length.toLocaleString();
+
+        tbody.innerHTML = timeline.map((point, index) => {
             const formattedDate = escapeHtml(formatTimelineDate(point.time_period, currentInterval));
             const avgRisk = point.avg_risk_score ? parseFloat(point.avg_risk_score).toFixed(1) : '0.0';
             const riskColor = getRiskColor(parseFloat(avgRisk));
+
+            // Calculate trend (compare with previous period)
+            let trendIndicator = '';
+            if (index < timeline.length - 1) {
+                const prevTotal = timeline[index + 1].total_events || 0;
+                const currentTotal = point.total_events || 0;
+                const change = currentTotal - prevTotal;
+                const changePercent = prevTotal > 0 ? ((change / prevTotal) * 100).toFixed(0) : 0;
+
+                if (change > 0) {
+                    trendIndicator = `<span style="color: #ef4444; font-size: 11px;">▲ ${changePercent}%</span>`;
+                } else if (change < 0) {
+                    trendIndicator = `<span style="color: #10b981; font-size: 11px;">▼ ${Math.abs(changePercent)}%</span>`;
+                } else {
+                    trendIndicator = `<span style="color: var(--text-secondary); font-size: 11px;">━ 0%</span>`;
+                }
+            } else {
+                trendIndicator = `<span style="color: var(--text-secondary); font-size: 11px;">━</span>`;
+            }
 
             return `
                 <tr style="border-bottom: 1px solid var(--border);">
@@ -266,6 +418,7 @@
                     <td style="padding: 12px; text-align: center;">
                         <span style="background: ${riskColor}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">${avgRisk}</span>
                     </td>
+                    <td style="padding: 12px; text-align: center;">${trendIndicator}</td>
                 </tr>
             `;
         }).join('');
@@ -372,44 +525,37 @@
                 if (/^\d{6}$/.test(str)) {
                     const year = parseInt(str.substring(0, 4));
                     const week = parseInt(str.substring(4, 6));
-                    return `Week ${week}, ${year}`;
+                    return `Week ${week}`;
                 }
             }
 
-            // Handle hour format (e.g., "2024-12-05 14:00:00")
-            if (interval === 'hour') {
-                // Use TimeSettings for short format if available
-                if (window.TimeSettings?.isLoaded()) {
-                    return window.TimeSettings.formatShort(dateString);
-                }
-                const date = new Date(dateString);
-                if (!isNaN(date.getTime())) {
-                    return date.toLocaleString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit'
-                    });
-                }
-            }
-
-            // Handle day format - use TimeSettings for date if available
-            if (window.TimeSettings?.isLoaded()) {
-                return window.TimeSettings.formatDate(dateString);
-            }
-
+            // Parse the date
             const date = new Date(dateString);
-            if (!isNaN(date.getTime())) {
-                return date.toLocaleDateString('en-US', {
-                    weekday: 'short',
+            if (isNaN(date.getTime())) {
+                return String(dateString);
+            }
+
+            // Format based on interval
+            if (interval === 'hour') {
+                // Format: "Dec 6, 2PM"
+                return date.toLocaleString('en-US', {
                     month: 'short',
                     day: 'numeric',
-                    year: 'numeric'
+                    hour: 'numeric'
+                });
+            } else if (interval === 'day') {
+                // Format: "Dec 6"
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                });
+            } else {
+                // Week or default: "Dec 6"
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
                 });
             }
-
-            // Fallback - return as is
-            return String(dateString);
 
         } catch (e) {
             return String(dateString);

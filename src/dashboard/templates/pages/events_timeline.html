@@ -3,7 +3,7 @@
     <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 4px 0; font-size: 24px; font-weight: 600;">Events Timeline</h2>
-            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Visualize authentication events over time</p>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Track authentication patterns and trends over time</p>
         </div>
         <div class="page-header-actions" style="display: flex; align-items: center; gap: 12px;">
             <button id="timeline-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
@@ -31,20 +31,63 @@
 
     <!-- Main Content (hidden until loaded) -->
     <div id="timeline-content" style="display: none;">
+        <!-- Summary Stats -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div class="card" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Total Events</div>
+                        <div id="timeline-stat-total" style="font-size: 28px; font-weight: 700; color: var(--text-primary);">-</div>
+                    </div>
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📊</div>
+                </div>
+            </div>
+
+            <div class="card" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Failed Attempts</div>
+                        <div id="timeline-stat-failed" style="font-size: 28px; font-weight: 700; color: #ef4444;">-</div>
+                    </div>
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">❌</div>
+                </div>
+            </div>
+
+            <div class="card" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Successful Logins</div>
+                        <div id="timeline-stat-successful" style="font-size: 28px; font-weight: 700; color: #10b981;">-</div>
+                    </div>
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">✅</div>
+                </div>
+            </div>
+
+            <div class="card" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Anomalies Detected</div>
+                        <div id="timeline-stat-anomalies" style="font-size: 28px; font-weight: 700; color: #f59e0b;">-</div>
+                    </div>
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">⚠️</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Filters -->
         <div class="card" style="padding: 20px; margin-bottom: 24px;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: end;">
                 <div>
                     <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Interval</label>
-                    <select id="timeline-interval" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
-                        <option value="hour">Hourly (max 7 days)</option>
+                    <select id="timeline-interval" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--surface); cursor: pointer;">
+                        <option value="hour">Hourly</option>
                         <option value="day" selected>Daily</option>
                         <option value="week">Weekly</option>
                     </select>
                 </div>
                 <div>
                     <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary);">Time Range</label>
-                    <select id="timeline-days" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                    <select id="timeline-days" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--surface); cursor: pointer;">
                         <option value="1">Last 24 Hours</option>
                         <option value="3">Last 3 Days</option>
                         <option value="7" selected>Last 7 Days</option>
@@ -59,31 +102,59 @@
 
         <!-- Timeline Visualization -->
         <div class="card" style="padding: 20px; margin-bottom: 24px;">
-            <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600;">Timeline Visualization</h3>
-            <div id="timeline-chart-container">
-                <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Loading timeline...</p>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Event Trends Over Time</h3>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                        <input type="checkbox" id="chart-show-total" checked style="cursor: pointer;">
+                        <span style="width: 12px; height: 12px; background: #0078D4; border-radius: 2px;"></span>
+                        <span>Total Events</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                        <input type="checkbox" id="chart-show-failed" checked style="cursor: pointer;">
+                        <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 2px;"></span>
+                        <span>Failed</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                        <input type="checkbox" id="chart-show-successful" checked style="cursor: pointer;">
+                        <span style="width: 12px; height: 12px; background: #10b981; border-radius: 2px;"></span>
+                        <span>Successful</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                        <input type="checkbox" id="chart-show-anomalies" checked style="cursor: pointer;">
+                        <span style="width: 12px; height: 12px; background: #f59e0b; border-radius: 2px;"></span>
+                        <span>Anomalies</span>
+                    </label>
+                </div>
+            </div>
+            <div style="position: relative; height: 400px;">
+                <canvas id="timeline-chart"></canvas>
             </div>
         </div>
 
         <!-- Timeline Data Table -->
         <div class="card" style="padding: 20px;">
-            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Timeline Data</h3>
-            <div class="table-wrapper">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600;">📋 Detailed Timeline Data</h3>
+                <div style="font-size: 12px; color: var(--text-secondary);">Showing <span id="timeline-row-count">0</span> time periods</div>
+            </div>
+            <div class="table-wrapper" style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <thead>
                         <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
-                            <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600;">Total</th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600;">Failed</th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600;">Successful</th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600;">Invalid</th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600;">Anomalies</th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600;">Avg Risk</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600; white-space: nowrap;">📅 Date/Time</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">📊 Total</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">❌ Failed</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">✅ Success</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">🚫 Invalid</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">⚠️ Anomaly</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">🎯 Avg Risk</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; white-space: nowrap;">📈 Trend</th>
                         </tr>
                     </thead>
                     <tbody id="timeline-table-body">
                         <tr>
-                            <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-secondary);">Loading...</td>
+                            <td colspan="8" style="padding: 40px; text-align: center; color: var(--text-secondary);">Loading...</td>
                         </tr>
                     </tbody>
                 </table>

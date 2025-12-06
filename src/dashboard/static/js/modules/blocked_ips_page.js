@@ -43,37 +43,46 @@ async function loadIPBlocks() {
 
         // Build table
         const tableBody = document.getElementById('blocksTableBody');
+
+        // Collect unique agents for filter dropdown
+        const uniqueAgents = new Set();
+        data.blocks.forEach(block => {
+            const agentName = block.agent_name || 'Manual Block';
+            uniqueAgents.add(agentName);
+        });
+
         tableBody.innerHTML = data.blocks.map(block => {
             const statusBadge = block.is_active
                 ? '<span style="padding: 4px 12px; background: #D13438; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Active</span>'
-                : '<span style="padding: 4px 12px; background: #107C10; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Unblocked</span>';
+                : '<span style="padding: 4px 12px; background: #10b981; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Expired</span>';
 
-            const sourceBadge = getSourceBadge(block.source || block.block_source);
+            const sourceBadge = getSourceBadge(block.source);
 
-            const unblockTime = block.unblock_at
+            const expiresAt = block.unblock_at
                 ? formatLocalDateTime(block.unblock_at)
-                : (block.auto_unblock ? 'Auto' : 'Manual');
+                : 'Permanent';
 
-            // Use ip_address field from API (not ip_address_text)
-            const ipAddress = block.ip_address || block.ip_address_text;
+            // Use ip_address field from API
+            const ipAddress = block.ip_address;
+
+            // Agent name from API (already includes fallback to 'Manual Block')
+            const agentName = escapeHtml(block.agent_name || 'Manual Block');
+
+            // Location from API response
+            const locationText = block.location && block.location.country
+                ? `${block.location.city || 'Unknown'}, ${block.location.country}`
+                : '';
 
             // Action buttons based on status
             let actionButtons = '';
             if (block.is_active) {
                 actionButtons = `
                     <button
-                        onclick="disableBlockFromTable('${escapeHtml(ipAddress)}', ${block.id})"
-                        style="padding: 6px 12px; border: 1px solid #CA5010; background: var(--surface); color: #CA5010; border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 4px;"
-                        title="Disable block (keep record)"
+                        onclick="unblockIPFromTable('${escapeHtml(ipAddress)}', ${block.id})"
+                        style="padding: 6px 12px; background: #107C10; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;"
+                        title="Unblock IP"
                     >
-                        Disable
-                    </button>
-                    <button
-                        onclick="confirmDeleteBlock('${escapeHtml(ipAddress)}', ${block.id})"
-                        style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
-                        title="Delete block record"
-                    >
-                        Delete
+                        Unblock
                     </button>`;
             } else {
                 actionButtons = `
@@ -86,40 +95,40 @@ async function loadIPBlocks() {
                     </button>`;
             }
 
-            // View Details button
-            const viewDetailsBtn = `<button
-                onclick="showBlockIpDetails('${escapeHtml(ipAddress)}')"
-                style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 8px;"
-                title="View IP Details"
-            >
-                Details
-            </button>`;
-
             return `
-                <tr style="border-bottom: 1px solid var(--border-light);" data-ip="${escapeHtml(ipAddress)}">
-                    <td style="padding: 12px; font-size: 13px; font-weight: 600; font-family: 'Courier New', monospace;">
+                <tr style="border-bottom: 1px solid var(--border-light);" data-ip="${escapeHtml(ipAddress)}" data-agent="${agentName}" data-source="${escapeHtml(block.source)}" data-is-active="${block.is_active}">
+                    <td style="padding: 10px; font-family: monospace; font-weight: 600; font-size: 13px;">
                         ${escapeHtml(ipAddress)}
                     </td>
-                    <td style="padding: 12px; font-size: 12px;" class="ip-location-cell" data-ip="${escapeHtml(ipAddress)}">
-                        <span class="location-loading" style="color: var(--text-secondary);">Loading...</span>
+                    <td style="padding: 10px; font-size: 13px;">
+                        ${agentName}
                     </td>
-                    <td style="padding: 12px; font-size: 12px;">
-                        ${escapeHtml(block.reason || block.block_reason || 'No reason specified')}
+                    <td style="padding: 10px; text-align: center; font-size: 13px;" class="ip-attempts-cell" data-ip="${escapeHtml(ipAddress)}">
+                        ${block.failed_attempts && block.failed_attempts > 0 ? `<span style="font-weight: 600; color: #D13438;">${block.failed_attempts}</span>` : '<span style="color: var(--text-secondary);">-</span>'}
                     </td>
-                    <td style="padding: 12px;">${sourceBadge}</td>
-                    <td style="padding: 12px; font-size: 12px;">
+                    <td style="padding: 10px; font-size: 13px;" class="ip-location-cell" data-ip="${escapeHtml(ipAddress)}">
+                        ${locationText ? escapeHtml(locationText) : '<span style="color: var(--text-secondary);">...</span>'}
+                    </td>
+                    <td style="padding: 10px; font-size: 13px; max-width: 250px; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(block.reason || 'No reason specified')}">
+                        ${escapeHtml(block.reason || 'No reason specified')}
+                    </td>
+                    <td style="padding: 10px;">${sourceBadge}</td>
+                    <td style="padding: 10px; font-size: 13px; white-space: nowrap;">
                         ${formatLocalDateTime(block.blocked_at)}
                     </td>
-                    <td style="padding: 12px; font-size: 12px;">
-                        ${unblockTime}
+                    <td style="padding: 10px; font-size: 13px; white-space: nowrap;">
+                        ${expiresAt}
                     </td>
-                    <td style="padding: 12px; text-align: center;">${statusBadge}</td>
-                    <td style="padding: 12px; text-align: right; white-space: nowrap;">
-                        ${viewDetailsBtn}${actionButtons}
+                    <td style="padding: 10px; text-align: center;">${statusBadge}</td>
+                    <td style="padding: 10px; text-align: center; white-space: nowrap;">
+                        ${actionButtons}
                     </td>
                 </tr>
             `;
         }).join('');
+
+        // Populate agent filter dropdown
+        populateAgentFilter(uniqueAgents);
 
         // Enrich location data asynchronously
         enrichBlocksLocationData();
@@ -154,22 +163,22 @@ function getSourceBadge(source) {
 function updateBlockStats(blocks) {
     const activeBlocks = blocks.filter(b => b.is_active).length;
     const totalBlocks = blocks.length;
+    const ruleBlocks = blocks.filter(b => b.source === 'rule_based').length;
+    const manualBlocks = blocks.filter(b => b.source === 'manual').length;
+    const expiredBlocks = blocks.filter(b => !b.is_active).length;
 
-    const statsEl = document.getElementById('blockStatsContainer');
-    if (statsEl) {
-        statsEl.innerHTML = `
-            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <div style="padding: 12px 20px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 4px;">
-                    <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Active Blocks</div>
-                    <div style="font-size: 24px; font-weight: 700; color: #D13438; margin-top: 4px;">${activeBlocks}</div>
-                </div>
-                <div style="padding: 12px 20px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 4px;">
-                    <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Total Blocks</div>
-                    <div style="font-size: 24px; font-weight: 700; color: var(--text-primary); margin-top: 4px;">${totalBlocks}</div>
-                </div>
-            </div>
-        `;
-    }
+    // Update stat cards
+    const statActiveEl = document.getElementById('stat-active-blocks');
+    const statTotalEl = document.getElementById('stat-total-blocks');
+    const statRuleEl = document.getElementById('stat-rule-blocks');
+    const statManualEl = document.getElementById('stat-manual-blocks');
+    const statExpiredEl = document.getElementById('stat-expired-blocks');
+
+    if (statActiveEl) statActiveEl.textContent = activeBlocks.toLocaleString();
+    if (statTotalEl) statTotalEl.textContent = totalBlocks.toLocaleString();
+    if (statRuleEl) statRuleEl.textContent = ruleBlocks.toLocaleString();
+    if (statManualEl) statManualEl.textContent = manualBlocks.toLocaleString();
+    if (statExpiredEl) statExpiredEl.textContent = expiredBlocks.toLocaleString();
 }
 
 // Setup form toggle buttons
@@ -379,10 +388,42 @@ async function unblockIPAddress(ipAddress, reason) {
     }
 }
 
+// Populate agent filter dropdown
+function populateAgentFilter(uniqueAgents) {
+    const agentFilter = document.getElementById('blockAgentFilter');
+    if (!agentFilter) return;
+
+    // Keep current selection
+    const currentValue = agentFilter.value;
+
+    // Clear and rebuild options
+    agentFilter.innerHTML = '<option value="">All Agents</option>';
+
+    // Sort agents alphabetically
+    const sortedAgents = Array.from(uniqueAgents).sort();
+
+    sortedAgents.forEach(agent => {
+        const option = document.createElement('option');
+        option.value = agent;
+        option.textContent = agent;
+        agentFilter.appendChild(option);
+    });
+
+    // Restore selection if it still exists
+    if (currentValue && sortedAgents.includes(currentValue)) {
+        agentFilter.value = currentValue;
+    }
+}
+
 // Setup filter functionality
 function setupBlockFilters() {
+    const agentFilter = document.getElementById('blockAgentFilter');
     const sourceFilter = document.getElementById('blockSourceFilter');
     const statusFilter = document.getElementById('blockStatusFilter');
+
+    if (agentFilter) {
+        agentFilter.onchange = applyBlockFilters;
+    }
 
     if (sourceFilter) {
         sourceFilter.onchange = applyBlockFilters;
@@ -395,6 +436,7 @@ function setupBlockFilters() {
 
 // Apply filters to block table
 function applyBlockFilters() {
+    const agentFilter = document.getElementById('blockAgentFilter')?.value || '';
     const sourceFilter = document.getElementById('blockSourceFilter')?.value || '';
     const statusFilter = document.getElementById('blockStatusFilter')?.value || '';
 
@@ -403,22 +445,30 @@ function applyBlockFilters() {
     rows.forEach(row => {
         let showRow = true;
 
-        // Get source from badge text (column index 3)
-        const sourceBadge = row.cells[3]?.textContent.trim().toLowerCase();
+        // Get agent from data attribute
+        const rowAgent = row.getAttribute('data-agent') || '';
 
-        // Get status from badge (column index 6)
-        const statusBadge = row.cells[6]?.textContent.trim().toLowerCase();
+        // Get source from data attribute
+        const rowSource = row.getAttribute('data-source') || '';
+
+        // Get status from data attribute
+        const isActive = row.getAttribute('data-is-active') === 'true';
+
+        // Apply agent filter
+        if (agentFilter && rowAgent !== agentFilter) {
+            showRow = false;
+        }
 
         // Apply source filter
-        if (sourceFilter && !sourceBadge.includes(sourceFilter.toLowerCase())) {
+        if (sourceFilter && rowSource !== sourceFilter) {
             showRow = false;
         }
 
         // Apply status filter (values are "true" or "false" as strings)
         if (statusFilter) {
-            if (statusFilter === 'true' && !statusBadge.includes('active')) {
+            if (statusFilter === 'true' && !isActive) {
                 showRow = false;
-            } else if (statusFilter === 'false' && !statusBadge.includes('unblocked')) {
+            } else if (statusFilter === 'false' && isActive) {
                 showRow = false;
             }
         }

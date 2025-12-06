@@ -321,6 +321,48 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Centered Loader Overlay */
+        .centered-loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s;
+        }
+
+        .centered-loader-content {
+            background: var(--card-bg, #ffffff);
+            border-radius: 8px;
+            padding: 40px 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .loader-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border, #e0e0e0);
+            border-top-color: #0078D4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loader-text {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary, #323130);
+            text-align: center;
+        }
     `;
 
     // Inject styles into document
@@ -386,6 +428,36 @@
         }
 
         return toast;
+    };
+
+    /**
+     * Show centered loading overlay
+     * @param {string} message - Loading message to display
+     * @returns {HTMLElement} The loader overlay element
+     */
+    window.showCenteredLoader = function(message) {
+        // Remove any existing loaders
+        document.querySelectorAll('.centered-loader-overlay').forEach(el => el.remove());
+
+        const overlay = document.createElement('div');
+        overlay.className = 'centered-loader-overlay';
+
+        const content = document.createElement('div');
+        content.className = 'centered-loader-content';
+
+        const spinner = document.createElement('div');
+        spinner.className = 'loader-spinner';
+
+        const text = document.createElement('div');
+        text.className = 'loader-text';
+        text.textContent = message || 'Loading...';
+
+        content.appendChild(spinner);
+        content.appendChild(text);
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        return overlay;
     };
 
     /**
@@ -942,16 +1014,16 @@
             return;
         }
 
-        // Show loading toast
-        const loadingToast = showToast(`Analyzing ${ipAddress}...`, 'info', 0);
+        // Show centered loading overlay
+        const loadingOverlay = showCenteredLoader(`Analyzing ${ipAddress}...`);
 
         try {
             // Fetch full IP analysis from backend
             const response = await fetch(`/api/demo/ip-analysis/${encodeURIComponent(ipAddress)}`);
             const data = await response.json();
 
-            // Remove loading toast
-            if (loadingToast) loadingToast.remove();
+            // Remove loading overlay
+            if (loadingOverlay) loadingOverlay.remove();
 
             if (!data.success) {
                 showToast(`Failed to analyze IP: ${data.error || 'Unknown error'}`, 'error');
@@ -976,7 +1048,7 @@
             showFullAnalysisModal(ipAddress, geo, content);
 
         } catch (error) {
-            if (loadingToast) loadingToast.remove();
+            if (loadingOverlay) loadingOverlay.remove();
             console.error('Error loading IP analysis:', error);
             showToast('Error loading IP analysis', 'error');
         }

@@ -28,13 +28,18 @@ async function loadGeoIPStats() {
             const stats = data.stats;
             document.getElementById('stat-total-geoips').textContent = stats.total_ips.toLocaleString();
 
+            // Count unique countries
+            const countryCount = stats.top_countries ? stats.top_countries.length : 0;
+            const countryEl = document.getElementById('stat-country-count');
+            if (countryEl) {
+                countryEl.textContent = countryCount.toLocaleString();
+            }
+
             const threatIndicators = stats.threat_indicators || {};
             document.getElementById('stat-proxy-count').textContent =
                 ((threatIndicators.proxy_count || 0) + (threatIndicators.vpn_count || 0)).toLocaleString();
             document.getElementById('stat-tor-count').textContent =
                 (threatIndicators.tor_count || 0).toLocaleString();
-            document.getElementById('stat-datacenter-count').textContent =
-                (threatIndicators.datacenter_count || 0).toLocaleString();
         }
     } catch (error) {
         console.error('Error loading GeoIP stats:', error);
@@ -92,38 +97,37 @@ async function loadGeoIPRecent() {
         const data = await response.json();
 
         if (!data.success || !data.data || data.data.length === 0) {
-            container.innerHTML = '<div class="empty-state-small">No recent lookups</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">No recent lookups</div>';
             return;
         }
 
         container.innerHTML = `
-            <div class="table-wrapper">
-            <table style="width: 100%; border-collapse: collapse;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
-                    <tr style="border-bottom: 1px solid var(--border);">
-                        <th style="text-align: left; padding: 10px; font-weight: 600; font-size: 13px;">IP Address</th>
-                        <th style="text-align: left; padding: 10px; font-weight: 600; font-size: 13px;">Country</th>
-                        <th style="text-align: left; padding: 10px; font-weight: 600; font-size: 13px;">City</th>
-                        <th style="text-align: left; padding: 10px; font-weight: 600; font-size: 13px;">ASN Org</th>
-                        <th style="text-align: center; padding: 10px; font-weight: 600; font-size: 13px;">Flags</th>
-                        <th style="text-align: right; padding: 10px; font-weight: 600; font-size: 13px;">Last Seen</th>
+                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 10px; text-align: left; font-weight: 600;">IP Address</th>
+                        <th style="padding: 10px; text-align: left; font-weight: 600;">Country</th>
+                        <th style="padding: 10px; text-align: left; font-weight: 600;">City</th>
+                        <th style="padding: 10px; text-align: left; font-weight: 600;">ISP / Network</th>
+                        <th style="padding: 10px; text-align: center; font-weight: 600;">Type</th>
+                        <th style="padding: 10px; text-align: right; font-weight: 600;">Last Seen</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${data.data.map(ip => {
                         const flags = [];
-                        if (ip.is_proxy) flags.push('🔴 Proxy');
-                        if (ip.is_vpn) flags.push('🔵 VPN');
-                        if (ip.is_tor) flags.push('🟣 Tor');
+                        if (ip.is_proxy) flags.push('<span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Proxy</span>');
+                        if (ip.is_vpn) flags.push('<span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">VPN</span>');
+                        if (ip.is_tor) flags.push('<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Tor</span>');
 
                         return `
-                            <tr style="border-bottom: 1px solid var(--border-light);">
-                                <td style="padding: 10px; font-size: 13px; font-family: monospace;">${escapeHtml(ip.ip_address_text)}</td>
-                                <td style="padding: 10px; font-size: 13px;">${escapeHtml(ip.country_name || 'N/A')}</td>
-                                <td style="padding: 10px; font-size: 13px;">${escapeHtml(ip.city || 'N/A')}</td>
-                                <td style="padding: 10px; font-size: 13px;">${escapeHtml(ip.asn_org || 'N/A')}</td>
-                                <td style="text-align: center; padding: 10px; font-size: 12px;">${flags.join(' ') || '-'}</td>
-                                <td style="text-align: right; padding: 10px; font-size: 13px;">${ip.last_seen ? formatLocalDateTime(ip.last_seen) : 'N/A'}</td>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 10px; font-family: monospace; font-weight: 500;">${escapeHtml(ip.ip_address_text)}</td>
+                                <td style="padding: 10px;">${escapeHtml(ip.country_name || 'Unknown')}</td>
+                                <td style="padding: 10px; color: var(--text-secondary);">${escapeHtml(ip.city || 'N/A')}</td>
+                                <td style="padding: 10px; color: var(--text-secondary); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(ip.isp || ip.asn_org || 'N/A')}">${escapeHtml(ip.isp || ip.asn_org || 'N/A')}</td>
+                                <td style="text-align: center; padding: 10px;">${flags.length > 0 ? flags.join(' ') : '<span style="color: var(--text-secondary);">-</span>'}</td>
+                                <td style="text-align: right; padding: 10px; color: var(--text-secondary);">${ip.last_seen ? formatLocalDateTime(ip.last_seen) : 'N/A'}</td>
                             </tr>
                         `;
                     }).join('')}

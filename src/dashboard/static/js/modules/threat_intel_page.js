@@ -27,7 +27,16 @@ async function loadThreatStats() {
         if (data.success && data.stats) {
             const stats = data.stats;
             document.getElementById('stat-total-threats').textContent = stats.total_ips.toLocaleString();
-            document.getElementById('stat-high-threat').textContent = stats.high_threat_count.toLocaleString();
+
+            // Calculate critical and high separately
+            const criticalCount = stats.threat_levels?.critical || 0;
+            const highCount = stats.high_threat_count || stats.threat_levels?.high || 0;
+
+            const criticalEl = document.getElementById('stat-critical-threat');
+            if (criticalEl) {
+                criticalEl.textContent = criticalCount.toLocaleString();
+            }
+            document.getElementById('stat-high-threat').textContent = highCount.toLocaleString();
 
             const abuseipdb = stats.abuseipdb || {};
             const avgScore = abuseipdb.avg_score ? parseFloat(abuseipdb.avg_score).toFixed(1) : '0.0';
@@ -37,6 +46,59 @@ async function loadThreatStats() {
         }
     } catch (error) {
         console.error('Error loading threat stats:', error);
+    }
+}
+
+// Load threat level distribution
+async function loadThreatDistribution() {
+    const container = document.getElementById('threat-distribution');
+
+    try {
+        const response = await fetch('/api/threat-intel/stats');
+        const data = await response.json();
+
+        if (!data.success || !data.stats.threat_levels) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">No distribution data</div>';
+            return;
+        }
+
+        const levels = data.stats.threat_levels;
+        const total = Object.values(levels).reduce((a, b) => a + b, 0);
+
+        if (total === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">No threats tracked yet</div>';
+            return;
+        }
+
+        const distribution = [
+            { level: 'Clean', count: levels.clean || 0, color: '#10b981' },
+            { level: 'Low', count: levels.low || 0, color: '#3b82f6' },
+            { level: 'Medium', count: levels.medium || 0, color: '#f59e0b' },
+            { level: 'High', count: levels.high || 0, color: '#fb923c' },
+            { level: 'Critical', count: levels.critical || 0, color: '#ef4444' }
+        ].filter(item => item.count > 0);
+
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                ${distribution.map(item => {
+                    const percentage = ((item.count / total) * 100).toFixed(1);
+                    return `
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-size: 13px; font-weight: 500;">${item.level}</span>
+                                <span style="font-size: 12px; color: var(--text-secondary);">${item.count.toLocaleString()} (${percentage}%)</span>
+                            </div>
+                            <div style="height: 8px; background: var(--background); border-radius: 4px; overflow: hidden;">
+                                <div style="height: 100%; width: ${percentage}%; background: ${item.color}; transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading threat distribution:', error);
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #D13438; font-size: 13px;">Error loading distribution</div>';
     }
 }
 

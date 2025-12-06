@@ -27,7 +27,6 @@ from routes.agents import agent_routes  # Updated to use modular package
 from routes.geoip_routes import geoip_routes
 from routes.threat_intel_routes import threat_intel_routes
 from routes.ip_stats_routes import ip_stats_routes
-from routes.events_analysis_routes import events_analysis_routes
 from routes.settings_routes import settings_routes
 from routes.integrations_routes import integrations_routes
 from routes.api_keys_routes import api_keys_routes
@@ -74,7 +73,6 @@ app.register_blueprint(agent_routes, url_prefix='/api')  # Agent management API
 app.register_blueprint(geoip_routes)  # GeoIP lookup API
 app.register_blueprint(threat_intel_routes)  # Threat Intelligence API
 app.register_blueprint(ip_stats_routes, url_prefix='/api/dashboard/ip-stats')  # IP Statistics API
-app.register_blueprint(events_analysis_routes, url_prefix='/api/dashboard/events-analysis')  # Events Analysis API
 app.register_blueprint(settings_routes, url_prefix='/api/dashboard/settings')  # Settings API
 app.register_blueprint(integrations_routes, url_prefix='/api/dashboard/integrations')  # Integrations API
 app.register_blueprint(api_keys_routes, url_prefix='/api/dashboard/api-keys')  # API Keys management
@@ -298,6 +296,46 @@ def _is_api_request():
         return True
 
     return False
+
+
+# ==============================================================================
+# CACHE CONTROL MIDDLEWARE - Universal browser cache prevention
+# ==============================================================================
+
+@app.after_request
+def add_cache_control_headers(response):
+    """
+    Add cache control headers to all responses to prevent browser caching
+    This ensures users always get fresh data from the server
+
+    Applied to ALL routes universally to solve browser caching issues
+    """
+    # Only add headers if not already set
+    if 'Cache-Control' not in response.headers:
+        # For API routes and dynamic content - NEVER cache
+        if (request.path.startswith('/api/') or
+            request.path.startswith('/dashboard') or
+            request.path == '/' or
+            request.path.startswith('/login')):
+
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+
+        # For static files (CSS, JS, images) - allow short caching
+        elif (request.path.startswith('/static/') or
+              request.path.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf'))):
+
+            # Cache static files for 1 hour, but revalidate
+            response.headers['Cache-Control'] = 'public, max-age=3600, must-revalidate'
+
+        # Default for everything else - no cache
+        else:
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+
+    return response
 
 
 # Health check endpoint

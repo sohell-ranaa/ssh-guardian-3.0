@@ -51,18 +51,21 @@ def list_blocks():
     - offset: Offset for pagination (default: 0)
     - is_active: Filter by active status (true/false)
     - block_source: Filter by source (manual, rule_based, etc.)
+    - search: Search by IP address (partial match)
     """
     try:
         limit = min(int(request.args.get('limit', 50)), 500)
         offset = int(request.args.get('offset', 0))
         is_active = request.args.get('is_active')
         block_source = request.args.get('block_source')
+        search = request.args.get('search', '').strip()
 
         # Generate cache key from parameters
         cache = get_cache()
         cache_k = cache_key_hash('blocking', 'blocks_list',
                                  limit=limit, offset=offset,
-                                 is_active=is_active, block_source=block_source)
+                                 is_active=is_active, block_source=block_source,
+                                 search=search if search else None)
 
         # Try cache first
         cached = cache.get(cache_k)
@@ -80,6 +83,10 @@ def list_blocks():
         if block_source:
             where_clauses.append("ib.block_source = %s")
             params.append(block_source)
+
+        if search:
+            where_clauses.append("ib.ip_address_text LIKE %s")
+            params.append(f"%{search}%")
 
         where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
 
@@ -109,6 +116,9 @@ def list_blocks():
                     ae.source_ip_text as trigger_ip,
                     ae.target_username as trigger_username,
 
+                    -- Agent info
+                    COALESCE(ag.display_name, ag.hostname, 'Manual Block') as agent_name,
+
                     -- GeoIP info
                     geo.country_name,
                     geo.city,
@@ -119,6 +129,7 @@ def list_blocks():
                 FROM ip_blocks ib
                 LEFT JOIN blocking_rules br ON ib.blocking_rule_id = br.id
                 LEFT JOIN auth_events ae ON ib.trigger_event_id = ae.id
+                LEFT JOIN agents ag ON ae.agent_id = ag.id
                 LEFT JOIN ip_geolocation geo ON ib.ip_address_text = geo.ip_address_text
                 LEFT JOIN users u ON ib.unblocked_by_user_id = u.id
 
@@ -150,6 +161,7 @@ def list_blocks():
                     'ip_address': block['ip_address_text'],
                     'reason': block['block_reason'],
                     'source': block['block_source'],
+                    'agent_name': block['agent_name'],
                     'failed_attempts': block['failed_attempts'],
                     'threat_level': block['threat_level'],
                     'is_active': bool(block['is_active']),
@@ -805,6 +817,186 @@ def delete_rule(rule_id):
         return jsonify({
             'success': False,
             'error': 'Failed to delete rule'
+        }), 500
+
+
+@blocking_routes.route('/watchlist', methods=['GET'])
+def list_watchlist():
+    """
+    Get list of IPs on watchlist
+
+    Query Parameters:
+    - search: Search by IP address (partial match)
+    - limit: Number of results (default: 50, max: 500)
+    - offset: Offset for pagination (default: 0)
+    - is_active: Filter by active status (true/false)
+    """
+    try:
+        search = request.args.get('search', '').strip()
+        limit = min(int(request.args.get('limit', 50)), 500)
+        offset = int(request.args.get('offset', 0))
+        is_active = request.args.get('is_active')
+
+        where_clauses = []
+        params = []
+
+        if search:
+            where_clauses.append("ip_address_text LIKE %s")
+            params.append(f"%{search}%")
+
+        if is_active is not None:
+            where_clauses.append("is_active = %s")
+            params.append(is_active.lower() == 'true')
+
+        where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            query = f"""
+                SELECT
+                    id,
+                    ip_address_text as ip,
+                    watch_reason as reason,
+                    watch_level,
+                    is_active,
+                    expires_at,
+                    notify_on_activity,
+                    created_at as added_at,
+                    trigger_event_id
+                FROM ip_watchlist
+                WHERE 1=1 {where_sql}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """
+
+            params.extend([limit, offset])
+            cursor.execute(query, params)
+            watchlist = cursor.fetchall()
+
+            # Get total count
+            count_query = f"""
+                SELECT COUNT(*) as total
+                FROM ip_watchlist
+                WHERE 1=1 {where_sql}
+            """
+            cursor.execute(count_query, params[:-2])
+            total = cursor.fetchone()['total']
+
+            return jsonify({
+                'success': True,
+                'watchlist': watchlist,
+                'items': watchlist,  # Alias for compatibility
+                'pagination': {
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset,
+                    'has_more': (offset + limit) < total
+                }
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Error fetching watchlist: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch watchlist'
+        }), 500
+
+
+@blocking_routes.route('/whitelist', methods=['GET'])
+def list_whitelist():
+    """
+    Get list of whitelisted IPs
+
+    Query Parameters:
+    - search: Search by IP address (partial match)
+    - limit: Number of results (default: 50, max: 500)
+    - offset: Offset for pagination (default: 0)
+    - is_active: Filter by active status (true/false)
+    """
+    try:
+        search = request.args.get('search', '').strip()
+        limit = min(int(request.args.get('limit', 50)), 500)
+        offset = int(request.args.get('offset', 0))
+        is_active = request.args.get('is_active')
+
+        where_clauses = []
+        params = []
+
+        if search:
+            where_clauses.append("ip_address_text LIKE %s")
+            params.append(f"%{search}%")
+
+        if is_active is not None:
+            where_clauses.append("is_active = %s")
+            params.append(is_active.lower() == 'true')
+
+        where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            query = f"""
+                SELECT
+                    id,
+                    ip_address_text as ip,
+                    whitelist_reason as reason,
+                    whitelist_source as source,
+                    is_active,
+                    expires_at,
+                    created_by_user_id as added_by_user_id,
+                    created_at as added_at,
+                    ip_range_cidr
+                FROM ip_whitelist
+                WHERE 1=1 {where_sql}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """
+
+            params.extend([limit, offset])
+            cursor.execute(query, params)
+            whitelist = cursor.fetchall()
+
+            # Get total count
+            count_query = f"""
+                SELECT COUNT(*) as total
+                FROM ip_whitelist
+                WHERE 1=1 {where_sql}
+            """
+            cursor.execute(count_query, params[:-2])
+            total = cursor.fetchone()['total']
+
+            return jsonify({
+                'success': True,
+                'whitelist': whitelist,
+                'items': whitelist,  # Alias for compatibility
+                'pagination': {
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset,
+                    'has_more': (offset + limit) < total
+                }
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Error fetching whitelist: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch whitelist'
         }), 500
 
 

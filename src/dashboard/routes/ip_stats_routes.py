@@ -175,6 +175,14 @@ def get_ip_statistics_list():
         })
 
     except Exception as e:
+        # Ensure connection is closed on error
+        try:
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+        except:
+            pass
         return jsonify({
             'success': False,
             'error': str(e)
@@ -283,6 +291,14 @@ def get_ip_statistics_summary():
         })
 
     except Exception as e:
+        # Ensure connection is closed on error
+        try:
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+        except:
+            pass
         return jsonify({
             'success': False,
             'error': str(e)
@@ -365,14 +381,13 @@ def get_ip_statistics_detail(ip_address):
         cursor.execute("""
             SELECT
                 event_type,
-                username,
-                server_name,
-                port,
-                event_timestamp,
-                risk_score
-            FROM ssh_events
-            WHERE ip_address_text = %s
-            ORDER BY event_timestamp DESC
+                target_username as username,
+                target_server as server_name,
+                target_port as port,
+                timestamp as event_timestamp
+            FROM auth_events
+            WHERE source_ip_text = %s
+            ORDER BY timestamp DESC
             LIMIT 20
         """, (ip_address,))
 
@@ -422,6 +437,14 @@ def get_ip_statistics_detail(ip_address):
         })
 
     except Exception as e:
+        # Ensure connection is closed on error
+        try:
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+        except:
+            pass
         return jsonify({
             'success': False,
             'error': str(e)

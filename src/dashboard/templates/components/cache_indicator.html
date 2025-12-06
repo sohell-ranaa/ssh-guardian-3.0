@@ -245,13 +245,15 @@
     transition: all 0.2s;
 }
 
-.cache-action-btn.refresh-all {
-    background: #3b82f6;
+.cache-action-btn.clear-browser-cache {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
 }
 
-.cache-action-btn.refresh-all:hover {
-    background: #2563eb;
+.cache-action-btn.clear-browser-cache:hover {
+    background: linear-gradient(135deg, #5568d3 0%, #653a8b 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .cache-action-btn.clear-all {
@@ -301,15 +303,18 @@
     position: fixed;
     bottom: 20px;
     right: 20px;
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 16px 24px;
+    border-radius: 12px;
     font-size: 13px;
     font-weight: 500;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     transform: translateY(100px);
     opacity: 0;
     transition: all 0.3s ease;
     z-index: 9999;
+    max-width: 400px;
+    white-space: pre-line;
+    line-height: 1.6;
 }
 
 .cache-toast.show {
@@ -318,22 +323,22 @@
 }
 
 .cache-toast.success {
-    background: #10b981;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
 }
 
 .cache-toast.info {
-    background: #3b82f6;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
 }
 
 .cache-toast.warning {
-    background: #f59e0b;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
 }
 
 .cache-toast.error {
-    background: #ef4444;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
 }
 </style>
@@ -354,11 +359,11 @@
         <!-- Dynamic cache items will be inserted here -->
     </div>
     <div class="cache-actions-row">
-        <button class="cache-action-btn refresh-all" onclick="CacheManager.refreshAll()">
-            Refresh All
+        <button class="cache-action-btn clear-browser-cache" onclick="CacheManager.clearBrowserCache()">
+            🧹 Clear Browser Cache
         </button>
         <button class="cache-action-btn clear-all" onclick="CacheManager.clearAll()">
-            Clear All Cache
+            Clear Server Cache
         </button>
     </div>
 </div>
@@ -617,13 +622,17 @@ const CacheManager = {
         }
     },
 
-    // Refresh all cached endpoints
-    async refreshAll() {
-        this.showToast('Refreshing all data...', 'info');
+    // Clear browser cache (NEW - Universal solution)
+    async clearBrowserCache() {
+        this.showToast('Clearing browser & server cache...', 'info');
 
-        // Clear all server-side caches
         try {
-            const response = await fetch('/api/dashboard/system/cache/clear', { method: 'POST' });
+            const response = await fetch('/api/dashboard/cache-settings/clear-browser-cache', {
+                method: 'POST',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
             const result = await response.json();
 
             if (result.success) {
@@ -632,55 +641,83 @@ const CacheManager = {
                 this.updateCacheCount();
                 this.refreshPanelList();
 
-                // Trigger page reload to fetch fresh data
-                const hash = window.location.hash.substring(1) || 'dashboard';
-                if (typeof showPage === 'function') {
-                    showPage(hash);
-                }
+                // Show success message with details
+                const details = result.details || {};
+                const message = `✅ All caches cleared!\n` +
+                    `   • Redis keys: ${details.redis_keys_deleted || 0}\n` +
+                    `   • Browser cache: Cleared\n` +
+                    `   • Fresh data will load now`;
 
-                this.showToast(`Cache cleared (${result.deleted || 0} keys) - Refreshing...`, 'success');
+                this.showToast(message, 'success');
+
+                // Trigger page reload to fetch completely fresh data
+                setTimeout(() => {
+                    const hash = window.location.hash.substring(1) || 'dashboard';
+                    if (typeof showPage === 'function') {
+                        showPage(hash);
+                    } else {
+                        window.location.reload(true); // Force reload
+                    }
+                }, 1000);
+
             } else {
-                this.showToast(result.error || 'Failed to clear cache', 'error');
+                this.showToast(result.error || 'Failed to clear browser cache', 'error');
             }
         } catch (error) {
-            this.showToast('Failed to clear caches', 'error');
+            this.showToast('Failed to clear browser cache: ' + error.message, 'error');
         }
     },
 
-    // Clear all caches
+    // Clear server cache only
     async clearAll() {
-        if (!confirm('Clear all cached data? This will force fresh data fetches.')) {
+        if (!confirm('Clear server cache only? (Use "Clear Browser Cache" for complete clearing)')) {
             return;
         }
 
         try {
-            const response = await fetch('/api/dashboard/system/cache/clear', { method: 'POST' });
+            const response = await fetch('/api/dashboard/cache-settings/clear', {
+                method: 'POST',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
             const result = await response.json();
 
             if (result.success) {
                 this.cacheStatus = {};
                 this.updateCacheCount();
                 this.refreshPanelList();
-                this.showToast(`Cache cleared (${result.deleted || 0} keys)`, 'success');
+                this.showToast(`Server cache cleared (${result.message || 'success'})`, 'success');
+
+                // Reload current page
+                setTimeout(() => {
+                    const hash = window.location.hash.substring(1) || 'dashboard';
+                    if (typeof showPage === 'function') {
+                        showPage(hash);
+                    }
+                }, 500);
             } else {
                 this.showToast(result.error || 'Failed to clear cache', 'error');
             }
         } catch (error) {
-            this.showToast('Failed to clear caches', 'error');
+            this.showToast('Failed to clear server cache', 'error');
         }
     },
 
     // Show toast notification
-    showToast(message, type = 'info') {
+    showToast(message, type = 'info', duration = null) {
         const toast = document.getElementById('cacheToast');
         if (!toast) return;
 
         toast.textContent = message;
         toast.className = `cache-toast ${type} show`;
 
+        // Auto-dismiss duration (longer for success messages with details)
+        const dismissTime = duration || (type === 'success' && message.includes('\n') ? 5000 : 3000);
+
         setTimeout(() => {
             toast.classList.remove('show');
-        }, 3000);
+        }, dismissTime);
     },
 
     // Create page header with cache indicator

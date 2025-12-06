@@ -72,8 +72,8 @@ def parse_log_line(log_line: str) -> Optional[Dict]:
                 event_type = 'successful'
                 failure_reason = None
             else:
-                event_type = 'invalid'
-                failure_reason = 'other'
+                # Skip invalid/unrecognized events - don't save them
+                return None
 
             # Determine auth method
             if 'publickey' in event_name:

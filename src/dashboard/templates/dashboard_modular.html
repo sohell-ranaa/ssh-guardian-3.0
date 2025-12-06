@@ -25,13 +25,11 @@
             {% include 'pages/overview.html' %}
             {% include 'pages/dashboard_analytics.html' %}
             {% include 'pages/events_live.html' %}
-            {% include 'pages/events_analysis.html' %}
             {% include 'pages/events_timeline.html' %}
             {% include 'pages/agents_page.html' %}
             {% include 'pages/ip_blocks.html' %}
             {% include 'pages/ip_geo.html' %}
             {% include 'pages/ip_threat.html' %}
-            {% include 'pages/ip_stats.html' %}
             {% include 'pages/rules.html' %}
             {% include 'pages/settings_general.html' %}
             {% include 'pages/cache_settings.html' %}
@@ -186,13 +184,11 @@
                 'home': 'page-overview',
                 'dashboard': 'page-dashboard',
                 'events-live': 'page-events-live',
-                'events-analysis': 'page-events-analysis',
                 'events-timeline': 'page-events-timeline',
                 'agents': 'page-agents',
                 'ip-blocks': 'page-ip-blocks',
                 'ip-geo': 'page-ip-geo',
                 'ip-threat': 'page-ip-threat',
-                'ip-stats': 'page-ip-stats',
                 'rules': 'page-rules',
                 'settings-general': 'page-settings-general',
                 'cache-settings': 'page-cache-settings',
@@ -274,17 +270,9 @@
                     if (typeof loadBlockedIPsPage === 'function') {
                         loadBlockedIPsPage();
                     }
-                } else if (pageName === 'ip-stats') {
-                    if (typeof loadIPStatsPage === 'function') {
-                        loadIPStatsPage();
-                    }
                 } else if (pageName === 'rules') {
                     if (typeof loadBlockingRulesPage === 'function') {
                         loadBlockingRulesPage();
-                    }
-                } else if (pageName === 'events-analysis') {
-                    if (typeof loadEventsAnalysisPage === 'function') {
-                        loadEventsAnalysisPage();
                     }
                 } else if (pageName === 'events-timeline') {
                     if (typeof loadEventsTimelinePage === 'function') {
@@ -522,10 +510,8 @@
     <script src="/static/js/modules/threat_intel_page.js"></script>
     <script src="/static/js/modules/blocking_rules_page.js"></script>
     <script src="/static/js/modules/blocked_ips_page.js"></script>
-    <script src="/static/js/modules/ip_stats_page.js"></script>
     <script src="/static/js/modules/event_actions.js"></script>
     <script src="/static/js/modules/events_live_page.js"></script>
-    <script src="/static/js/modules/events_analysis_page.js"></script>
     <script src="/static/js/modules/events_timeline_page.js"></script>
     <script src="/static/js/modules/time_settings.js"></script>
     <script src="/static/js/modules/settings_general_page.js"></script>

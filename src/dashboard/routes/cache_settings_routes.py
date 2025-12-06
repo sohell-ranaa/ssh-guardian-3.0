@@ -26,6 +26,8 @@ _cache_warmer_running = False
 @cache_settings_routes.route('/list', methods=['GET'])
 def list_cache_settings():
     """Get all cache settings with current status"""
+    conn = None
+    cursor = None
     try:
         category = request.args.get('category', '').strip()
 
@@ -60,9 +62,6 @@ def list_cache_settings():
             total = (s.get('hit_count', 0) or 0) + (s.get('miss_count', 0) or 0)
             s['hit_rate'] = round((s.get('hit_count', 0) or 0) / total * 100, 1) if total > 0 else 0.0
 
-        cursor.close()
-        conn.close()
-
         return jsonify({
             'success': True,
             'data': settings
@@ -73,6 +72,11 @@ def list_cache_settings():
             'success': False,
             'error': str(e)
         }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @cache_settings_routes.route('/categories', methods=['GET'])
@@ -450,7 +454,7 @@ def get_cache_stats():
 
 @cache_settings_routes.route('/clear', methods=['POST'])
 def clear_cache():
-    """Clear all cache data"""
+    """Clear all cache data (both Redis and browser)"""
     try:
         client = get_redis_client()
         deleted = 0
@@ -472,10 +476,20 @@ def clear_cache():
             cursor.close()
             conn.close()
 
-        return jsonify({
+        # Create response with browser cache-clearing headers
+        response = jsonify({
             'success': True,
-            'message': f'Cleared {deleted} cache keys'
+            'message': f'Cleared {deleted} cache keys',
+            'browser_cache_cleared': True
         })
+
+        # Add headers to prevent caching of this response and clear browser cache
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['Clear-Site-Data'] = '"cache"'
+
+        return response
 
     except Exception as e:
         return jsonify({
@@ -660,3 +674,81 @@ def stop_auto_warmer():
         'success': True,
         'message': 'Auto cache warmer stopped'
     })
+
+
+@cache_settings_routes.route('/clear-browser-cache', methods=['POST'])
+def clear_browser_cache():
+    """
+    Clear both server-side Redis cache AND instruct browser to clear its cache
+    This is a universal endpoint to solve all browser caching issues
+
+    Returns special headers that force browser cache invalidation
+    """
+    try:
+        # Clear server-side Redis cache
+        client = get_redis_client()
+        redis_keys_deleted = 0
+
+        if client:
+            keys = client.keys('sshg:*')
+            if keys:
+                redis_keys_deleted = client.delete(*keys)
+
+            # Reset hit/miss counters in database
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE cache_settings
+                SET hit_count = 0, miss_count = 0,
+                    last_hit_at = NULL, last_refresh_at = NULL
+            """)
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+        # Create response with browser cache clearing instructions
+        response = jsonify({
+            'success': True,
+            'message': 'All caches cleared successfully',
+            'details': {
+                'redis_keys_deleted': redis_keys_deleted,
+                'browser_cache_cleared': True,
+                'action': 'Browser will reload fresh data on next request'
+            }
+        })
+
+        # Add aggressive cache-busting headers for this response
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['Clear-Site-Data'] = '"cache", "storage"'  # Modern browsers support this
+
+        return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@cache_settings_routes.route('/force-reload', methods=['GET'])
+def force_reload():
+    """
+    Endpoint that always returns fresh timestamp to force browser reload
+    Frontend can call this to verify cache is working
+    """
+    from datetime import datetime
+
+    response = jsonify({
+        'success': True,
+        'timestamp': datetime.now().isoformat(),
+        'message': 'This response should never be cached'
+    })
+
+    # Aggressive no-cache headers
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
+    return response

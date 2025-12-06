@@ -27,7 +27,7 @@ DB_CONFIG = {
 # Connection Pool Configuration
 POOL_CONFIG = {
     "pool_name": "ssh_guardian_v3_pool",
-    "pool_size": int(os.getenv("DB_POOL_SIZE", 30)),
+    "pool_size": int(os.getenv("DB_POOL_SIZE", 32)),  # Max allowed by mysql.connector is 32
     "pool_reset_session": True,
     "connect_timeout": int(os.getenv("DB_TIMEOUT", 10))
 }

@@ -2,8 +2,8 @@
 <div id="page-ip-geo" class="page-content" style="display: none;">
     <div class="page-header-with-cache">
         <div>
-            <h1 class="page-title">GeoIP Lookup</h1>
-            <p class="page-subtitle">Lookup geographic information and network details for IP addresses</p>
+            <h1 class="page-title">GeoIP Intelligence</h1>
+            <p class="page-subtitle">Geographic analysis for IP addresses</p>
         </div>
         <div class="page-header-actions">
             <div class="cache-indicator loading" data-cache-endpoint="geoip">
@@ -15,70 +15,97 @@
         </div>
     </div>
 
-    <!-- Statistics -->
-    <div class="stats-grid" id="geoip-stats">
-        <div class="stat-card">
-            <div class="stat-value" id="stat-total-geoips">-</div>
-            <div class="stat-label">Total IPs Tracked</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-proxy-count">-</div>
-            <div class="stat-label">Proxy/VPN</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-tor-count">-</div>
-            <div class="stat-label">Tor Nodes</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-datacenter-count">-</div>
-            <div class="stat-label">Datacenter IPs</div>
-        </div>
-    </div>
-
-    <!-- IP Lookup Search -->
-    <div class="card" style="margin-bottom: 20px;">
-        <div class="card-header">
-            <div class="card-title">🔍 IP Address Lookup</div>
-        </div>
-        <div style="padding: 20px;">
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <input
-                    type="text"
-                    id="geoip-search-input"
-                    placeholder="Enter IP address (e.g., 8.8.8.8)"
-                    style="flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 3px; font-size: 14px;"
-                >
-                <button
-                    onclick="lookupGeoIP()"
-                    style="padding: 10px 24px; background: var(--azure-blue); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 14px; font-weight: 600;"
-                >
-                    Lookup
-                </button>
+    <!-- Quick Stats - Compact -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        <div class="card" style="padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">🌍</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total IPs</div>
+                    <div id="stat-total-geoips" style="font-size: 22px; font-weight: 700;">-</div>
+                </div>
             </div>
-            <div id="geoip-lookup-result" style="margin-top: 20px;"></div>
+        </div>
+
+        <div class="card" style="padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">🗺️</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Countries</div>
+                    <div id="stat-country-count" style="font-size: 22px; font-weight: 700; color: #10b981;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">🔒</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">VPN/Proxy</div>
+                    <div id="stat-proxy-count" style="font-size: 22px; font-weight: 700; color: #f59e0b;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">🕵️</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Tor Nodes</div>
+                    <div id="stat-tor-count" style="font-size: 22px; font-weight: 700; color: #ef4444;">-</div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Top Countries -->
-    <div class="card" style="margin-bottom: 20px;">
-        <div class="card-header">
-            <div class="card-title">🌐 Top Countries</div>
+    <!-- Two Column Layout -->
+    <div style="display: grid; grid-template-columns: 400px 1fr; gap: 20px; margin-bottom: 20px;">
+        <!-- Left: IP Lookup -->
+        <div class="card">
+            <div style="padding: 16px; border-bottom: 1px solid var(--border);">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600;">🔍 IP Address Lookup</h3>
+            </div>
+            <div style="padding: 16px;">
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <input
+                        type="text"
+                        id="geoip-search-input"
+                        placeholder="Enter IP (e.g., 8.8.8.8)"
+                        style="flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface);"
+                        onkeypress="if(event.key === 'Enter') lookupGeoIP()"
+                    >
+                    <button
+                        onclick="lookupGeoIP()"
+                        style="padding: 10px 20px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap;"
+                    >
+                        Lookup
+                    </button>
+                </div>
+                <div id="geoip-lookup-result"></div>
+            </div>
         </div>
-        <div id="geoip-top-countries" style="padding: 20px;">
-            <div class="loading-message">Loading...</div>
+
+        <!-- Right: Top Countries -->
+        <div class="card">
+            <div style="padding: 16px; border-bottom: 1px solid var(--border);">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600;">🌐 Top Countries by IP Count</h3>
+            </div>
+            <div id="geoip-top-countries" style="padding: 16px;">
+                <div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">Loading...</div>
+            </div>
         </div>
     </div>
 
-    <!-- Recent Lookups -->
+    <!-- Recent Lookups Table - Full Width -->
     <div class="card">
-        <div class="card-header">
-            <div class="card-title">📋 Recent Lookups</div>
-            <button class="btn-refresh" onclick="loadGeoIPPage()" title="Refresh">
-                <span>🔄</span>
+        <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="margin: 0; font-size: 15px; font-weight: 600;">📋 Recent IP Lookups</h3>
+            <button onclick="loadGeoIPPage()" style="padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 12px;">
+                🔄 Refresh
             </button>
         </div>
-        <div id="geoip-recent-list" style="padding: 20px;">
-            <div class="loading-message">Loading...</div>
+        <div id="geoip-recent-list" style="padding: 16px;">
+            <div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">Loading...</div>
         </div>
     </div>
 </div>

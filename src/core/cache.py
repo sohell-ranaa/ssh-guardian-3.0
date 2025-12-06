@@ -339,3 +339,21 @@ def invalidate_on_new_event():
     """Call this when a new event is inserted"""
     cache = get_cache()
     cache.invalidate_events()
+
+
+def clear_all_caches():
+    """
+    Clear ALL Redis cache keys
+    This is a nuclear option for cache problems
+    """
+    cache = get_cache()
+    return cache.delete_pattern('')
+
+
+def get_cache_buster_timestamp():
+    """
+    Get a timestamp to use as cache buster in URLs
+    Usage: /api/endpoint?_cb=<timestamp>
+    """
+    from datetime import datetime
+    return int(datetime.now().timestamp() * 1000)  # milliseconds

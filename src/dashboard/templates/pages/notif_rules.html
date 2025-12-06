@@ -1,22 +1,67 @@
 <!-- SSH Guardian v3.0 - Notification Rules Page -->
 <div id="page-notif-rules" class="page-content" style="display: none;">
-    <div class="page-header">
+    <div class="page-header-with-cache">
         <div>
             <h1 class="page-title">Notification Rules</h1>
-            <p class="page-subtitle">Configure automated notification triggers</p>
+            <p class="page-subtitle">Configure automated notification triggers and alerts</p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button id="notif-rules-create-btn" class="btn btn-primary">
-                + Create Rule
+        <div class="page-header-actions">
+            <button id="notif-rules-create-btn" style="padding: 8px 18px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 16px;">+</span> Create Rule
             </button>
-            <button id="notif-rules-refresh-btn" class="btn btn-secondary">
-                Refresh
+            <button id="notif-rules-refresh-btn" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--text-primary);">
+                🔄 Refresh
             </button>
         </div>
     </div>
 
+    <!-- Quick Stats -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">📋</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total Rules</div>
+                    <div id="stat-total-rules" style="font-size: 20px; font-weight: 700;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">✅</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Active Rules</div>
+                    <div id="stat-active-rules" style="font-size: 20px; font-weight: 700; color: #10b981;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">🔔</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total Triggered</div>
+                    <div id="stat-total-triggered" style="font-size: 20px; font-weight: 700; color: #f59e0b;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">📱</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Channels Used</div>
+                    <div id="stat-channels-count" style="font-size: 20px; font-weight: 700; color: #8b5cf6;">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification Rules Container -->
-    <div id="notification-rules-container" style="margin-top: 24px;">
-        <!-- Rules will be loaded here -->
+    <div class="card">
+        <div id="notification-rules-container" style="padding: 20px;">
+            <div style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading notification rules...</div>
+        </div>
     </div>
 </div>

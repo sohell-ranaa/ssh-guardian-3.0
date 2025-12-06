@@ -84,6 +84,7 @@ def list_events():
         event_type = request.args.get('event_type')
         threat_level = request.args.get('threat_level')
         search = request.args.get('search', '').strip()
+        ip_filter = request.args.get('ip', '').strip()
         agent_id = request.args.get('agent_id')
         nocache = request.args.get('nocache', '0') == '1'
 
@@ -92,6 +93,7 @@ def list_events():
             'event_type': event_type,
             'threat_level': threat_level,
             'search': search if search else None,
+            'ip': ip_filter if ip_filter else None,
             'agent_id': agent_id
         }
         # Remove None values for cleaner cache key
@@ -121,8 +123,12 @@ def list_events():
             needs_threat_join = True
 
         if search:
-            where_clauses.append("(ae.source_ip_text LIKE %s OR ae.target_username LIKE %s)")
-            params.extend([f"%{search}%", f"%{search}%"])
+            where_clauses.append("(ae.target_username LIKE %s)")
+            params.append(f"%{search}%")
+
+        if ip_filter:
+            where_clauses.append("ae.source_ip_text LIKE %s")
+            params.append(f"%{ip_filter}%")
 
         if agent_id:
             where_clauses.append("ae.agent_id = %s")
@@ -479,6 +485,106 @@ def cache_statistics():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+
+@events_routes.route('/timeline', methods=['GET'])
+def get_timeline():
+    """
+    Get events timeline aggregated by time interval
+
+    Query Parameters:
+    - interval: Time aggregation (hour, day, week) - default: day
+    - days: Number of days to look back (1-90) - default: 7
+    - nocache: Set to 1 to bypass cache
+    """
+    try:
+        # Get query parameters
+        interval = request.args.get('interval', 'day')
+        days = min(int(request.args.get('days', 7)), 90)
+        nocache = request.args.get('nocache', '0') == '1'
+
+        # Validate interval
+        if interval not in ['hour', 'day', 'week']:
+            interval = 'day'
+
+        # Limit hourly to 7 days for performance
+        if interval == 'hour' and days > 7:
+            days = 7
+
+        # Try cache first
+        cache = get_cache()
+        cache_key_str = f"timeline_{interval}_{days}"
+
+        if not nocache and cache.enabled:
+            cached_data = cache.get(cache_key_str)
+            if cached_data:
+                cached_data['from_cache'] = True
+                return jsonify(cached_data), 200
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Build SQL based on interval
+            if interval == 'hour':
+                time_format = "DATE_FORMAT(timestamp, '%Y-%m-%d %H:00:00')"
+                group_by = time_format
+            elif interval == 'week':
+                time_format = "YEARWEEK(timestamp, 1)"
+                group_by = time_format
+            else:  # day
+                time_format = "DATE(timestamp)"
+                group_by = time_format
+
+            # Query timeline data
+            query = f"""
+                SELECT
+                    {time_format} as time_period,
+                    COUNT(*) as total_events,
+                    SUM(CASE WHEN event_type = 'failed' THEN 1 ELSE 0 END) as failed,
+                    SUM(CASE WHEN event_type = 'successful' THEN 1 ELSE 0 END) as successful,
+                    SUM(CASE WHEN event_type = 'invalid' THEN 1 ELSE 0 END) as invalid,
+                    SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies,
+                    AVG(COALESCE(ml_risk_score, 0)) as avg_risk_score
+                FROM auth_events
+                WHERE timestamp >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                GROUP BY {group_by}
+                ORDER BY time_period DESC
+                LIMIT 200
+            """
+
+            cursor.execute(query, (days,))
+            timeline = cursor.fetchall()
+
+            # Format response
+            response_data = {
+                'success': True,
+                'data': {
+                    'timeline': timeline,
+                    'interval': interval,
+                    'days': days
+                },
+                'from_cache': False
+            }
+
+            # Cache the result
+            if cache.enabled:
+                cache.set(cache_key_str, response_data, CACHE_TTL.get('events_timeline', 300))
+
+            return jsonify(response_data), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Error fetching timeline: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch timeline data'
         }), 500
 
 
