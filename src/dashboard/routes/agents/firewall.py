@@ -508,6 +508,82 @@ def create_firewall_command(agent_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@agent_routes.route('/agents/<int:agent_id>/firewall/request-sync', methods=['POST'])
+def request_firewall_sync(agent_id):
+    """
+    Request the agent to sync its firewall rules.
+    This creates a special 'sync_now' command that the agent will process.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Check if agent exists and is online
+        cursor.execute("""
+            SELECT id, agent_id, status, is_approved
+            FROM agents WHERE id = %s
+        """, (agent_id,))
+        agent = cursor.fetchone()
+
+        if not agent:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Agent not found'}), 404
+
+        if agent['status'] != 'online':
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Agent is offline. It will sync when it comes back online.'
+            }), 400
+
+        if not agent['is_approved']:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Agent is not approved. Please approve the agent first.'
+            }), 403
+
+        # Create a sync_now command
+        command_uuid = str(uuid.uuid4())
+
+        cursor.execute("""
+            INSERT INTO agent_firewall_commands
+                (agent_id, command_uuid, action, params_json, status, created_at)
+            VALUES (%s, %s, 'sync_now', '{}', 'pending', NOW())
+        """, (agent_id, command_uuid))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        # Invalidate cache
+        cache = get_cache()
+        cache.delete_pattern(f'firewall:{agent_id}')
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='firewall_sync_requested',
+            resource_type='firewall',
+            resource_id=str(agent_id),
+            details={'command_id': command_uuid},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Sync request sent to agent',
+            'command_id': command_uuid
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @agent_routes.route('/agents/<int:agent_id>/firewall/rules', methods=['GET'])
 def get_firewall_rules(agent_id):
     """Get firewall rules for an agent with filtering options"""

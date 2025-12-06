@@ -204,23 +204,29 @@ function isLocalhost(ip) {
 }
 
 async function loadFirewallData(agentId) {
+    console.log('[Firewall] Loading data for agent:', agentId);
     showFirewallContent();
     showLoadingStates();
 
     try {
         const response = await fetch(`/api/agents/${agentId}/firewall`);
+        console.log('[Firewall] Response status:', response.status);
         const data = await response.json();
+        console.log('[Firewall] Data received:', data.success, 'has_data:', data.has_data, 'rules_flat:', data.rules_flat?.length);
 
         if (data.success) {
             firewallData = data;
 
             if (data.has_data) {
+                console.log('[Firewall] Rendering data...');
                 updateFirewallStats(data.state);
                 updateChainPolicies(data.state);
+                console.log('[Firewall] Rendering rules table with', data.rules_flat?.length, 'rules');
                 renderRulesTable(data.rules_flat || []);
                 renderPortForwards(data.port_forwards || []);
                 renderInterfaces(data.interfaces || []);
                 renderCommandHistory(data.recent_commands || []);
+                console.log('[Firewall] Render complete');
 
                 // Enable action buttons (except for localhost agents)
                 document.getElementById('syncFirewallNow').disabled = false;
@@ -232,13 +238,15 @@ async function loadFirewallData(agentId) {
                 // Update cache indicator
                 updateCacheIndicator('firewall', data.from_cache);
             } else {
+                console.log('[Firewall] No data available');
                 showNoFirewallData();
             }
         } else {
+            console.log('[Firewall] Error:', data.error);
             showFirewallError(data.error);
         }
     } catch (error) {
-        console.error('Error loading firewall data:', error);
+        console.error('[Firewall] Error loading firewall data:', error);
         showFirewallError(error.message);
 
         // Set cache indicator to error state
@@ -472,52 +480,90 @@ function switchFirewallTab(tabName) {
 // ============================================================================
 
 function renderRulesTable(rules) {
-    document.getElementById('rulesLoading').style.display = 'none';
-    document.getElementById('rulesTableContainer').style.display = 'block';
+    const loadingEl = document.getElementById('rulesLoading');
+    const containerEl = document.getElementById('rulesTableContainer');
+    const gridEl = document.getElementById('rulesGrid');
 
-    const tbody = document.getElementById('rulesTableBody');
+    console.log('[Firewall] renderRulesTable - Elements found:', {
+        loading: !!loadingEl,
+        container: !!containerEl,
+        grid: !!gridEl
+    });
+
+    if (!loadingEl || !containerEl || !gridEl) {
+        console.error('[Firewall] Missing DOM elements!');
+        return;
+    }
+
+    // Hide loading, show container
+    loadingEl.style.display = 'none';
+    containerEl.style.display = 'block';
+
+    console.log('[Firewall] After style update - loading display:', loadingEl.style.display, 'container display:', containerEl.style.display);
 
     if (!rules || rules.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="10" style="padding: 40px; text-align: center; color: var(--text-secondary);">
-                    No rules found
-                </td>
-            </tr>
+        gridEl.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                No rules found
+            </div>
         `;
         return;
     }
 
-    tbody.innerHTML = rules.map(rule => `
-        <tr style="border-bottom: 1px solid var(--border);" data-table="${rule.table_name}" data-chain="${rule.chain}" data-target="${rule.target}">
-            <td style="padding: 10px 12px;">
-                <span style="padding: 2px 8px; background: var(--background); border-radius: 2px; font-size: 11px;">${rule.table_name}</span>
-            </td>
-            <td style="padding: 10px 12px; font-weight: 500;">${rule.chain}</td>
-            <td style="padding: 10px 12px;">${rule.rule_num}</td>
-            <td style="padding: 10px 12px;">
-                <span style="padding: 2px 8px; border-radius: 2px; font-size: 12px; ${getTargetStyle(rule.target)}">${rule.target}</span>
-            </td>
-            <td style="padding: 10px 12px;">${rule.protocol || 'all'}</td>
-            <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${rule.source_ip || '0.0.0.0/0'}</td>
-            <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${rule.destination_ip || '0.0.0.0/0'}</td>
-            <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${rule.ports || '-'}</td>
-            <td style="padding: 10px 12px; font-size: 12px;">${formatPacketCount(rule.packets_count)}</td>
-            <td style="padding: 10px 12px; text-align: center;">
-                ${!isLocalhostAgent ? `
-                    <button onclick="deleteRule('${rule.table_name}', '${rule.chain}', ${rule.rule_num})" style="
-                        padding: 4px 8px;
-                        background: rgba(209, 52, 56, 0.1);
-                        color: #D13438;
-                        border: none;
-                        border-radius: 2px;
-                        cursor: pointer;
-                        font-size: 11px;
-                    " title="Delete rule">Delete</button>
-                ` : '-'}
-            </td>
-        </tr>
-    `).join('');
+    // Generate the entire table HTML
+    const tableHTML = `
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Table</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Chain</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">#</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Target</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Protocol</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Source</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Destination</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Ports</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600;">Packets</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 600;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rules.map(rule => `
+                    <tr style="border-bottom: 1px solid var(--border);" data-table="${rule.table_name}" data-chain="${rule.chain}" data-target="${rule.target}">
+                        <td style="padding: 10px 12px;">
+                            <span style="padding: 2px 8px; background: var(--background); border-radius: 2px; font-size: 11px;">${rule.table_name}</span>
+                        </td>
+                        <td style="padding: 10px 12px; font-weight: 500;">${rule.chain}</td>
+                        <td style="padding: 10px 12px;">${rule.rule_num}</td>
+                        <td style="padding: 10px 12px;">
+                            <span style="padding: 2px 8px; border-radius: 2px; font-size: 12px; ${getTargetStyle(rule.target)}">${rule.target}</span>
+                        </td>
+                        <td style="padding: 10px 12px;">${rule.protocol || 'all'}</td>
+                        <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${rule.source_ip || '0.0.0.0/0'}</td>
+                        <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${rule.destination_ip || '0.0.0.0/0'}</td>
+                        <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${rule.ports || '-'}</td>
+                        <td style="padding: 10px 12px; font-size: 12px;">${formatPacketCount(rule.packets_count)}</td>
+                        <td style="padding: 10px 12px; text-align: center;">
+                            ${!isLocalhostAgent ? `
+                                <button onclick="deleteRule('${rule.table_name}', '${rule.chain}', ${rule.rule_num})" style="
+                                    padding: 4px 8px;
+                                    background: rgba(209, 52, 56, 0.1);
+                                    color: #D13438;
+                                    border: none;
+                                    border-radius: 2px;
+                                    cursor: pointer;
+                                    font-size: 11px;
+                                " title="Delete rule">Delete</button>
+                            ` : '-'}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+
+    gridEl.innerHTML = tableHTML;
+    console.log('[Firewall] Table rendered with', rules.length, 'rows');
 }
 
 function getTargetStyle(target) {
@@ -551,7 +597,7 @@ function applyRulesFilter() {
     const filterChain = document.getElementById('filterChain').value;
     const filterTarget = document.getElementById('filterTarget').value;
 
-    const rows = document.querySelectorAll('#rulesTableBody tr[data-table]');
+    const rows = document.querySelectorAll('#rulesGrid tr[data-table]');
 
     rows.forEach(row => {
         let show = true;

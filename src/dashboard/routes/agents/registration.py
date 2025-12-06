@@ -17,6 +17,27 @@ from connection import get_connection
 from . import agent_routes
 
 
+def get_real_ip():
+    """Get real client IP, handling proxies and forwarded headers"""
+    # Check X-Forwarded-For header (set by proxies)
+    if request.headers.get('X-Forwarded-For'):
+        # X-Forwarded-For can contain multiple IPs, first one is the client
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+
+    # Check X-Real-IP header (set by Nginx)
+    if request.headers.get('X-Real-IP'):
+        return request.headers.get('X-Real-IP').strip()
+
+    # Check system_info for IP addresses sent by agent
+    if request.json and request.json.get('system_info', {}).get('ip_addresses'):
+        ips = request.json['system_info']['ip_addresses']
+        if ips and len(ips) > 0:
+            return ips[0]
+
+    # Fall back to remote_addr
+    return request.remote_addr
+
+
 @agent_routes.route('/agents/register', methods=['POST'])
 def register_agent():
     """Register a new agent or update existing agent"""
@@ -35,6 +56,9 @@ def register_agent():
                 'error': 'agent_id and hostname are required'
             }), 400
 
+        # Get real client IP
+        ip_address = get_real_ip()
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -49,19 +73,20 @@ def register_agent():
             existing_agent = cursor.fetchone()
 
             if existing_agent:
-                # Update existing agent
+                # Update existing agent - also update IP address
                 cursor.execute("""
                     UPDATE agents
                     SET hostname = %s,
                         system_info = %s,
                         version = %s,
                         heartbeat_interval_sec = %s,
+                        ip_address_primary = %s,
                         last_heartbeat = NOW(),
                         status = 'online',
                         updated_at = NOW()
                     WHERE agent_id = %s
                 """, (hostname, json.dumps(system_info), version,
-                     heartbeat_interval, agent_id))
+                     heartbeat_interval, ip_address, agent_id))
 
                 conn.commit()
 
@@ -77,9 +102,6 @@ def register_agent():
                 # Create new agent
                 agent_uuid = str(uuid.uuid4())
                 api_key = str(uuid.uuid4())  # Generate API key
-
-                # Get IP address from request
-                ip_address = request.remote_addr
 
                 cursor.execute("""
                     INSERT INTO agents (

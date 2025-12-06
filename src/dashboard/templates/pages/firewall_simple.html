@@ -1,0 +1,513 @@
+<!-- SSH Guardian v3.0 - Simple Firewall Management -->
+<div id="page-firewall" class="page-content" style="display: none;">
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">Firewall Management</h1>
+            <p class="page-subtitle">Manage network access rules on your servers</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="firewall">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <button class="cache-refresh-btn" onclick="loadFirewallPage()" title="Refresh">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Selector -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+            <div style="flex: 1; min-width: 250px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Select Server</label>
+                <select id="firewallAgentSelector" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                    <option value="">-- Select a server --</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <button id="syncNowBtn" onclick="requestFirewallSync()" style="display: none; padding: 10px 20px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    🔄 Sync Now
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- No Agent Selected -->
+    <div id="firewallNoAgent" class="card" style="text-align: center; padding: 60px 20px;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🛡️</div>
+        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Select a Server</h3>
+        <p style="color: var(--text-secondary); font-size: 14px;">Choose a server from the dropdown to manage its firewall rules.</p>
+    </div>
+
+    <!-- Firewall Content -->
+    <div id="firewallContent" style="display: none;">
+
+        <!-- Agent Health & Status -->
+        <div class="card" style="margin-bottom: 20px;" id="agentHealthCard">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+                <div style="flex: 1; min-width: 300px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <div id="agentHealthIndicator" style="width: 12px; height: 12px; border-radius: 50%; background: #ccc;"></div>
+                        <h3 id="agentHealthHostname" style="font-size: 18px; font-weight: 600; margin: 0;">-</h3>
+                        <span id="agentHealthStatus" class="rule-badge" style="background: var(--surface);">Unknown</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; font-size: 13px;">
+                        <div>
+                            <span style="color: var(--text-secondary);">IP Address:</span>
+                            <span id="agentHealthIP" style="font-family: monospace; margin-left: 8px;">-</span>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Last Heartbeat:</span>
+                            <span id="agentHealthHeartbeat" style="margin-left: 8px;">-</span>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Agent Version:</span>
+                            <span id="agentHealthVersion" style="margin-left: 8px;">-</span>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Uptime:</span>
+                            <span id="agentHealthUptime" style="margin-left: 8px;">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                    <div id="agentApprovalStatus" style="display: none; padding: 8px 16px; background: rgba(255, 185, 0, 0.1); border: 1px solid rgba(255, 185, 0, 0.3); border-radius: 4px; color: #CC9400; font-size: 13px;">
+                        ⚠️ Agent not approved - <a href="#" onclick="approveAgentFromFirewall()" style="color: #CC9400; font-weight: 600;">Approve Now</a>
+                    </div>
+                    <div id="noFirewallDataWarning" style="display: none; padding: 8px 16px; background: rgba(0, 120, 212, 0.1); border: 1px solid rgba(0, 120, 212, 0.3); border-radius: 4px; color: #0078D4; font-size: 13px;">
+                        📋 No firewall data yet. Click "Sync Now" or wait for agent to sync.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-fw-status">-</div>
+                <div class="stat-label">Firewall Status</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-fw-allowed">-</div>
+                <div class="stat-label">Allowed Rules</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-fw-blocked">-</div>
+                <div class="stat-label">Blocked Rules</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-fw-sync">-</div>
+                <div class="stat-label">Last Sync</div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-title" style="margin-bottom: 16px;">Quick Actions (UFW)</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                <button onclick="quickAction('allow-ssh')" class="quick-action-btn" style="padding: 16px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">🔐</div>
+                    <div style="font-weight: 600; font-size: 14px;">Allow SSH</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Port 22</div>
+                </button>
+                <button onclick="quickAction('allow-http')" class="quick-action-btn" style="padding: 16px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">🌐</div>
+                    <div style="font-weight: 600; font-size: 14px;">Allow HTTP/HTTPS</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Ports 80, 443</div>
+                </button>
+                <button onclick="quickAction('allow-mysql')" class="quick-action-btn" style="padding: 16px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">🗄️</div>
+                    <div style="font-weight: 600; font-size: 14px;">Allow MySQL</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Port 3306</div>
+                </button>
+                <button onclick="quickAction('limit-ssh')" class="quick-action-btn" style="padding: 16px; background: rgba(0, 120, 212, 0.05); border: 1px solid rgba(0, 120, 212, 0.2); border-radius: 4px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">⏱️</div>
+                    <div style="font-weight: 600; font-size: 14px; color: #0078D4;">Rate Limit SSH</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Brute force protection</div>
+                </button>
+                <button onclick="quickAction('enable')" class="quick-action-btn" style="padding: 16px; background: rgba(16, 124, 16, 0.05); border: 1px solid rgba(16, 124, 16, 0.2); border-radius: 4px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">🔥</div>
+                    <div style="font-weight: 600; font-size: 14px; color: #107C10;">Enable UFW</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Activate firewall</div>
+                </button>
+                <button onclick="quickAction('disable')" class="quick-action-btn" style="padding: 16px; background: rgba(209, 52, 56, 0.05); border: 1px solid rgba(209, 52, 56, 0.2); border-radius: 4px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">⚠️</div>
+                    <div style="font-weight: 600; font-size: 14px; color: #D13438;">Disable UFW</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Warning: No protection</div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Add New Rule - Simple Form -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-title" style="margin-bottom: 16px;">Add New Rule</div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; align-items: end;">
+                <!-- Action -->
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">ACTION</label>
+                    <select id="simpleRuleAction" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                        <option value="ACCEPT">✅ Allow</option>
+                        <option value="DROP">🚫 Block</option>
+                    </select>
+                </div>
+
+                <!-- Direction -->
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">DIRECTION</label>
+                    <select id="simpleRuleDirection" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                        <option value="INPUT">Incoming (to this server)</option>
+                        <option value="OUTPUT">Outgoing (from this server)</option>
+                    </select>
+                </div>
+
+                <!-- Protocol -->
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">PROTOCOL</label>
+                    <select id="simpleRuleProtocol" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);">
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="all">All Protocols</option>
+                    </select>
+                </div>
+
+                <!-- Port -->
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">PORT</label>
+                    <select id="simpleRulePort" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);" onchange="toggleCustomPort(this)">
+                        <option value="any">Any Port</option>
+                        <option value="22">SSH (22)</option>
+                        <option value="80">HTTP (80)</option>
+                        <option value="443">HTTPS (443)</option>
+                        <option value="3306">MySQL (3306)</option>
+                        <option value="5432">PostgreSQL (5432)</option>
+                        <option value="6379">Redis (6379)</option>
+                        <option value="27017">MongoDB (27017)</option>
+                        <option value="custom">Custom Port...</option>
+                    </select>
+                </div>
+
+                <!-- Custom Port (hidden by default) -->
+                <div id="customPortDiv" style="display: none;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">CUSTOM PORT</label>
+                    <input type="text" id="simpleRuleCustomPort" placeholder="e.g., 8080 or 3000-3100" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px;">
+                </div>
+
+                <!-- Source IP -->
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">FROM IP/NETWORK</label>
+                    <select id="simpleRuleSource" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--surface);" onchange="toggleCustomSource(this)">
+                        <option value="any">Anywhere (0.0.0.0/0)</option>
+                        <option value="local">Local Network Only</option>
+                        <option value="custom">Specific IP/Network...</option>
+                    </select>
+                </div>
+
+                <!-- Custom Source (hidden by default) -->
+                <div id="customSourceDiv" style="display: none;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary);">IP ADDRESS OR CIDR</label>
+                    <input type="text" id="simpleRuleCustomSource" placeholder="e.g., 192.168.1.100 or 10.0.0.0/8" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px;">
+                </div>
+
+                <!-- Add Button -->
+                <div>
+                    <button onclick="addSimpleRule()" style="width: 100%; padding: 10px 20px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        ➕ Add Rule
+                    </button>
+                </div>
+            </div>
+
+            <div id="addRuleMessage" style="display: none; margin-top: 16px; padding: 12px; border-radius: 4px; font-size: 13px;"></div>
+        </div>
+
+        <!-- Current Rules - Simple View -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div class="card-title">Current Rules</div>
+                <div style="display: flex; gap: 8px;">
+                    <select id="filterRuleType" onchange="filterSimpleRules()" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;">
+                        <option value="all">All Rules</option>
+                        <option value="allow">Allowed Only</option>
+                        <option value="block">Blocked Only</option>
+                    </select>
+                    <button onclick="toggleAdvancedView()" style="padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: 13px; cursor: pointer;">
+                        🔧 Advanced View
+                    </button>
+                </div>
+            </div>
+
+            <div id="simpleRulesLoading" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                Loading rules...
+            </div>
+
+            <div id="simpleRulesContainer" style="display: none;">
+                <div id="simpleRulesList">
+                    <!-- Rules will be populated here -->
+                </div>
+            </div>
+
+            <div id="noRulesMessage" style="display: none; text-align: center; padding: 40px; color: var(--text-secondary);">
+                <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
+                <p>No custom firewall rules configured</p>
+            </div>
+        </div>
+
+        <!-- Advanced View (Hidden by default) -->
+        <div id="advancedViewSection" class="card" style="display: none; margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div class="card-title">Advanced View (UFW Rules)</div>
+                <button onclick="toggleAdvancedView()" style="padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: 13px; cursor: pointer;">
+                    ✕ Close
+                </button>
+            </div>
+            <div id="advancedRulesGrid" style="overflow-x: auto;">
+                <!-- Advanced rules table will be populated here -->
+            </div>
+        </div>
+
+        <!-- Recent Activity Logs -->
+        <div class="card" style="margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div class="card-title">Recent Activity</div>
+                <select id="logTypeFilter" onchange="filterRecentLogs()" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;">
+                    <option value="all">All Events</option>
+                    <option value="failed">Failed Logins</option>
+                    <option value="success">Successful Logins</option>
+                    <option value="blocked">Blocked IPs</option>
+                </select>
+            </div>
+            <div id="recentLogsLoading" style="text-align: center; padding: 30px; color: var(--text-secondary);">
+                Loading recent activity...
+            </div>
+            <div id="recentLogsContainer" style="display: none;">
+                <div id="recentLogsList" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Logs will be populated here -->
+                </div>
+            </div>
+            <div id="noLogsMessage" style="display: none; text-align: center; padding: 30px; color: var(--text-secondary);">
+                <div style="font-size: 24px; margin-bottom: 8px;">📝</div>
+                <p>No recent activity for this server</p>
+            </div>
+        </div>
+
+        <!-- Listening Ports -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-title" style="margin-bottom: 16px;">Listening Ports</div>
+            <div id="interfacesGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+                <!-- Listening ports will be populated here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .quick-action-btn:hover {
+        border-color: var(--azure-blue) !important;
+        background: rgba(0, 120, 212, 0.05) !important;
+    }
+
+    .simple-rule-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: var(--background);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        margin-bottom: 8px;
+        transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+        cursor: grab;
+    }
+
+    .simple-rule-card:hover {
+        border-color: var(--azure-blue);
+    }
+
+    .simple-rule-card.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .simple-rule-card.drag-over {
+        border-color: #107C10;
+        border-style: dashed;
+        background: rgba(16, 124, 16, 0.05);
+    }
+
+    .drag-handle {
+        cursor: grab;
+        color: var(--text-secondary);
+        font-size: 18px;
+        padding: 4px;
+        user-select: none;
+    }
+
+    .drag-handle:hover {
+        color: var(--azure-blue);
+    }
+
+    .simple-rule-card.dragging .drag-handle {
+        cursor: grabbing;
+    }
+
+    .rule-icon {
+        font-size: 24px;
+        width: 40px;
+        text-align: center;
+    }
+
+    .rule-details {
+        flex: 1;
+    }
+
+    .rule-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .rule-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .rule-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .rule-badge.allow {
+        background: rgba(16, 124, 16, 0.1);
+        color: #107C10;
+    }
+
+    .rule-badge.block {
+        background: rgba(209, 52, 56, 0.1);
+        color: #D13438;
+    }
+
+    .rule-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .rule-delete-btn {
+        padding: 6px 12px;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 12px;
+    }
+
+    .rule-delete-btn:hover {
+        background: rgba(209, 52, 56, 0.1);
+        border-color: #D13438;
+        color: #D13438;
+    }
+
+    /* Log entry styles */
+    .log-entry {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+    }
+
+    .log-entry:last-child {
+        border-bottom: none;
+    }
+
+    .log-entry:hover {
+        background: var(--background);
+    }
+
+    .log-icon {
+        font-size: 16px;
+        width: 24px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .log-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .log-main {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .log-ip {
+        font-family: monospace;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .log-user {
+        color: var(--azure-blue);
+    }
+
+    .log-action {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .log-action.failed {
+        background: rgba(209, 52, 56, 0.1);
+        color: #D13438;
+    }
+
+    .log-action.success {
+        background: rgba(16, 124, 16, 0.1);
+        color: #107C10;
+    }
+
+    .log-action.blocked {
+        background: rgba(255, 185, 0, 0.1);
+        color: #CC9400;
+    }
+
+    .log-meta {
+        margin-top: 4px;
+        color: var(--text-secondary);
+        font-size: 12px;
+    }
+
+    .log-location {
+        padding: 2px 6px;
+        background: rgba(0, 120, 212, 0.1);
+        color: #0078D4;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .log-time {
+        color: var(--text-secondary);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    /* Sync button animation */
+    .sync-spinning {
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+</style>

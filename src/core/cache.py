@@ -27,8 +27,8 @@ REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 # Minimum 15 minutes (900s) for all data to reduce DB load
 # These are fallback defaults; actual TTLs are loaded from database
 CACHE_TTL = {
-    # Dynamic data - minimum 15 minutes
-    'events_list': 900,          # 15 minutes - events list
+    # Dynamic data - reduced for live events page
+    'events_list': 60,           # 1 minute - events list (for fresher live data)
     'events_count': 900,         # 15 minutes - total count
     'dashboard_summary': 900,    # 15 minutes - dashboard home stats
     'events_analysis': 900,      # 15 minutes - events analysis

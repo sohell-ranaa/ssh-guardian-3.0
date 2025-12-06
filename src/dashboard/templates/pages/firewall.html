@@ -220,26 +220,8 @@
                 Loading firewall rules...
             </div>
             <div id="rulesTableContainer" style="display: none;">
-                <div class="table-wrapper">
-                    <table id="rulesTable" style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                        <thead>
-                            <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Table</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Chain</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">#</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Target</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Protocol</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Source</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Destination</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Ports</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600;">Packets</th>
-                                <th style="padding: 12px; text-align: center; font-weight: 600;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rulesTableBody">
-                            <!-- Rules will be inserted here -->
-                        </tbody>
-                    </table>
+                <div id="rulesGrid" style="overflow-x: auto;">
+                    <!-- Rules table will be inserted here by JavaScript -->
                 </div>
             </div>
             <div id="rulesError" style="display: none; text-align: center; padding: 40px; color: #D13438;">

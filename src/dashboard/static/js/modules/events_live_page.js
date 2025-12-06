@@ -58,7 +58,7 @@
         stopAutoRefresh(); // Clear any existing interval
         autoRefreshInterval = setInterval(() => {
             if (document.getElementById('page-events-live')?.style.display !== 'none') {
-                loadEvents();
+                loadEvents(true);  // Force refresh to get live data
             }
         }, AUTO_REFRESH_DELAY);
         autoRefreshEnabled = true;
@@ -108,8 +108,9 @@
 
     /**
      * Load events from API
+     * @param {boolean} forceRefresh - If true, bypass cache to get fresh data
      */
-    async function loadEvents() {
+    async function loadEvents(forceRefresh = false) {
         const searchInput = document.getElementById('eventSearch');
         const typeFilter = document.getElementById('eventTypeFilter');
         const threatFilter = document.getElementById('threatLevelFilter');
@@ -124,6 +125,11 @@
             limit: pageSize,
             offset: currentPage * pageSize
         });
+
+        // Add nocache param to bypass server cache if force refresh
+        if (forceRefresh) {
+            params.append('nocache', '1');
+        }
 
         if (search) params.append('search', search);
         if (eventType) params.append('event_type', eventType);
@@ -142,15 +148,20 @@
         try {
             // Use fetchWithCache if available to track cache status
             let data;
+            const url = `/api/dashboard/events/list?${params}`;
+            console.log('[LiveEvents] Fetching:', url);
+
             if (typeof fetchWithCache === 'function') {
-                data = await fetchWithCache(`/api/dashboard/events/list?${params}`, 'events');
+                data = await fetchWithCache(url, 'events');
             } else {
-                const response = await fetch(`/api/dashboard/events/list?${params}`);
+                const response = await fetch(url);
                 data = await response.json();
             }
 
-            if (!data.success) {
-                throw new Error('Failed to load events');
+            console.log('[LiveEvents] Response:', data ? `success=${data.success}, events=${data.events?.length}` : 'null');
+
+            if (!data || !data.success) {
+                throw new Error(data?.error || 'Failed to load events');
             }
 
             const tbody = document.getElementById('eventsTableBody');
@@ -253,8 +264,12 @@
             if (tableEl) tableEl.style.display = 'block';
 
         } catch (error) {
+            console.error('[LiveEvents] Error loading events:', error);
             if (loadingEl) loadingEl.style.display = 'none';
-            if (errorEl) errorEl.style.display = 'block';
+            if (errorEl) {
+                errorEl.textContent = `Error loading events: ${error.message}`;
+                errorEl.style.display = 'block';
+            }
         }
     }
 
@@ -498,12 +513,12 @@
      * Setup event listeners
      */
     function setupEventsEventListeners() {
-        // Refresh button
+        // Refresh button - force cache bypass to get fresh data
         const refreshBtn = document.getElementById('refreshEvents');
         if (refreshBtn) {
             refreshBtn.onclick = () => {
                 currentPage = 0;
-                loadEvents();
+                loadEvents(true);  // Force refresh, bypass cache
             };
         }
 

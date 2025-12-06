@@ -29,7 +29,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
-# Import firewall collector
+# Import UFW manager (primary) or firewall collector (fallback)
+try:
+    from ufw_manager import UFWManager
+    UFW_AVAILABLE = True
+except ImportError:
+    UFW_AVAILABLE = False
+
 try:
     from firewall_collector import FirewallCollector, FirewallManager
     FIREWALL_AVAILABLE = True
@@ -243,9 +249,25 @@ class GuardianAPIClient:
             url = f"{self.config.server_url}/api/agents/register"
             response = self.session.post(url, json=payload, timeout=30)
 
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 logging.info(f"✅ Agent registered successfully: {data.get('message')}")
+
+                # Update API key with the one returned by server
+                if data.get('api_key'):
+                    old_key = self.config.api_key
+                    self.config.api_key = data['api_key']
+                    self.session.headers['X-API-Key'] = self.config.api_key
+
+                    # Save updated config to file
+                    config_file = os.getenv('SSH_GUARDIAN_CONFIG', '/etc/ssh-guardian/agent.json')
+                    try:
+                        self.config.save_to_file(config_file)
+                        if old_key != self.config.api_key:
+                            logging.info(f"✅ API key updated and saved to {config_file}")
+                    except Exception as e:
+                        logging.warning(f"Could not save updated config: {e}")
+
                 return True
             else:
                 logging.error(f"❌ Agent registration failed: {response.status_code} - {response.text}")
@@ -401,6 +423,53 @@ class GuardianAPIClient:
             logging.error(f"❌ Extended data sync error: {e}")
             return False
 
+    # =========================================================================
+    # UFW API METHODS
+    # =========================================================================
+
+    def submit_ufw_rules(self, ufw_data: Dict) -> bool:
+        """Submit UFW rules to central server"""
+        try:
+            payload = {
+                'agent_id': self.config.agent_id,
+                'hostname': self.config.hostname,
+                'ufw_data': ufw_data,
+                'submitted_at': datetime.now().isoformat()
+            }
+
+            url = f"{self.config.server_url}/api/agents/ufw/sync"
+            response = self.session.post(url, json=payload, timeout=60)
+
+            if response.status_code == 200:
+                data = response.json()
+                logging.info(f"🔥 UFW rules synced: {data.get('rules_count', 0)} rules, status: {data.get('ufw_status', 'unknown')}")
+                return True
+            else:
+                logging.error(f"❌ UFW sync failed: {response.status_code} - {response.text}")
+                return False
+
+        except Exception as e:
+            logging.error(f"❌ UFW sync error: {e}")
+            return False
+
+    def get_pending_ufw_commands(self) -> List[Dict]:
+        """Get pending UFW commands from central server"""
+        try:
+            url = f"{self.config.server_url}/api/agents/ufw/commands"
+            params = {'agent_id': self.config.agent_id}
+            response = self.session.get(url, params=params, timeout=30)
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('commands', [])
+            else:
+                logging.warning(f"Failed to get UFW commands: {response.status_code}")
+                return []
+
+        except Exception as e:
+            logging.error(f"Error getting UFW commands: {e}")
+            return []
+
     def _get_system_info(self) -> Dict:
         """Collect system information"""
         return {
@@ -489,11 +558,19 @@ class SSHGuardianAgent:
         self.running = False
 
         # Initialize firewall components if available and enabled
+        # Prefer UFW over iptables
+        self.ufw_manager = None
         self.firewall_collector = None
         self.firewall_manager = None
-        if FIREWALL_AVAILABLE and config.firewall_enabled:
-            self.firewall_collector = FirewallCollector()
-            self.firewall_manager = FirewallManager()
+
+        if config.firewall_enabled:
+            if UFW_AVAILABLE:
+                self.ufw_manager = UFWManager()
+                logging.info("Using UFW for firewall management")
+            elif FIREWALL_AVAILABLE:
+                self.firewall_collector = FirewallCollector()
+                self.firewall_manager = FirewallManager()
+                logging.info("Using iptables for firewall management (UFW not available)")
 
     def setup_logging(self):
         """Setup logging configuration"""
@@ -524,7 +601,11 @@ class SSHGuardianAgent:
         logging.info(f"Check Interval: {self.config.check_interval}s")
         logging.info(f"Batch Size: {self.config.batch_size}")
         logging.info(f"Firewall Enabled: {self.config.firewall_enabled}")
-        if self.firewall_collector:
+        if self.ufw_manager:
+            logging.info(f"Firewall Type: UFW")
+            logging.info(f"Firewall Sync Interval: {self.config.firewall_sync_interval}s")
+        elif self.firewall_collector:
+            logging.info(f"Firewall Type: iptables")
             logging.info(f"Firewall Sync Interval: {self.config.firewall_sync_interval}s")
         logging.info("="*70)
 
@@ -565,8 +646,8 @@ class SSHGuardianAgent:
                         last_heartbeat_time = current_time
                         self.state.save()
 
-                # Firewall synchronization
-                if self.firewall_collector and self.config.firewall_enabled:
+                # Firewall synchronization (UFW or iptables)
+                if self.config.firewall_enabled and (self.ufw_manager or self.firewall_collector):
                     if current_time - last_firewall_sync_time >= self.config.firewall_sync_interval:
                         self._sync_firewall()
                         last_firewall_sync_time = current_time
@@ -586,20 +667,28 @@ class SSHGuardianAgent:
 
     def _sync_firewall(self):
         """Collect and sync firewall rules to central server"""
-        if not self.firewall_collector:
-            return
-
         try:
-            logging.info("🔥 Collecting firewall rules...")
-            firewall_data = self.firewall_collector.collect_all()
+            # Use UFW if available, otherwise fall back to iptables
+            if self.ufw_manager:
+                logging.info("🔥 Collecting UFW rules...")
+                ufw_data = self.ufw_manager.collect_all()
 
-            if 'error' not in firewall_data:
-                self.api_client.submit_firewall_rules(firewall_data)
+                if 'error' not in ufw_data:
+                    self.api_client.submit_ufw_rules(ufw_data)
+                else:
+                    logging.warning(f"UFW collection error: {ufw_data.get('error')}")
 
-                # Also sync extended data (ports, users, suggestions)
-                self._sync_extended_data(firewall_data)
-            else:
-                logging.warning(f"Firewall collection error: {firewall_data.get('error')}")
+            elif self.firewall_collector:
+                logging.info("🔥 Collecting iptables rules...")
+                firewall_data = self.firewall_collector.collect_all()
+
+                if 'error' not in firewall_data:
+                    self.api_client.submit_firewall_rules(firewall_data)
+
+                    # Also sync extended data (ports, users, suggestions)
+                    self._sync_extended_data(firewall_data)
+                else:
+                    logging.warning(f"Firewall collection error: {firewall_data.get('error')}")
 
         except Exception as e:
             logging.error(f"Error syncing firewall: {e}")
@@ -645,15 +734,18 @@ class SSHGuardianAgent:
 
     def _process_firewall_commands(self):
         """Process pending firewall commands from central server"""
-        if not self.firewall_manager:
-            return
-
         try:
-            commands = self.api_client.get_pending_firewall_commands()
+            # Get pending commands - works for both UFW and iptables
+            if self.ufw_manager:
+                commands = self.api_client.get_pending_ufw_commands()
+            elif self.firewall_manager:
+                commands = self.api_client.get_pending_firewall_commands()
+            else:
+                return
 
             for cmd in commands:
                 command_id = cmd.get('id')
-                action = cmd.get('action')
+                action = cmd.get('action') or cmd.get('command_type')
                 params = cmd.get('params', {})
 
                 logging.info(f"🔧 Processing firewall command: {action} (ID: {command_id})")
@@ -662,46 +754,51 @@ class SSHGuardianAgent:
                 message = ""
 
                 try:
-                    if action == 'add_rule':
-                        success, message = self.firewall_manager.add_rule(params)
-                    elif action == 'delete_rule':
-                        success, message = self.firewall_manager.delete_rule(
-                            params.get('table', 'filter'),
-                            params.get('chain'),
-                            params.get('rule_num')
-                        )
-                    elif action == 'add_port_forward':
-                        success, message = self.firewall_manager.add_port_forward(
-                            params.get('external_port'),
-                            params.get('internal_ip'),
-                            params.get('internal_port'),
-                            params.get('protocol', 'tcp'),
-                            params.get('interface')
-                        )
-                    elif action == 'remove_port_forward':
-                        success, message = self.firewall_manager.remove_port_forward(
-                            params.get('external_port'),
-                            params.get('internal_ip'),
-                            params.get('internal_port'),
-                            params.get('protocol', 'tcp')
-                        )
-                    elif action == 'set_policy':
-                        success, message = self.firewall_manager.set_chain_policy(
-                            params.get('chain'),
-                            params.get('policy'),
-                            params.get('table', 'filter')
-                        )
-                    elif action == 'flush_chain':
-                        success, message = self.firewall_manager.flush_chain(
-                            params.get('chain'),
-                            params.get('table', 'filter')
-                        )
-                    elif action == 'save_rules':
-                        success, message = self.firewall_manager.save_rules(
-                            params.get('filepath', '/etc/iptables/rules.v4')
-                        )
-                    else:
-                        message = f"Unknown action: {action}"
+                    if self.ufw_manager:
+                        # UFW command processing
+                        success, message = self.ufw_manager.execute_command(action, params)
+                    elif self.firewall_manager:
+                        # iptables command processing (legacy)
+                        if action == 'add_rule':
+                            success, message = self.firewall_manager.add_rule(params)
+                        elif action == 'delete_rule':
+                            success, message = self.firewall_manager.delete_rule(
+                                params.get('table', 'filter'),
+                                params.get('chain'),
+                                params.get('rule_num')
+                            )
+                        elif action == 'add_port_forward':
+                            success, message = self.firewall_manager.add_port_forward(
+                                params.get('external_port'),
+                                params.get('internal_ip'),
+                                params.get('internal_port'),
+                                params.get('protocol', 'tcp'),
+                                params.get('interface')
+                            )
+                        elif action == 'remove_port_forward':
+                            success, message = self.firewall_manager.remove_port_forward(
+                                params.get('external_port'),
+                                params.get('internal_ip'),
+                                params.get('internal_port'),
+                                params.get('protocol', 'tcp')
+                            )
+                        elif action == 'set_policy':
+                            success, message = self.firewall_manager.set_chain_policy(
+                                params.get('chain'),
+                                params.get('policy'),
+                                params.get('table', 'filter')
+                            )
+                        elif action == 'flush_chain':
+                            success, message = self.firewall_manager.flush_chain(
+                                params.get('chain'),
+                                params.get('table', 'filter')
+                            )
+                        elif action == 'save_rules':
+                            success, message = self.firewall_manager.save_rules(
+                                params.get('filepath', '/etc/iptables/rules.v4')
+                            )
+                        else:
+                            message = f"Unknown action: {action}"
 
                 except Exception as e:
                     message = f"Error executing command: {str(e)}"
