@@ -318,7 +318,12 @@
         if (window.TimeSettings?.isLoaded()) {
             return window.TimeSettings.relative(dateStr);
         }
-        const date = new Date(dateStr);
+        // Ensure UTC parsing - append Z if no timezone info
+        let parseDateStr = String(dateStr);
+        if (!parseDateStr.endsWith('Z') && !parseDateStr.includes('+') && !parseDateStr.includes('-', 10)) {
+            parseDateStr += 'Z';
+        }
+        const date = new Date(parseDateStr);
         const now = new Date();
         const diffMs = now - date;
         const diffMins = Math.floor(diffMs / 60000);

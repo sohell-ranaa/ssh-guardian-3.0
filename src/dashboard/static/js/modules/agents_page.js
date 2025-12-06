@@ -93,9 +93,20 @@ function createAgentCard(agent) {
     const statusClass = isOnline ? 'online' : 'offline';
     const statusText = isOnline ? 'Online' : 'Offline';
 
-    const lastHeartbeat = agent.last_heartbeat
-        ? (window.TimeSettings?.isLoaded() ? window.TimeSettings.formatShort(agent.last_heartbeat) : new Date(agent.last_heartbeat).toLocaleString())
-        : 'Never';
+    // Use TimeSettings for proper UTC handling, with fallback that also handles UTC
+    let lastHeartbeat = 'Never';
+    if (agent.last_heartbeat) {
+        if (window.TimeSettings?.isLoaded()) {
+            lastHeartbeat = window.TimeSettings.formatShort(agent.last_heartbeat);
+        } else {
+            // Fallback: ensure UTC parsing
+            let hbStr = String(agent.last_heartbeat);
+            if (!hbStr.endsWith('Z') && !hbStr.includes('+') && !hbStr.includes('-', 10)) {
+                hbStr += 'Z';
+            }
+            lastHeartbeat = new Date(hbStr).toLocaleString();
+        }
+    }
 
     return `
         <div class="agent-card">

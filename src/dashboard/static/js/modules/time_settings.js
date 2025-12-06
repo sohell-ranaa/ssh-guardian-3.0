@@ -99,6 +99,26 @@
     }
 
     /**
+     * Get the effective timezone (resolves 'Local' to browser's timezone)
+     * @returns {string} The timezone identifier to use
+     */
+    function getEffectiveTimezone() {
+        if (timeSettings.timezone === 'Local') {
+            // Get the browser's local timezone
+            return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+        return timeSettings.timezone;
+    }
+
+    /**
+     * Get user's local timezone name (for display purposes)
+     * @returns {string} The browser's local timezone identifier
+     */
+    function getBrowserTimezone() {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
+    /**
      * Format a date/time according to user's settings
      * @param {string|Date} dateInput - Date string or Date object (assumed UTC if no timezone)
      * @param {string} format - 'time', 'date', 'datetime', or custom format
@@ -121,8 +141,9 @@
 
         if (isNaN(date.getTime())) return 'Invalid Date';
 
-        // Convert to user's timezone
-        const options = { timeZone: timeSettings.timezone };
+        // Convert to user's timezone (resolve 'Local' to actual browser timezone)
+        const effectiveTz = getEffectiveTimezone();
+        const options = { timeZone: effectiveTz };
 
         try {
             // Get parts in the target timezone
@@ -205,7 +226,8 @@
      * Format using custom format string
      */
     function formatCustom(date, formatStr) {
-        const options = { timeZone: timeSettings.timezone };
+        const effectiveTz = getEffectiveTimezone();
+        const options = { timeZone: effectiveTz };
         const formatter = new Intl.DateTimeFormat('en-US', {
             ...options,
             year: 'numeric',
@@ -238,7 +260,17 @@
     function getRelativeTime(dateInput) {
         if (!dateInput) return 'N/A';
 
-        const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+        let date;
+        if (dateInput instanceof Date) {
+            date = dateInput;
+        } else {
+            // If the string doesn't have timezone info, treat it as UTC
+            let dateStr = String(dateInput);
+            if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+                dateStr += 'Z';  // Append Z to indicate UTC
+            }
+            date = new Date(dateStr);
+        }
         if (isNaN(date.getTime())) return 'Invalid Date';
 
         const now = new Date();
@@ -268,7 +300,9 @@
         formatShort: (d) => formatDateTime(d, 'short'),
         formatFull: (d) => formatDateTime(d, 'datetime'),
         relative: getRelativeTime,
-        isLoaded: () => settingsLoaded
+        isLoaded: () => settingsLoaded,
+        getEffectiveTimezone: getEffectiveTimezone,  // Resolves 'Local' to actual TZ
+        getBrowserTimezone: getBrowserTimezone       // Gets browser's local timezone
     };
 
     // Auto-load settings when DOM is ready

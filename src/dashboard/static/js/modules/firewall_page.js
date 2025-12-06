@@ -984,7 +984,7 @@ function renderSuggestions(suggestions, highPriorityCount) {
                     <span style="padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; text-transform: uppercase; ${getPriorityStyle(s.priority)}">${s.priority}</span>
                     <span style="margin-left: 8px; font-size: 12px; color: var(--text-secondary);">${s.suggestion_type}</span>
                 </div>
-                <span style="font-size: 11px; color: var(--text-secondary);">${formatTimeAgo(new Date(s.created_at))}</span>
+                <span style="font-size: 11px; color: var(--text-secondary);">${formatTimeAgo(s.created_at)}</span>
             </div>
             <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">${s.title}</h4>
             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">${s.description || ''}</p>
@@ -1286,12 +1286,23 @@ function showMessage(elementId, message, type) {
     }, 5000);
 }
 
-function formatTimeAgo(date) {
+function formatTimeAgo(dateInput) {
     // Use TimeSettings.relative() for timezone-aware relative time
     if (window.TimeSettings?.isLoaded()) {
-        return window.TimeSettings.relative(date);
+        return window.TimeSettings.relative(dateInput);
     }
     // Fallback if TimeSettings not loaded
+    let date;
+    if (dateInput instanceof Date) {
+        date = dateInput;
+    } else {
+        // Ensure UTC parsing - append Z if no timezone info
+        let dateStr = String(dateInput);
+        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+            dateStr += 'Z';
+        }
+        date = new Date(dateStr);
+    }
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
 

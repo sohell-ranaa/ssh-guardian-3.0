@@ -159,17 +159,21 @@ function updateAgentHealthDisplay(agent) {
     document.getElementById('agentHealthIP').textContent = agent.ip_address_primary || '-';
     document.getElementById('agentHealthVersion').textContent = agent.version || '-';
 
-    // Format last heartbeat
+    // Format last heartbeat - pass raw string to let formatTimeAgo handle UTC
     if (agent.last_heartbeat) {
-        const hb = new Date(agent.last_heartbeat);
-        document.getElementById('agentHealthHeartbeat').textContent = formatTimeAgo(hb);
+        document.getElementById('agentHealthHeartbeat').textContent = formatTimeAgo(agent.last_heartbeat);
     } else {
         document.getElementById('agentHealthHeartbeat').textContent = 'Never';
     }
 
     // Calculate uptime (rough estimate from created_at)
     if (agent.created_at && isOnline) {
-        const created = new Date(agent.created_at);
+        // Ensure UTC parsing for created_at
+        let createdStr = String(agent.created_at);
+        if (!createdStr.endsWith('Z') && !createdStr.includes('+') && !createdStr.includes('-', 10)) {
+            createdStr += 'Z';
+        }
+        const created = new Date(createdStr);
         const now = new Date();
         const days = Math.floor((now - created) / (1000 * 60 * 60 * 24));
         document.getElementById('agentHealthUptime').textContent = days > 0 ? `${days} days` : 'Today';
@@ -319,8 +323,9 @@ function renderRecentLogs(events) {
         // Handle both API response formats (ip vs source_ip, timestamp vs event_time)
         const ipAddress = event.ip || event.source_ip || '-';
         const username = event.username || event.target_username || '';
-        const timestamp = event.timestamp || event.event_time ? new Date(event.timestamp || event.event_time) : new Date();
-        const timeStr = formatTimeAgo(timestamp);
+        // Pass raw timestamp string to formatTimeAgo for proper UTC handling
+        const rawTimestamp = event.timestamp || event.event_time;
+        const timeStr = rawTimestamp ? formatTimeAgo(rawTimestamp) : 'Just now';
 
         // Get location info if available
         const location = event.location;
@@ -903,7 +908,19 @@ function showNotification(message, type) {
     }
 }
 
-function formatTimeAgo(date) {
+function formatTimeAgo(dateInput) {
+    let date;
+    if (dateInput instanceof Date) {
+        date = dateInput;
+    } else {
+        // Ensure UTC parsing - append Z if no timezone info
+        let dateStr = String(dateInput);
+        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+            dateStr += 'Z';
+        }
+        date = new Date(dateStr);
+    }
+
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
 

@@ -224,13 +224,19 @@
      */
     function formatTimestamp(timestamp) {
         if (!timestamp) return 'Never';
-        const date = new Date(timestamp);
-        if (isNaN(date.getTime())) return 'Never';
 
         // Use TimeSettings relative time if available
         if (window.TimeSettings?.isLoaded()) {
             return window.TimeSettings.relative(timestamp);
         }
+
+        // Ensure UTC parsing - append Z if no timezone info
+        let dateStr = String(timestamp);
+        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+            dateStr += 'Z';
+        }
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return 'Never';
 
         const now = new Date();
         const diffMs = now - date;

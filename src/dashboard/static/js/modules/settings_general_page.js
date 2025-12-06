@@ -140,12 +140,17 @@
                                 Display Timezone
                             </label>
                             <select id="time-setting-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                                ${(timeSettingsData.available_timezones || []).map(tz =>
-                                    `<option value="${tz}" ${timeSettingsData.timezone === tz ? 'selected' : ''}>${tz}</option>`
-                                ).join('')}
+                                ${(timeSettingsData.available_timezones || []).map(tz => {
+                                    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                    const displayText = tz === 'Local' ? 'Local (Browser: ' + browserTz + ')' : tz;
+                                    const isSelected = timeSettingsData.timezone === tz ? 'selected' : '';
+                                    return '<option value="' + tz + '" ' + isSelected + '>' + displayText + '</option>';
+                                }).join('')}
                             </select>
-                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                                All timestamps will be displayed in this timezone
+                            <p id="timezone-hint" style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                                ${timeSettingsData.timezone === 'Local'
+                                    ? "Using your browser's timezone automatically"
+                                    : 'All timestamps will be displayed in this timezone'}
                             </p>
                         </div>
 
@@ -224,9 +229,14 @@
     function getCurrentTimePreview() {
         if (!timeSettingsData) return '';
 
-        const timezone = document.getElementById('time-setting-timezone')?.value || timeSettingsData.timezone;
+        let timezone = document.getElementById('time-setting-timezone')?.value || timeSettingsData.timezone;
         const timeFormat = document.getElementById('time-setting-time-format')?.value || timeSettingsData.time_format;
         const dateFormat = document.getElementById('time-setting-date-format')?.value || timeSettingsData.date_format;
+
+        // Resolve 'Local' to browser's actual timezone
+        if (timezone === 'Local') {
+            timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
 
         try {
             const now = new Date();
@@ -276,7 +286,23 @@
             }
         };
 
-        document.getElementById('time-setting-timezone')?.addEventListener('change', updatePreview);
+        // Update timezone hint when selection changes
+        const updateTimezoneHint = () => {
+            const hint = document.getElementById('timezone-hint');
+            const tzSelect = document.getElementById('time-setting-timezone');
+            if (hint && tzSelect) {
+                if (tzSelect.value === 'Local') {
+                    hint.textContent = "Using your browser's timezone automatically";
+                } else {
+                    hint.textContent = 'All timestamps will be displayed in this timezone';
+                }
+            }
+        };
+
+        document.getElementById('time-setting-timezone')?.addEventListener('change', () => {
+            updatePreview();
+            updateTimezoneHint();
+        });
         document.getElementById('time-setting-date-format')?.addEventListener('change', updatePreview);
         document.getElementById('time-setting-time-format')?.addEventListener('change', updatePreview);
 

@@ -511,7 +511,12 @@ window.NotificationPane = {
     formatTimeAgo(timestamp) {
         if (!timestamp) return '';
 
-        const date = new Date(timestamp);
+        // Ensure UTC parsing - append Z if no timezone info
+        let dateStr = String(timestamp);
+        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+            dateStr += 'Z';
+        }
+        const date = new Date(dateStr);
         const now = new Date();
         const seconds = Math.floor((now - date) / 1000);
 

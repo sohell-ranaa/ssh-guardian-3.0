@@ -576,6 +576,8 @@ def get_time_settings():
 
         # Add comprehensive timezone list for frontend
         time_settings['available_timezones'] = [
+            # Browser local timezone (auto-detect from user's browser)
+            'Local',
             # UTC
             'UTC',
             # Americas
