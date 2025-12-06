@@ -21,6 +21,9 @@
             // Load and render time settings section
             await loadAndRenderTimeSettings();
 
+            // Load and render navigation settings section
+            await loadNavigationSettings();
+
             // Setup event listeners
             setupSettingsEventListeners();
 
@@ -29,6 +32,75 @@
             showNotification('Failed to load settings', 'error');
         }
     };
+
+    /**
+     * Load and populate navigation settings
+     */
+    async function loadNavigationSettings() {
+        try {
+            const response = await fetch('/api/dashboard/settings/navigation');
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                const select = document.getElementById('default-landing-page');
+                if (select) {
+                    select.value = data.data.default_landing_page || 'overview';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading navigation settings:', error);
+        }
+
+        // Setup save button listener
+        const saveBtn = document.getElementById('save-navigation-settings');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', saveNavigationSettings);
+        }
+    }
+
+    /**
+     * Save navigation settings
+     */
+    async function saveNavigationSettings() {
+        const select = document.getElementById('default-landing-page');
+        const statusSpan = document.getElementById('navigation-save-status');
+
+        if (!select) return;
+
+        try {
+            const response = await fetch('/api/dashboard/settings/navigation', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    default_landing_page: select.value
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (statusSpan) {
+                    statusSpan.textContent = 'Saved!';
+                    statusSpan.style.color = 'var(--success, #107C10)';
+                    setTimeout(() => { statusSpan.textContent = ''; }, 3000);
+                }
+                showNotification('Navigation settings saved successfully', 'success');
+            } else {
+                if (statusSpan) {
+                    statusSpan.textContent = 'Failed to save';
+                    statusSpan.style.color = 'var(--error, #D13438)';
+                }
+                showNotification('Failed to save navigation settings: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            console.error('Error saving navigation settings:', error);
+            if (statusSpan) {
+                statusSpan.textContent = 'Error';
+                statusSpan.style.color = 'var(--error, #D13438)';
+            }
+            showNotification('Error saving navigation settings', 'error');
+        }
+    }
 
     /**
      * Load and render time settings section

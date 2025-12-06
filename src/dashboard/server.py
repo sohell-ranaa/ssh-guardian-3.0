@@ -47,6 +47,8 @@ from routes.cache_settings_routes import cache_settings_routes
 from routes.export_routes import export_routes
 from routes.event_actions_routes import event_actions_routes
 from routes.ip_info_routes import ip_info_routes
+from routes.dashboard_content_routes import dashboard_content_routes
+from routes.notification_pane_routes import notification_pane_routes
 from auth import SessionManager, login_required
 
 # Import API blueprints
@@ -92,6 +94,8 @@ app.register_blueprint(cache_settings_routes, url_prefix='/api/dashboard/cache-s
 app.register_blueprint(export_routes)  # Data export API
 app.register_blueprint(event_actions_routes)  # Event actions API (whitelist, watchlist, notes, reports)
 app.register_blueprint(ip_info_routes)  # IP geolocation info API (FreeIPAPI)
+app.register_blueprint(dashboard_content_routes, url_prefix='/api/dashboard/content')  # Dashboard content API (thesis/guide)
+app.register_blueprint(notification_pane_routes, url_prefix='/api/notifications')  # Notification pane API
 app.register_blueprint(events_api)  # API for agent event submission
 
 

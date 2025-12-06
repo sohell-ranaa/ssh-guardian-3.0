@@ -1139,3 +1139,170 @@ def execute_all_scenarios():
     except Exception as e:
         print(f"[Demo] Error executing full demo: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@demo_routes.route('/ip-analysis/<ip_address>', methods=['GET'])
+@login_required
+def get_ip_analysis(ip_address):
+    """
+    Get comprehensive IP analysis with ML predictions, behavioral patterns,
+    threat intelligence, and recommendations - same format as simulation results.
+
+    This is used by the Live Events "View Details" action to show full analysis.
+    """
+    try:
+        if not ip_address:
+            return jsonify({'success': False, 'error': 'IP address required'}), 400
+
+        # Get IP history from database
+        history = get_ip_history(ip_address)
+
+        # Get geolocation data
+        geo = {}
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT * FROM ip_geolocation
+                WHERE ip_address_text = %s
+                ORDER BY last_updated DESC
+                LIMIT 1
+            """, (ip_address,))
+            geo_row = cursor.fetchone()
+            if geo_row:
+                geo = {
+                    'country': geo_row.get('country') or geo_row.get('country_name') or 'Unknown',
+                    'country_code': geo_row.get('country_code'),
+                    'city': geo_row.get('city') or 'Unknown',
+                    'region': geo_row.get('region') or geo_row.get('region_name'),
+                    'isp': geo_row.get('isp') or geo_row.get('org') or 'Unknown',
+                    'asn': geo_row.get('asn'),
+                    'is_tor': bool(geo_row.get('is_tor')),
+                    'is_vpn': bool(geo_row.get('is_vpn')),
+                    'is_proxy': bool(geo_row.get('is_proxy')),
+                    'is_datacenter': bool(geo_row.get('is_datacenter')),
+                    'latitude': float(geo_row['latitude']) if geo_row.get('latitude') else None,
+                    'longitude': float(geo_row['longitude']) if geo_row.get('longitude') else None,
+                    'timezone': geo_row.get('timezone'),
+                    'continent': geo_row.get('continent')
+                }
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"[IPAnalysis] Error getting geo data: {e}")
+
+        # Get threat intelligence data
+        threat = {}
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT * FROM ip_threat_intelligence
+                WHERE ip_address_text = %s
+                ORDER BY last_updated DESC
+                LIMIT 1
+            """, (ip_address,))
+            threat_row = cursor.fetchone()
+            if threat_row:
+                threat = {
+                    'abuseipdb_score': float(threat_row.get('abuseipdb_score') or 0),
+                    'abuseipdb_reports': int(threat_row.get('abuseipdb_reports') or 0),
+                    'abuseipdb_confidence': float(threat_row.get('abuseipdb_confidence') or 0),
+                    'virustotal_positives': int(threat_row.get('virustotal_positives') or 0),
+                    'virustotal_total': int(threat_row.get('virustotal_total') or 70),
+                    'overall_threat_level': threat_row.get('overall_threat_level', 'unknown')
+                }
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"[IPAnalysis] Error getting threat intel: {e}")
+
+        # Get ML predictions for this IP (most recent event)
+        ml = {'ml_available': False, 'risk_score': 0, 'confidence': 0, 'is_anomaly': False}
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT ml_risk_score, ml_threat_type, ml_confidence, is_anomaly
+                FROM auth_events
+                WHERE source_ip_text = %s AND ml_risk_score IS NOT NULL
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (ip_address,))
+            ml_row = cursor.fetchone()
+            if ml_row:
+                ml = {
+                    'ml_available': True,
+                    'risk_score': float(ml_row.get('ml_risk_score') or 0),
+                    'threat_type': ml_row.get('ml_threat_type'),
+                    'confidence': float(ml_row.get('ml_confidence') or 0),
+                    'is_anomaly': bool(ml_row.get('is_anomaly'))
+                }
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"[IPAnalysis] Error getting ML data: {e}")
+
+        # Calculate behavioral score
+        behavioral_analysis = calculate_behavioral_score(history)
+
+        # Calculate geographic risk score
+        geographic_risk = calculate_geographic_risk_score(geo, threat)
+
+        # Calculate composite risk using multi-factor analysis
+        composite_risk = calculate_composite_risk(
+            threat,
+            ml,
+            behavioral_analysis,
+            geographic_risk
+        )
+
+        # Generate smart context-aware recommendations
+        smart_recommendations = generate_smart_recommendations(
+            composite_risk,
+            behavioral_analysis,
+            threat,
+            ml,
+            geo,
+            history,
+            ip_address
+        )
+
+        # Also generate traditional recommendations for backward compatibility
+        basic_recommendations = generate_recommendations(ml, threat, geo, history, ip_address)
+
+        # Merge recommendations (smart recommendations take priority)
+        recommendations = smart_recommendations + basic_recommendations
+
+        # Remove duplicates based on action type
+        seen_actions = set()
+        unique_recommendations = []
+        for rec in recommendations:
+            action_key = f"{rec.get('action_type', 'unknown')}_{rec.get('action', '')}"
+            if action_key not in seen_actions:
+                seen_actions.add(action_key)
+                unique_recommendations.append(rec)
+
+        # Limit to top recommendations
+        recommendations = unique_recommendations[:8]
+
+        return jsonify({
+            'success': True,
+            'ip': ip_address,
+            'composite_risk': composite_risk,
+            'behavioral_analysis': behavioral_analysis,
+            'geographic_intelligence': geographic_risk,
+            'results': {
+                'threat_intel': threat,
+                'ml': ml,
+                'geo': geo,
+                'history': history,
+                'recommendations': recommendations
+            }
+        })
+
+    except Exception as e:
+        print(f"[IPAnalysis] Error analyzing IP {ip_address}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500

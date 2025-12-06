@@ -480,3 +480,128 @@ def cache_statistics():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@events_routes.route('/<int:event_id>', methods=['GET'])
+def get_event(event_id):
+    """
+    Get a single event by ID with full enrichment data.
+    Used for viewing event details from notifications.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get event with geo and threat data
+        # Use geo_id join like the list query for consistency
+        cursor.execute("""
+            SELECT
+                ae.id,
+                ae.event_uuid,
+                ae.source_ip_text,
+                ae.target_username,
+                ae.event_type,
+                ae.auth_method,
+                ae.target_server,
+                ae.target_port,
+                ae.timestamp,
+                ae.ml_risk_score,
+                ae.ml_threat_type,
+                ae.is_anomaly,
+                ae.agent_id,
+                geo.country_code,
+                geo.country_name,
+                geo.city,
+                geo.region,
+                geo.isp,
+                geo.latitude,
+                geo.longitude,
+                geo.is_proxy,
+                geo.is_vpn,
+                geo.is_tor,
+                ti.overall_threat_level as threat_level,
+                ti.threat_confidence,
+                ti.abuseipdb_score,
+                ti.abuseipdb_reports,
+                ti.virustotal_positives,
+                ti.virustotal_total
+            FROM auth_events ae
+            LEFT JOIN ip_geolocation geo ON ae.geo_id = geo.id
+            LEFT JOIN ip_threat_intelligence ti ON ae.source_ip_text = ti.ip_address_text
+            WHERE ae.id = %s
+        """, (event_id,))
+
+        event = cursor.fetchone()
+
+        if not event:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Event not found'
+            }), 404
+
+        # Fetch agent data if exists
+        agent_data = None
+        if event['agent_id']:
+            cursor.execute("""
+                SELECT id, display_name, hostname
+                FROM agents
+                WHERE id = %s
+            """, (event['agent_id'],))
+            agent_data = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        # Format the response
+        formatted_event = {
+            'id': event['id'],
+            'event_uuid': event['event_uuid'],
+            'ip': event['source_ip_text'],
+            'username': event['target_username'],
+            'event_type': event['event_type'],
+            'auth_method': event['auth_method'],
+            'server': event['target_server'],
+            'port': event['target_port'],
+            'timestamp': event['timestamp'].isoformat() if event['timestamp'] else None,
+            'ml_risk_score': event['ml_risk_score'],
+            'ml_threat_type': event['ml_threat_type'],
+            'is_anomaly': bool(event['is_anomaly']) if event['is_anomaly'] is not None else False,
+            'agent': {
+                'id': agent_data['id'],
+                'name': agent_data['display_name'],
+                'hostname': agent_data['hostname']
+            } if agent_data else None,
+            'location': {
+                'country_code': event['country_code'],
+                'country': event['country_name'],
+                'city': event['city'],
+                'region': event['region'],
+                'isp': event['isp'],
+                'latitude': float(event['latitude']) if event['latitude'] else None,
+                'longitude': float(event['longitude']) if event['longitude'] else None,
+                'is_proxy': bool(event['is_proxy']) if event['is_proxy'] is not None else False,
+                'is_vpn': bool(event['is_vpn']) if event['is_vpn'] is not None else False,
+                'is_tor': bool(event['is_tor']) if event['is_tor'] is not None else False
+            } if event['country_code'] else None,
+            'threat': {
+                'level': event['threat_level'],
+                'confidence': event['threat_confidence'],
+                'abuseipdb_score': event['abuseipdb_score'],
+                'abuseipdb_reports': event['abuseipdb_reports'],
+                'virustotal_positives': event['virustotal_positives'],
+                'virustotal_total': event['virustotal_total']
+            } if event['threat_level'] else None
+        }
+
+        return jsonify({
+            'success': True,
+            'data': formatted_event
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

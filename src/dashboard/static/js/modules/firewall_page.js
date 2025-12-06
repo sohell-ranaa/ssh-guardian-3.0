@@ -265,7 +265,12 @@ async function loadFirewallData(agentId) {
     }
 }
 
-function loadFirewallPage() {
+async function loadFirewallPage() {
+    // Ensure TimeSettings is loaded for proper date/time formatting
+    if (window.TimeSettings && !window.TimeSettings.isLoaded()) {
+        await window.TimeSettings.load();
+    }
+
     if (currentAgentId) {
         loadFirewallData(currentAgentId);
     }
@@ -1282,6 +1287,11 @@ function showMessage(elementId, message, type) {
 }
 
 function formatTimeAgo(date) {
+    // Use TimeSettings.relative() for timezone-aware relative time
+    if (window.TimeSettings?.isLoaded()) {
+        return window.TimeSettings.relative(date);
+    }
+    // Fallback if TimeSettings not loaded
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
 
@@ -1293,6 +1303,11 @@ function formatTimeAgo(date) {
 
 function formatDateTime(dateStr) {
     if (!dateStr) return '-';
+    // Use TimeSettings for timezone-aware formatting
+    if (window.TimeSettings?.isLoaded()) {
+        return window.TimeSettings.formatFull(dateStr);
+    }
+    // Fallback
     const date = new Date(dateStr);
     return date.toLocaleString();
 }

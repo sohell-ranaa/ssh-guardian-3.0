@@ -539,7 +539,9 @@ def warm_cache():
                 'blocking_list': '/api/dashboard/blocking/list',
                 'ip_stats_list': '/api/dashboard/ip-stats/list',
                 'ip_stats_summary': '/api/dashboard/ip-stats/summary',
-                'notifications_list': '/api/dashboard/notifications/list'
+                'notifications_list': '/api/dashboard/notifications/list',
+                'guide_full': '/api/dashboard/content/guide/full',
+                'thesis_full': '/api/dashboard/content/thesis/full'
             }
 
             base_url = 'http://localhost:8081'
@@ -601,7 +603,9 @@ def start_auto_warmer():
             'events_list': '/api/dashboard/events/list?limit=50',
             'dashboard_summary': '/api/dashboard/summary',
             'blocking_list': '/api/dashboard/blocking/list',
-            'notifications_list': '/api/dashboard/notifications/list'
+            'notifications_list': '/api/dashboard/notifications/list',
+            'guide_full': '/api/dashboard/content/guide/full',
+            'thesis_full': '/api/dashboard/content/thesis/full'
         }
 
         base_url = 'http://localhost:8081'

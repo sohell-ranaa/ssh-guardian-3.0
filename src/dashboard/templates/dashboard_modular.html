@@ -22,7 +22,8 @@
     <div class="main-content" id="mainContent">
         <div class="content-wrapper">
             <!-- Page Templates -->
-            {% include 'pages/dashboard_home.html' %}
+            {% include 'pages/overview.html' %}
+            {% include 'pages/dashboard_analytics.html' %}
             {% include 'pages/events_live.html' %}
             {% include 'pages/events_analysis.html' %}
             {% include 'pages/events_timeline.html' %}
@@ -167,6 +168,10 @@
 
         // Page navigation
         function showPage(pageName) {
+            // Strip query parameters from page name (e.g., 'events-live?event=123' -> 'events-live')
+            // The query params are still available via window.location.hash for page-specific handling
+            const basePageName = pageName.split('?')[0];
+
             // Hide all pages
             document.querySelectorAll('.page-content').forEach(page => {
                 page.style.display = 'none';
@@ -174,9 +179,12 @@
             });
 
             // Map old-style names to new page IDs
+            // Use basePageName for lookup
+            pageName = basePageName;
             const pageMap = {
+                'overview': 'page-overview',
+                'home': 'page-overview',
                 'dashboard': 'page-dashboard',
-                'home': 'page-dashboard',
                 'events-live': 'page-events-live',
                 'events-analysis': 'page-events-analysis',
                 'events-timeline': 'page-events-timeline',
@@ -238,7 +246,15 @@
                 }
 
                 // Call page-specific load functions
-                if (pageName === 'events-live') {
+                if (pageName === 'overview') {
+                    if (typeof loadOverviewPage === 'function') {
+                        loadOverviewPage();
+                    }
+                } else if (pageName === 'dashboard') {
+                    if (typeof loadDashboardAnalytics === 'function') {
+                        loadDashboardAnalytics();
+                    }
+                } else if (pageName === 'events-live') {
                     if (typeof loadEventsLivePage === 'function') {
                         loadEventsLivePage();
                     }
@@ -362,7 +378,7 @@
                 item.classList.add('active');
 
                 // Get page name and show it
-                const pageName = item.dataset.page || 'dashboard';
+                const pageName = item.dataset.page || 'overview';
 
                 // Update URL hash (use page name directly)
                 window.location.hash = pageName;
@@ -371,18 +387,43 @@
             });
         });
 
+        // Get default landing page from settings
+        let defaultLandingPage = 'overview';
+
+        async function loadDefaultLandingPage() {
+            try {
+                const response = await fetch('/api/dashboard/settings/navigation');
+                const data = await response.json();
+                if (data.success && data.data?.default_landing_page) {
+                    defaultLandingPage = data.data.default_landing_page;
+                }
+            } catch (error) {
+                console.log('Using default landing page: overview');
+            }
+        }
+
         // Handle initial hash and hash changes
-        function handleHash() {
-            const hash = window.location.hash.substring(1) || 'dashboard';
+        async function handleHash() {
+            let hash = window.location.hash.substring(1);
+            if (!hash) {
+                // No hash, use default landing page
+                await loadDefaultLandingPage();
+                hash = defaultLandingPage;
+                window.location.hash = hash;
+                return;
+            }
             showPage(hash);
         }
 
         // Listen for hash changes
-        window.addEventListener('hashchange', handleHash);
+        window.addEventListener('hashchange', () => {
+            const hash = window.location.hash.substring(1);
+            if (hash) showPage(hash);
+        });
 
         // Store the current page name for reloading
         window.loadCurrentPage = function() {
-            const hash = window.location.hash.substring(1) || 'dashboard';
+            const hash = window.location.hash.substring(1) || 'overview';
             showPage(hash);
         };
 
@@ -499,6 +540,7 @@
     <script src="/static/js/modules/trends_reports_page.js"></script>
     <script src="/static/js/modules/system_status_page.js"></script>
     <script src="/static/js/modules/firewall_simple.js"></script>
+    <script src="/static/js/modules/notification_pane.js"></script>
 
     <!-- Initial page load - called after all scripts are loaded -->
     <script>

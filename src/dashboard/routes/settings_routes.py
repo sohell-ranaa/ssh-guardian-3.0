@@ -414,6 +414,134 @@ def update_setting_by_key(setting_key):
         }), 500
 
 
+@settings_routes.route('/navigation', methods=['GET'])
+def get_navigation_settings():
+    """
+    Get navigation settings (default landing page, etc.)
+    """
+    try:
+        cache = get_cache()
+        cache_k = cache_key('settings', 'navigation', 'all')
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'data': cached,
+                'from_cache': True
+            })
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT setting_key, setting_value
+            FROM system_settings
+            WHERE setting_key IN ('default_landing_page')
+        """)
+
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Convert to dictionary with defaults
+        nav_settings = {row['setting_key']: row['setting_value'] for row in rows}
+
+        # Set defaults if not in database
+        if 'default_landing_page' not in nav_settings:
+            nav_settings['default_landing_page'] = 'overview'
+
+        nav_settings['available_landing_pages'] = [
+            {'value': 'overview', 'label': 'Overview (User Guide & Research)'},
+            {'value': 'dashboard', 'label': 'Dashboard (Analytics)'},
+            {'value': 'events-live', 'label': 'Live Events'}
+        ]
+
+        cache.set(cache_k, nav_settings, 3600)  # 1 hour cache
+
+        return jsonify({
+            'success': True,
+            'data': nav_settings,
+            'from_cache': False
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@settings_routes.route('/navigation', methods=['PUT'])
+def update_navigation_settings():
+    """
+    Update navigation settings
+    Body params:
+    - default_landing_page: 'overview', 'dashboard', or 'events-live'
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        valid_pages = ['overview', 'dashboard', 'events-live']
+        updated = []
+
+        if 'default_landing_page' in data:
+            new_value = data['default_landing_page']
+            if new_value not in valid_pages:
+                cursor.close()
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid landing page. Must be one of: {", ".join(valid_pages)}'
+                }), 400
+
+            # Try to update, if not exists, insert
+            cursor.execute("""
+                INSERT INTO system_settings (setting_key, setting_value, setting_type, category, description)
+                VALUES (%s, %s, 'string', 'navigation', 'Default page shown after login')
+                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()
+            """, ('default_landing_page', new_value))
+            updated.append('default_landing_page')
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        invalidate_settings_cache()
+
+        # Audit log
+        if updated:
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='navigation_settings_updated',
+                resource_type='setting',
+                resource_id='navigation',
+                details={'updated_keys': updated, 'new_values': {k: data.get(k) for k in updated}},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
+        return jsonify({
+            'success': True,
+            'message': f'Navigation settings updated: {", ".join(updated)}',
+            'updated': updated
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @settings_routes.route('/time', methods=['GET'])
 def get_time_settings():
     """

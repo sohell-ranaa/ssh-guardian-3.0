@@ -1,12 +1,12 @@
-<!-- Dashboard Home Page - Action-Focused Design -->
-<div id="page-dashboard" class="page-content active">
+<!-- Overview Page - User Guide & Research Thesis -->
+<div id="page-overview" class="page-content">
     <!-- Tab Navigation -->
-    <div class="dashboard-home-tabs">
-        <button class="dashboard-home-tab active" data-tab="guide" onclick="DashboardHome.switchTab('guide')">
+    <div class="overview-tabs">
+        <button class="overview-tab active" data-tab="guide" onclick="Overview.switchTab('guide')">
             <span class="tab-icon">&#128214;</span>
             <span class="tab-text">User Guide</span>
         </button>
-        <button class="dashboard-home-tab" data-tab="thesis" onclick="DashboardHome.switchTab('thesis')">
+        <button class="overview-tab" data-tab="thesis" onclick="Overview.switchTab('thesis')">
             <span class="tab-icon">&#128218;</span>
             <span class="tab-text">Research Thesis</span>
         </button>
@@ -16,22 +16,22 @@
     </div>
 
     <!-- Tab 1: User Guide -->
-    <div id="tab-guide" class="dashboard-home-tab-content active">
-        <!-- Hero Section - Redesigned -->
-        <div class="guide-hero">
-            <div class="guide-hero-content">
-                <!-- Logo with white background -->
-                <div class="guide-hero-logo">
+    <div id="overview-tab-guide" class="overview-tab-content active">
+        <!-- Hero Section - Light Theme -->
+        <div class="overview-hero">
+            <div class="overview-hero-content">
+                <!-- Logo with blue background -->
+                <div class="overview-hero-logo">
                     <div class="hero-logo-circle">
                         <span class="hero-logo-icon">&#128737;</span>
                     </div>
                     <div class="hero-logo-badge">v3.0</div>
                 </div>
 
-                <h1 class="guide-hero-title">SSH Guardian</h1>
-                <p class="guide-hero-tagline">Intelligent SSH Security for Modern Enterprises</p>
+                <h1 class="overview-hero-title">SSH Guardian</h1>
+                <p class="overview-hero-tagline">Intelligent SSH Security for Modern Enterprises</p>
 
-                <p class="guide-hero-description">
+                <p class="overview-hero-description">
                     A lightweight, ML-powered SSH anomaly detection system designed specifically for
                     Small and Medium Enterprises. Monitor authentication events, detect threats in real-time,
                     and automatically respond to attacks - all with minimal resource overhead.
@@ -58,21 +58,21 @@
                 </div>
 
                 <!-- Live Statistics -->
-                <div class="guide-hero-stats" id="hero-stats">
+                <div class="overview-hero-stats" id="overview-hero-stats">
                     <div class="hero-stat">
-                        <span class="hero-stat-value" id="stat-events">--</span>
+                        <span class="hero-stat-value" id="overview-stat-events">--</span>
                         <span class="hero-stat-label">Total Events</span>
                     </div>
                     <div class="hero-stat">
-                        <span class="hero-stat-value" id="stat-agents">--</span>
+                        <span class="hero-stat-value" id="overview-stat-agents">--</span>
                         <span class="hero-stat-label">Active Agents</span>
                     </div>
                     <div class="hero-stat">
-                        <span class="hero-stat-value" id="stat-blocked">--</span>
+                        <span class="hero-stat-value" id="overview-stat-blocked">--</span>
                         <span class="hero-stat-label">IPs Blocked</span>
                     </div>
                     <div class="hero-stat">
-                        <span class="hero-stat-value" id="stat-threats">--</span>
+                        <span class="hero-stat-value" id="overview-stat-threats">--</span>
                         <span class="hero-stat-label">Threats Detected</span>
                     </div>
                 </div>
@@ -80,7 +80,11 @@
                 <!-- Research Info -->
                 <div class="hero-research-info">
                     <div class="research-info-item">
-                        <span class="research-label">Research Project</span>
+                        <span class="research-label">Student</span>
+                        <span class="research-value">Md Sohel Rana (TP086217)</span>
+                    </div>
+                    <div class="research-info-item">
+                        <span class="research-label">Institution</span>
                         <span class="research-value">Asia Pacific University of Technology & Innovation</span>
                     </div>
                     <div class="research-info-item">
@@ -104,7 +108,7 @@
             </div>
 
             <div class="action-cards-grid">
-                <div class="action-card" data-action="events" onclick="navigateTo('events')">
+                <div class="action-card" data-action="events" onclick="navigateTo('events-live')">
                     <div class="action-card-header">
                         <div class="action-card-icon">&#128200;</div>
                         <span class="action-card-badge">Core</span>
@@ -149,7 +153,7 @@
                     <span class="action-card-cta">Manage Firewall <span>&#8594;</span></span>
                 </div>
 
-                <div class="action-card" data-action="ml" onclick="navigateTo('ml-intelligence')">
+                <div class="action-card" data-action="ml" onclick="navigateTo('ml-overview')">
                     <div class="action-card-header">
                         <div class="action-card-icon">&#129302;</div>
                         <span class="action-card-badge">AI</span>
@@ -164,7 +168,7 @@
                     <span class="action-card-cta">View ML Insights <span>&#8594;</span></span>
                 </div>
 
-                <div class="action-card" data-action="notifications" onclick="navigateTo('notifications')">
+                <div class="action-card" data-action="notifications" onclick="navigateTo('notif-rules')">
                     <div class="action-card-header">
                         <div class="action-card-icon">&#128276;</div>
                         <span class="action-card-badge">Alerts</span>
@@ -179,7 +183,7 @@
                     <span class="action-card-cta">Configure Alerts <span>&#8594;</span></span>
                 </div>
 
-                <div class="action-card" data-action="settings" onclick="navigateTo('settings')">
+                <div class="action-card" data-action="settings" onclick="navigateTo('settings-general')">
                     <div class="action-card-header">
                         <div class="action-card-icon">&#9881;</div>
                         <span class="action-card-badge">Config</span>
@@ -243,36 +247,36 @@
                         <p class="wizard-subtitle">Follow these steps to set up and use SSH Guardian effectively</p>
                     </div>
                     <div class="wizard-progress-info">
-                        <span class="wizard-progress-text">Step <span id="current-step">1</span> of <span id="total-steps">6</span></span>
+                        <span class="wizard-progress-text">Step <span id="overview-current-step">1</span> of <span id="overview-total-steps">6</span></span>
                         <div class="wizard-progress-bar-mini">
-                            <div class="wizard-progress-fill" id="wizard-progress-fill" style="width: 16.67%"></div>
+                            <div class="wizard-progress-fill" id="overview-wizard-progress-fill" style="width: 16.67%"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Step Cards -->
-                <div class="wizard-steps-grid" id="wizard-steps-grid">
-                    <div class="wizard-step-card active" data-step="1" onclick="DashboardHome.goToStep(1)">
+                <div class="wizard-steps-grid" id="overview-wizard-steps-grid">
+                    <div class="wizard-step-card active" data-step="1" onclick="Overview.goToStep(1)">
                         <div class="wizard-step-number">1</div>
                         <div class="wizard-step-label">Welcome</div>
                     </div>
-                    <div class="wizard-step-card" data-step="2" onclick="DashboardHome.goToStep(2)">
+                    <div class="wizard-step-card" data-step="2" onclick="Overview.goToStep(2)">
                         <div class="wizard-step-number">2</div>
                         <div class="wizard-step-label">Architecture</div>
                     </div>
-                    <div class="wizard-step-card" data-step="3" onclick="DashboardHome.goToStep(3)">
+                    <div class="wizard-step-card" data-step="3" onclick="Overview.goToStep(3)">
                         <div class="wizard-step-number">3</div>
                         <div class="wizard-step-label">Deployment</div>
                     </div>
-                    <div class="wizard-step-card" data-step="4" onclick="DashboardHome.goToStep(4)">
+                    <div class="wizard-step-card" data-step="4" onclick="Overview.goToStep(4)">
                         <div class="wizard-step-number">4</div>
                         <div class="wizard-step-label">Monitoring</div>
                     </div>
-                    <div class="wizard-step-card" data-step="5" onclick="DashboardHome.goToStep(5)">
+                    <div class="wizard-step-card" data-step="5" onclick="Overview.goToStep(5)">
                         <div class="wizard-step-number">5</div>
                         <div class="wizard-step-label">Firewall</div>
                     </div>
-                    <div class="wizard-step-card" data-step="6" onclick="DashboardHome.goToStep(6)">
+                    <div class="wizard-step-card" data-step="6" onclick="Overview.goToStep(6)">
                         <div class="wizard-step-number">6</div>
                         <div class="wizard-step-label">ML & Intel</div>
                     </div>
@@ -280,25 +284,25 @@
 
                 <!-- Content Panel -->
                 <div class="wizard-content-panel">
-                    <div class="wizard-content-header" id="wizard-content-header">
-                        <div class="wizard-content-icon" id="wizard-icon">&#128737;</div>
+                    <div class="wizard-content-header" id="overview-wizard-content-header">
+                        <div class="wizard-content-icon" id="overview-wizard-icon">&#128737;</div>
                         <div class="wizard-content-title-group">
-                            <h2 id="wizard-title">Welcome to SSH Guardian</h2>
-                            <p id="wizard-subtitle">A Research Project for SME Cybersecurity</p>
+                            <h2 id="overview-wizard-title">Welcome to SSH Guardian</h2>
+                            <p id="overview-wizard-subtitle">A Research Project for SME Cybersecurity</p>
                         </div>
                     </div>
-                    <div class="wizard-content-body" id="wizard-content-body">
+                    <div class="wizard-content-body" id="overview-wizard-content-body">
                         <div class="wizard-loading">
                             <div class="spinner"></div>
                             <p>Loading content...</p>
                         </div>
                     </div>
                     <div class="wizard-nav">
-                        <button class="wizard-nav-btn prev" id="wizard-prev" onclick="DashboardHome.prevStep()" disabled>
+                        <button class="wizard-nav-btn prev" id="overview-wizard-prev" onclick="Overview.prevStep()" disabled>
                             &#8592; Previous
                         </button>
-                        <div class="wizard-step-dots" id="wizard-dots"></div>
-                        <button class="wizard-nav-btn next" id="wizard-next" onclick="DashboardHome.nextStep()">
+                        <div class="wizard-step-dots" id="overview-wizard-dots"></div>
+                        <button class="wizard-nav-btn next" id="overview-wizard-next" onclick="Overview.nextStep()">
                             Next &#8594;
                         </button>
                     </div>
@@ -308,25 +312,25 @@
     </div>
 
     <!-- Tab 2: Research Thesis -->
-    <div id="tab-thesis" class="dashboard-home-tab-content">
+    <div id="overview-tab-thesis" class="overview-tab-content">
         <div class="thesis-container">
             <!-- Table of Contents -->
-            <nav class="thesis-toc" id="thesis-toc">
+            <nav class="thesis-toc" id="overview-thesis-toc">
                 <div class="toc-header">
                     <h3 class="toc-title">Table of Contents</h3>
                     <p class="toc-subtitle">Navigate thesis sections</p>
                 </div>
-                <ul class="toc-list" id="toc-list"></ul>
+                <ul class="toc-list" id="overview-toc-list"></ul>
             </nav>
 
             <!-- Thesis Content -->
-            <main class="thesis-main" id="thesis-main">
-                <header class="thesis-header" id="thesis-header">
+            <main class="thesis-main" id="overview-thesis-main">
+                <header class="thesis-header" id="overview-thesis-header">
                     <div class="thesis-logo">&#128218;</div>
-                    <h1 class="thesis-title" id="thesis-title-text">Loading...</h1>
-                    <div class="thesis-meta-grid" id="thesis-meta-grid"></div>
+                    <h1 class="thesis-title" id="overview-thesis-title-text">Loading...</h1>
+                    <div class="thesis-meta-grid" id="overview-thesis-meta-grid"></div>
                 </header>
-                <div class="thesis-sections" id="thesis-sections">
+                <div class="thesis-sections" id="overview-thesis-sections">
                     <div class="thesis-loading">
                         <div class="spinner"></div>
                         <p>Loading thesis content...</p>
@@ -337,4 +341,4 @@
     </div>
 </div>
 
-<script src="/static/js/modules/dashboard_home.js"></script>
+<script src="/static/js/modules/overview.js"></script>

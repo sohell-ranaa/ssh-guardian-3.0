@@ -932,7 +932,8 @@
     };
 
     /**
-     * Show IP Details modal with full geolocation info
+     * Show IP Details modal with full ML analysis, behavioral patterns, and recommendations
+     * Similar to simulation results display
      * @param {string} ipAddress - IP address to show details for
      */
     window.showIpDetails = async function(ipAddress) {
@@ -942,133 +943,366 @@
         }
 
         // Show loading toast
-        const loadingToast = showToast(`Loading details for ${ipAddress}...`, 'info', 0);
+        const loadingToast = showToast(`Analyzing ${ipAddress}...`, 'info', 0);
 
         try {
-            // Fetch IP status and geolocation info in parallel
-            const [status, geoInfo] = await Promise.all([
-                window.checkIpStatus(ipAddress),
-                window.fetchIpInfo(ipAddress)
-            ]);
+            // Fetch full IP analysis from backend
+            const response = await fetch(`/api/demo/ip-analysis/${encodeURIComponent(ipAddress)}`);
+            const data = await response.json();
 
             // Remove loading toast
             if (loadingToast) loadingToast.remove();
 
-            // Build status badges
-            const statusBadges = [];
-            if (status && status.is_blocked) {
-                statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #D83B01; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Blocked</span>');
-            }
-            if (status && status.is_whitelisted) {
-                statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #107C10; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Whitelisted</span>');
-            }
-            if (status && status.is_watched) {
-                statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #FFB900; color: #323130; border-radius: 3px; font-size: 11px; margin-right: 5px;">Watched</span>');
-            }
-            if (geoInfo && geoInfo.is_proxy) {
-                statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #8764B8; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Proxy/VPN</span>');
-            }
-            if (statusBadges.length === 0) {
-                statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #605E5C; color: white; border-radius: 3px; font-size: 11px;">No Special Status</span>');
+            if (!data.success) {
+                showToast(`Failed to analyze IP: ${data.error || 'Unknown error'}`, 'error');
+                return;
             }
 
-            // Build geolocation section
-            let geoSection = '';
-            if (geoInfo && geoInfo.success) {
-                const flagEmoji = geoInfo.country_code && geoInfo.country_code !== 'N/A'
-                    ? `<img src="https://flagcdn.com/24x18/${geoInfo.country_code.toLowerCase()}.png" alt="${geoInfo.country_code}" style="vertical-align: middle; margin-right: 6px;">`
-                    : '';
+            // Extract data
+            const composite = data.composite_risk || {};
+            const behavioral = data.behavioral_analysis || {};
+            const geoIntel = data.geographic_intelligence || {};
+            const results = data.results || {};
+            const threat = results.threat_intel || {};
+            const ml = results.ml || {};
+            const geo = results.geo || {};
+            const history = results.history || {};
+            const recommendations = results.recommendations || [];
 
-                geoSection = `
-                    <div style="border-top: 1px solid var(--border, #e0e0e0); padding-top: 16px; margin-top: 8px;">
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 600;">GEOLOCATION</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">Country</div>
-                                <div style="font-size: 13px; font-weight: 500;">${flagEmoji}${escapeHtml(geoInfo.country || 'Unknown')} (${escapeHtml(geoInfo.country_code || 'N/A')})</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">City</div>
-                                <div style="font-size: 13px; font-weight: 500;">${escapeHtml(geoInfo.city || 'Unknown')}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">Region</div>
-                                <div style="font-size: 13px; font-weight: 500;">${escapeHtml(geoInfo.region || 'Unknown')}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">Timezone</div>
-                                <div style="font-size: 13px; font-weight: 500;">${escapeHtml(geoInfo.timezone || 'N/A')}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="border-top: 1px solid var(--border, #e0e0e0); padding-top: 16px; margin-top: 16px;">
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 600;">NETWORK</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">ISP / Organization</div>
-                                <div style="font-size: 13px; font-weight: 500;">${escapeHtml(geoInfo.isp || 'Unknown')}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">ASN</div>
-                                <div style="font-size: 13px; font-weight: 500;">AS${escapeHtml(geoInfo.asn || 'N/A')}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">Coordinates</div>
-                                <div style="font-size: 13px; font-weight: 500;">${geoInfo.latitude || 0}, ${geoInfo.longitude || 0}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">Continent</div>
-                                <div style="font-size: 13px; font-weight: 500;">${escapeHtml(geoInfo.continent || 'Unknown')}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                geoSection = `
-                    <div style="border-top: 1px solid var(--border, #e0e0e0); padding-top: 16px; margin-top: 8px;">
-                        <div style="font-size: 12px; color: var(--text-secondary); text-align: center;">
-                            Geolocation info unavailable
-                        </div>
-                    </div>
-                `;
-            }
+            // Build the comprehensive analysis modal
+            const content = buildFullAnalysisContent(ipAddress, composite, behavioral, geoIntel, threat, ml, geo, history, recommendations);
 
-            const content = `
-                <div style="padding: 0;">
-                    <div style="display: grid; gap: 16px;">
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">IP Address</div>
-                            <div style="font-family: monospace; font-size: 18px; font-weight: 600;">${escapeHtml(ipAddress)}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Status</div>
-                            <div>${statusBadges.join('')}</div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div style="background: var(--hover-bg, #f5f5f5); padding: 12px; border-radius: 4px;">
-                                <div style="font-size: 24px; font-weight: 600; color: #0078D4;">${status?.notes_count || 0}</div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">Notes</div>
-                            </div>
-                            <div style="background: var(--hover-bg, #f5f5f5); padding: 12px; border-radius: 4px;">
-                                <div style="font-size: 24px; font-weight: 600; color: #F7630C;">${status?.reports_count || 0}</div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">Reports</div>
-                            </div>
-                        </div>
-                        ${geoSection}
-                    </div>
-                </div>
-            `;
-
-            showActionModal(`IP Details: ${ipAddress}`, content, null, {
-                showCancel: false,
-                confirmText: 'Close'
-            });
+            // Create larger modal for full analysis
+            showFullAnalysisModal(ipAddress, geo, content);
 
         } catch (error) {
             if (loadingToast) loadingToast.remove();
-            console.error('Error loading IP details:', error);
-            showToast('Error loading IP details', 'error');
+            console.error('Error loading IP analysis:', error);
+            showToast('Error loading IP analysis', 'error');
         }
     };
+
+    /**
+     * Build the full analysis content HTML - Professional Design
+     */
+    function buildFullAnalysisContent(ip, composite, behavioral, geoIntel, threat, ml, geo, history, recommendations) {
+        const threatLevel = (composite.threat_level || 'UNKNOWN').toLowerCase();
+        const overallScore = Math.round(composite.overall_score || 0);
+        const confidence = Math.round(composite.confidence || 0);
+
+        // Build risk breakdown section
+        const breakdown = composite.breakdown || {};
+        const threatIntelBreakdown = breakdown.threat_intel || {};
+        const mlBreakdown = breakdown.ml_prediction || {};
+        const behavioralBreakdown = breakdown.behavioral || {};
+        const geoBreakdown = breakdown.geographic || {};
+
+        // Get threat level description
+        const levelDescriptions = {
+            'critical': 'Immediate threat detected. This IP shows strong indicators of malicious activity and should be blocked immediately.',
+            'high': 'High risk detected. Multiple threat indicators suggest this IP is likely malicious.',
+            'moderate': 'Elevated risk detected. Some suspicious patterns warrant investigation.',
+            'low': 'Minor concerns detected. Activity appears mostly benign with some minor flags.',
+            'clean': 'No significant threats detected. This IP appears to be safe.',
+            'unknown': 'Insufficient data to determine threat level. Continue monitoring.'
+        };
+
+        // Build network flags
+        let networkFlagsHtml = '';
+        if (geo.is_tor || geo.is_vpn || geo.is_proxy || geo.is_datacenter) {
+            const flags = [];
+            if (geo.is_tor) flags.push('<span class="network-flag tor">TOR</span>');
+            if (geo.is_vpn) flags.push('<span class="network-flag vpn">VPN</span>');
+            if (geo.is_proxy) flags.push('<span class="network-flag proxy">PROXY</span>');
+            if (geo.is_datacenter) flags.push('<span class="network-flag datacenter">DATACENTER</span>');
+            networkFlagsHtml = `<div class="network-flags">${flags.join('')}</div>`;
+        }
+
+        // Build behavioral indicators
+        const indicators = behavioral.indicators || [];
+        let indicatorsHtml = '';
+        if (indicators.length > 0) {
+            indicatorsHtml = indicators.map(i => `<span class="indicator-tag">${escapeHtml(i)}</span>`).join('');
+        } else {
+            indicatorsHtml = '<span class="indicator-tag clean">No anomalous indicators</span>';
+        }
+
+        // Build recommendations HTML
+        let recommendationsHtml = '';
+        if (recommendations.length > 0) {
+            recommendationsHtml = recommendations.slice(0, 5).map(rec => {
+                const priority = (rec.priority || 'medium').toLowerCase();
+                const confidencePercent = Math.round((rec.confidence || rec.ai_confidence || 0) * 100);
+                const whyList = (rec.why || rec.evidence || []).filter(w => w).slice(0, 3);
+
+                let evidenceHtml = '';
+                if (whyList.length > 0) {
+                    evidenceHtml = `<ul class="recommendation-evidence">${whyList.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>`;
+                }
+
+                let riskHtml = '';
+                if (rec.risk_if_ignored) {
+                    riskHtml = `<div class="recommendation-risk"><strong>Risk if ignored:</strong> ${escapeHtml(rec.risk_if_ignored)}</div>`;
+                }
+
+                return `
+                    <div class="recommendation-card ${priority}">
+                        <div class="recommendation-header">
+                            <span class="recommendation-action">${escapeHtml(rec.action)}</span>
+                            <div class="recommendation-meta">
+                                <span class="recommendation-priority ${priority}">${priority}</span>
+                                <span class="recommendation-confidence">${confidencePercent}%</span>
+                            </div>
+                        </div>
+                        <div class="recommendation-reason">${escapeHtml(rec.reason)}</div>
+                        ${evidenceHtml}
+                        ${riskHtml}
+                    </div>
+                `;
+            }).join('');
+        } else {
+            recommendationsHtml = `
+                <div class="empty-recommendations">
+                    <div class="empty-recommendations-icon">✓</div>
+                    <div>No specific recommendations at this time</div>
+                </div>
+            `;
+        }
+
+        // Country flag
+        const flagImg = geo.country_code
+            ? `<img src="https://flagcdn.com/24x18/${geo.country_code.toLowerCase()}.png" alt="${geo.country_code}" onerror="this.style.display='none'">`
+            : '';
+
+        return `
+            <!-- Risk Score Hero -->
+            <div class="risk-score-hero ${threatLevel}">
+                <div class="risk-score-info">
+                    <h3>Composite Risk Assessment</h3>
+                    <p class="score-description">${levelDescriptions[threatLevel] || levelDescriptions['unknown']}</p>
+                    ${networkFlagsHtml}
+                </div>
+                <div class="risk-score-display">
+                    <div class="risk-score-circle ${threatLevel}">
+                        <span class="risk-score-value ${threatLevel}">${overallScore}</span>
+                        <span class="risk-score-label">${threatLevel.toUpperCase()}</span>
+                    </div>
+                    <div class="risk-score-confidence">${confidence}% confidence</div>
+                </div>
+            </div>
+
+            <!-- Risk Breakdown -->
+            <div class="analysis-section">
+                <div class="section-header">
+                    <div class="section-icon">📊</div>
+                    <span class="section-title">Risk Factor Breakdown</span>
+                </div>
+                <div class="risk-breakdown-grid">
+                    <div class="risk-breakdown-card threat-intel">
+                        <div class="breakdown-score threat-intel">${Math.round(threatIntelBreakdown.score || 0)}</div>
+                        <div class="breakdown-label">Threat Intel</div>
+                        <div class="breakdown-weight">Weight: ${Math.round((threatIntelBreakdown.weight || 0.35) * 100)}%</div>
+                    </div>
+                    <div class="risk-breakdown-card ml">
+                        <div class="breakdown-score ml">${Math.round(mlBreakdown.score || 0)}</div>
+                        <div class="breakdown-label">ML Prediction</div>
+                        <div class="breakdown-weight">Weight: ${Math.round((mlBreakdown.weight || 0.30) * 100)}%</div>
+                    </div>
+                    <div class="risk-breakdown-card behavioral">
+                        <div class="breakdown-score behavioral">${Math.round(behavioralBreakdown.score || 0)}</div>
+                        <div class="breakdown-label">Behavioral</div>
+                        <div class="breakdown-weight">Weight: ${Math.round((behavioralBreakdown.weight || 0.25) * 100)}%</div>
+                    </div>
+                    <div class="risk-breakdown-card geographic">
+                        <div class="breakdown-score geographic">${Math.round(geoBreakdown.score || 0)}</div>
+                        <div class="breakdown-label">Geographic</div>
+                        <div class="breakdown-weight">Weight: ${Math.round((geoBreakdown.weight || 0.10) * 100)}%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Behavioral Analysis -->
+            <div class="analysis-section">
+                <div class="section-header">
+                    <div class="section-icon" style="background: #FF8C00;">🔍</div>
+                    <span class="section-title">Behavioral Analysis</span>
+                </div>
+                <div class="behavioral-panel">
+                    <div class="behavioral-stats">
+                        <div class="behavioral-stat">
+                            <div class="behavioral-stat-value">${escapeHtml(behavioral.pattern || 'Unknown')}</div>
+                            <div class="behavioral-stat-label">Attack Pattern</div>
+                        </div>
+                        <div class="behavioral-stat">
+                            <div class="behavioral-stat-value">${behavioral.velocity || 0}/min</div>
+                            <div class="behavioral-stat-label">Attack Velocity</div>
+                        </div>
+                        <div class="behavioral-stat">
+                            <div class="behavioral-stat-value">${behavioral.failure_rate || 0}%</div>
+                            <div class="behavioral-stat-label">Failure Rate</div>
+                        </div>
+                        <div class="behavioral-stat">
+                            <div class="behavioral-stat-value">${behavioral.unique_usernames || 0}</div>
+                            <div class="behavioral-stat-label">Unique Usernames</div>
+                        </div>
+                    </div>
+                    <div class="behavioral-divider"></div>
+                    <div class="behavioral-indicators-label">Risk Indicators</div>
+                    <div class="behavioral-indicators">${indicatorsHtml}</div>
+                </div>
+            </div>
+
+            <!-- Threat Intelligence -->
+            <div class="analysis-section">
+                <div class="section-header">
+                    <div class="section-icon" style="background: #D83B01;">🛡️</div>
+                    <span class="section-title">Threat Intelligence</span>
+                </div>
+                <div class="intel-grid">
+                    <div class="intel-card">
+                        <div class="intel-logo abuseipdb">AIP</div>
+                        <div class="intel-details">
+                            <div class="intel-name">AbuseIPDB</div>
+                            <div class="intel-subtitle">${threat.abuseipdb_reports || 0} reports filed</div>
+                        </div>
+                        <div class="intel-score ${(threat.abuseipdb_score || 0) > 50 ? 'danger' : (threat.abuseipdb_score || 0) > 20 ? 'warning' : 'safe'}">${threat.abuseipdb_score || 0}<span style="font-size: 14px; color: var(--text-secondary);">/100</span></div>
+                    </div>
+                    <div class="intel-card">
+                        <div class="intel-logo virustotal">VT</div>
+                        <div class="intel-details">
+                            <div class="intel-name">VirusTotal</div>
+                            <div class="intel-subtitle">Security vendor detections</div>
+                        </div>
+                        <div class="intel-score ${(threat.virustotal_positives || 0) > 5 ? 'danger' : (threat.virustotal_positives || 0) > 0 ? 'warning' : 'safe'}">${threat.virustotal_positives || 0}<span style="font-size: 14px; color: var(--text-secondary);">/${threat.virustotal_total || 70}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ML Analysis -->
+            <div class="analysis-section">
+                <div class="section-header">
+                    <div class="section-icon" style="background: #8764B8;">🤖</div>
+                    <span class="section-title">Machine Learning Analysis</span>
+                </div>
+                <div class="ml-panel">
+                    <div class="ml-metric">
+                        <div class="ml-metric-value ${(ml.risk_score || 0) > 60 ? 'danger' : 'safe'}">${Math.round(ml.risk_score || 0)}</div>
+                        <div class="ml-metric-label">ML Risk Score</div>
+                    </div>
+                    <div class="ml-metric">
+                        <div class="ml-metric-value info">${Math.round((ml.confidence || 0) * 100)}%</div>
+                        <div class="ml-metric-label">Prediction Confidence</div>
+                    </div>
+                    <div class="ml-metric">
+                        <div class="ml-metric-value" style="font-size: 18px; color: var(--text-primary);">${escapeHtml(ml.threat_type || 'Unknown')}</div>
+                        <div class="ml-metric-label">Threat Classification</div>
+                        ${ml.is_anomaly ? '<span class="anomaly-badge">Anomaly Detected</span>' : ''}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historical Activity -->
+            <div class="analysis-section">
+                <div class="section-header">
+                    <div class="section-icon" style="background: #107C10;">📈</div>
+                    <span class="section-title">Historical Activity</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value info">${history.total_events || 0}</div>
+                        <div class="stat-label">Total Events</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value danger">${history.failed_attempts || 0}</div>
+                        <div class="stat-label">Failed Attempts</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value success">${history.successful_logins || 0}</div>
+                        <div class="stat-label">Successful Logins</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value warning">${history.anomaly_count || 0}</div>
+                        <div class="stat-label">Anomalies</div>
+                    </div>
+                </div>
+                ${history.first_seen ? `
+                    <div class="timeline-info">
+                        <span><strong>First seen:</strong> ${new Date(history.first_seen).toLocaleString()}</span>
+                        <span><strong>Last seen:</strong> ${history.last_seen ? new Date(history.last_seen).toLocaleString() : 'N/A'}</span>
+                    </div>
+                ` : ''}
+            </div>
+
+            <!-- AI Recommendations -->
+            <div class="analysis-section">
+                <div class="section-header">
+                    <div class="section-icon" style="background: linear-gradient(135deg, #0078D4, #8764B8);">💡</div>
+                    <span class="section-title">AI-Powered Recommendations</span>
+                </div>
+                <div class="recommendations-list">
+                    ${recommendationsHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Show a larger modal for full IP analysis - Professional Design
+     */
+    function showFullAnalysisModal(ip, geo, content) {
+        // Remove existing modals
+        document.querySelectorAll('.ip-analysis-overlay').forEach(el => el.remove());
+
+        const threatLevel = content.match(/risk-score-hero\s+(\w+)/) ?
+            content.match(/risk-score-hero\s+(\w+)/)[1] : 'unknown';
+
+        // Country flag
+        const flagImg = geo.country_code
+            ? `<img src="https://flagcdn.com/24x18/${geo.country_code.toLowerCase()}.png" alt="${geo.country_code}" onerror="this.style.display='none'">`
+            : '';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'ip-analysis-overlay';
+        overlay.innerHTML = `
+            <div class="ip-analysis-modal">
+                <div class="ip-analysis-header">
+                    <div class="ip-analysis-header-left">
+                        <div class="ip-analysis-icon ${threatLevel}">🔒</div>
+                        <div class="ip-analysis-title-group">
+                            <h2>${escapeHtml(ip)}</h2>
+                            <div class="ip-analysis-location">
+                                ${flagImg}
+                                <span>${escapeHtml(geo.city || 'Unknown')}, ${escapeHtml(geo.country || 'Unknown')}</span>
+                                ${geo.isp ? `<span style="color: var(--text-hint);">• ${escapeHtml(geo.isp)}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <button class="ip-analysis-close">&times;</button>
+                </div>
+                <div class="ip-analysis-body">
+                    ${content}
+                </div>
+            </div>
+        `;
+
+        // Close handlers
+        const closeModal = () => {
+            overlay.remove();
+            document.removeEventListener('keydown', keyHandler);
+        };
+
+        overlay.querySelector('.ip-analysis-close').onclick = closeModal;
+
+        const keyHandler = (e) => {
+            if (e.key === 'Escape') closeModal();
+        };
+        document.addEventListener('keydown', keyHandler);
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeModal();
+        };
+
+        document.body.appendChild(overlay);
+    }
 
 })();

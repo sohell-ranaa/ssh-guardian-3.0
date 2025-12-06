@@ -220,7 +220,7 @@
                         <span class="badge badge-outline">${formatTriggerLabel(notif.trigger_type)}</span>
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #EDEBE9; max-width: 250px;">
-                        <div style="font-size: 13px; font-weight: 500; color: #323130; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(notif.message_title || '')}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #323130; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(stripHtmlAndEmojis(notif.message_title || ''))}</div>
                     </td>
                     <td style="padding: 12px; border-bottom: 1px solid #EDEBE9;">
                         ${renderChannelBadges(channels)}
@@ -353,6 +353,20 @@
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    /**
+     * Strip HTML tags and emojis from text
+     */
+    function stripHtmlAndEmojis(str) {
+        if (!str) return '';
+        // Remove HTML tags
+        let cleaned = str.replace(/<[^>]*>/g, '');
+        // Remove common emojis (keep text readable)
+        cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '');
+        // Clean up extra whitespace
+        cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+        return cleaned;
     }
 
     /**
@@ -489,12 +503,12 @@
 
                     <div style="margin-bottom: 20px;">
                         <label style="font-size: 12px; color: #605E5C; display: block; margin-bottom: 4px;">Title</label>
-                        <div style="color: #323130; font-weight: 500;">${escapeHtml(notif.message_title)}</div>
+                        <div style="color: #323130; font-weight: 500;">${escapeHtml(stripHtmlAndEmojis(notif.message_title))}</div>
                     </div>
 
                     <div style="margin-bottom: 20px;">
                         <label style="font-size: 12px; color: #605E5C; display: block; margin-bottom: 4px;">Message</label>
-                        <div style="background: #FAF9F8; padding: 12px; border-radius: 4px; color: #323130; white-space: pre-wrap; font-size: 13px;">${escapeHtml(notif.message_body)}</div>
+                        <div style="background: #FAF9F8; padding: 12px; border-radius: 4px; color: #323130; white-space: pre-wrap; font-size: 13px;">${escapeHtml(stripHtmlAndEmojis(notif.message_body))}</div>
                     </div>
 
                     ${notif.failed_reason ? `

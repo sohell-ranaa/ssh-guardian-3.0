@@ -35,19 +35,228 @@
             // Reset pagination
             currentPage = 0;
 
-            // Load events data
-            await loadEvents();
+            // Check for specific event ID in URL (from notification click)
+            const eventId = getEventIdFromUrl();
+            if (eventId) {
+                // Load and show specific event details
+                await loadSpecificEvent(eventId);
+            } else {
+                // Load events data normally
+                await loadEvents();
+            }
 
             // Setup event listeners
             setupEventsEventListeners();
 
-            // Start auto-refresh if enabled
-            if (autoRefreshEnabled) {
+            // Start auto-refresh if enabled (but not if viewing specific event)
+            if (autoRefreshEnabled && !eventId) {
                 startAutoRefresh();
             }
 
         } catch (error) {
             console.error('Error loading Events Live page:', error);
+        }
+    };
+
+    /**
+     * Get event ID from URL query parameter
+     */
+    function getEventIdFromUrl() {
+        const hash = window.location.hash;
+        if (hash.includes('?')) {
+            const queryString = hash.split('?')[1];
+            const params = new URLSearchParams(queryString);
+            return params.get('event');
+        }
+        return null;
+    }
+
+    /**
+     * Load and display a specific event by ID
+     */
+    async function loadSpecificEvent(eventId) {
+        const loadingEl = document.getElementById('eventsLoading');
+        const tableEl = document.getElementById('eventsTable');
+        const errorEl = document.getElementById('eventsError');
+
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (tableEl) tableEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'none';
+
+        try {
+            // Ensure TimeSettings is loaded for proper date/time formatting in modal
+            if (window.TimeSettings && !window.TimeSettings.isLoaded()) {
+                await window.TimeSettings.load();
+            }
+
+            // Fetch the specific event
+            const response = await fetch(`/api/dashboard/events/${eventId}`);
+            const data = await response.json();
+
+            if (!data || !data.success) {
+                // Event not found, fall back to normal list
+                console.warn(`Event ${eventId} not found, loading all events`);
+                await loadEvents();
+                return;
+            }
+
+            const event = data.data || data.event;
+            if (!event) {
+                await loadEvents();
+                return;
+            }
+
+            // Show the event details modal
+            showEventDetailsModal(event);
+
+            // Also load the normal events list in the background
+            await loadEvents();
+
+        } catch (error) {
+            console.error('Error loading specific event:', error);
+            // Fall back to loading all events
+            await loadEvents();
+        }
+    }
+
+    /**
+     * Show event details in a modal
+     */
+    function showEventDetailsModal(event) {
+        // Remove existing modal
+        const existingModal = document.getElementById('event-detail-modal');
+        if (existingModal) existingModal.remove();
+
+        const location = event.location ?
+            `${escapeHtml(event.location.city) || 'Unknown'}, ${escapeHtml(event.location.country) || 'Unknown'}` :
+            'Unknown';
+
+        const flags = [];
+        if (event.location?.is_proxy) flags.push('Proxy');
+        if (event.location?.is_vpn) flags.push('VPN');
+        if (event.location?.is_tor) flags.push('Tor');
+        if (event.location?.is_datacenter) flags.push('Datacenter');
+
+        const modal = document.createElement('div');
+        modal.id = 'event-detail-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                // Clean up URL
+                window.location.hash = 'events-live';
+            }
+        };
+
+        modal.innerHTML = `
+            <div style="background: var(--surface); border-radius: 8px; width: 600px; max-width: 90vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+                <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary);">Event Details #${event.id}</h2>
+                    <button onclick="this.closest('#event-detail-modal').remove(); window.location.hash='events-live';" style="background: none; border: none; cursor: pointer; font-size: 24px; color: var(--text-secondary); line-height: 1;">&times;</button>
+                </div>
+                <div style="padding: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">IP Address</label>
+                            <div style="font-family: monospace; font-size: 14px; color: var(--text-primary);">${escapeHtml(event.ip)}</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Username</label>
+                            <div style="font-family: monospace; font-size: 14px; color: var(--text-primary);">${escapeHtml(event.username) || 'N/A'}</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Event Type</label>
+                            ${getStatusBadge(event.event_type)}
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Threat Level</label>
+                            ${getThreatBadge(event.threat?.level || event.threat_level)}
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Timestamp</label>
+                            <div style="color: var(--text-primary);">${formatTimestamp(event.timestamp)}</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Server</label>
+                            <div style="color: var(--text-primary);">${escapeHtml(event.server) || 'N/A'}</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Location</label>
+                            <div style="color: var(--text-primary);">${location}</div>
+                            ${flags.length > 0 ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${flags.join(' | ')}</div>` : ''}
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Auth Method</label>
+                            <div style="color: var(--text-primary);">${escapeHtml(event.auth_method) || 'N/A'}</div>
+                        </div>
+                    </div>
+
+                    ${event.threat ? `
+                        <div style="margin-bottom: 20px; padding: 12px; background: var(--background); border-radius: 4px;">
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 8px;">Threat Intelligence</label>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 13px;">
+                                ${event.threat.abuseipdb_score !== undefined && event.threat.abuseipdb_score !== null ? `<div><strong>AbuseIPDB:</strong> ${event.threat.abuseipdb_score}%</div>` : ''}
+                                ${event.threat.virustotal_positives !== undefined && event.threat.virustotal_positives !== null ? `<div><strong>VirusTotal:</strong> ${event.threat.virustotal_positives}/${event.threat.virustotal_total || '?'} detections</div>` : ''}
+                                ${event.threat.confidence !== undefined && event.threat.confidence !== null ? `<div><strong>Confidence:</strong> ${event.threat.confidence}%</div>` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${event.ml_risk_score !== undefined && event.ml_risk_score !== null ? `
+                        <div style="margin-bottom: 20px; padding: 12px; background: var(--background); border-radius: 4px;">
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 8px;">ML Analysis</label>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 13px;">
+                                <div><strong>Risk Score:</strong> ${event.ml_risk_score}/100</div>
+                                ${event.ml_threat_type ? `<div><strong>Threat Type:</strong> ${escapeHtml(event.ml_threat_type)}</div>` : ''}
+                                ${event.is_anomaly ? `<div><strong>Anomaly:</strong> Yes</div>` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <button onclick="blockIPFromModal('${escapeHtml(event.ip)}')" style="padding: 8px 16px; background: #D83B01; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                            Block IP
+                        </button>
+                        <button onclick="this.closest('#event-detail-modal').remove(); window.location.hash='events-live';" style="padding: 8px 16px; background: var(--background); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    }
+
+    /**
+     * Block IP from the modal
+     */
+    window.blockIPFromModal = async function(ip) {
+        if (!confirm(`Block IP address ${ip}?`)) return;
+
+        try {
+            const response = await fetch('/api/dashboard/blocking/blocks/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ip_address: ip,
+                    block_reason: 'Blocked from event details',
+                    block_type: 'manual'
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert(`IP ${ip} has been blocked.`);
+                const modal = document.getElementById('event-detail-modal');
+                if (modal) modal.remove();
+                window.location.hash = 'events-live';
+            } else {
+                alert(`Failed to block IP: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Error blocking IP:', error);
+            alert('Failed to block IP. Please try again.');
         }
     };
 

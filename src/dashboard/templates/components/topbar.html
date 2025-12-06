@@ -13,6 +13,38 @@
         <div class="header-actions" id="headerActions">
             <!-- Cache toggle button will be inserted here by CacheManager -->
         </div>
+
+        <!-- Notification Bell -->
+        <div class="notification-bell" id="notificationBell">
+            <button class="bell-btn" onclick="NotificationPane.toggle()" title="Notifications">
+                <span class="bell-icon">&#128276;</span>
+                <span class="notification-badge hidden" id="notificationBadge">0</span>
+            </button>
+
+            <!-- Notification Pane (hidden by default) -->
+            <div class="notification-pane" id="notificationPane">
+                <div class="pane-header">
+                    <h3>Notifications</h3>
+                    <div class="pane-header-actions">
+                        <button class="pane-header-btn" onclick="NotificationPane.markAllRead()">Mark all read</button>
+                    </div>
+                </div>
+                <div class="pane-body" id="notificationList">
+                    <!-- Notifications loaded here -->
+                    <div class="pane-loading">
+                        <div class="pane-loading-spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+                <div class="pane-footer">
+                    <a href="#notif-history">View All Notifications &#8594;</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Click-outside overlay (invisible) -->
+        <div class="notification-overlay" id="notificationOverlay" onclick="NotificationPane.close()"></div>
+
         <div class="user-menu">
             <span class="user-name" id="userName">Loading...</span>
         </div>
