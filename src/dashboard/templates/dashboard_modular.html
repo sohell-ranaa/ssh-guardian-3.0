@@ -45,6 +45,7 @@
             {% include 'pages/reports_trends.html' %}
             {% include 'pages/reports_export.html' %}
             {% include 'pages/simulation.html' %}
+            {% include 'pages/firewall.html' %}
 
             <!-- ML Intelligence Pages -->
             {% include 'pages/ml_overview.html' %}
@@ -198,6 +199,7 @@
                 'reports-trends': 'page-reports-trends',
                 'reports-export': 'page-reports-export',
                 'simulation': 'page-simulation',
+                'firewall': 'page-firewall',
                 'ml-overview': 'page-ml-overview',
                 'ml-performance': 'page-ml-performance',
                 'ml-training': 'page-ml-training',
@@ -342,6 +344,10 @@
                 } else if (pageName === 'system-status') {
                     if (typeof loadSystemStatusPage === 'function') {
                         loadSystemStatusPage();
+                    }
+                } else if (pageName === 'firewall') {
+                    if (typeof initFirewallPage === 'function') {
+                        initFirewallPage();
                     }
                 }
             }
@@ -492,6 +498,7 @@
     <script src="/static/js/modules/daily_reports_page.js"></script>
     <script src="/static/js/modules/trends_reports_page.js"></script>
     <script src="/static/js/modules/system_status_page.js"></script>
+    <script src="/static/js/modules/firewall_page.js"></script>
 
     <!-- Initial page load - called after all scripts are loaded -->
     <script>

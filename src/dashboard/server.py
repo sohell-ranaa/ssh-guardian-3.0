@@ -40,6 +40,7 @@ from routes.daily_reports_routes import daily_reports_routes
 from routes.trends_reports_routes import trends_reports_routes
 from routes.simulation_routes import simulation_routes
 from routes.ml_routes import ml_routes
+from routes.ml_training_routes import ml_training_routes
 from routes.demo_routes import demo_routes
 from routes.system_routes import system_routes
 from routes.cache_settings_routes import cache_settings_routes
@@ -84,6 +85,7 @@ app.register_blueprint(daily_reports_routes, url_prefix='/api/dashboard/daily-re
 app.register_blueprint(trends_reports_routes, url_prefix='/api/dashboard/trends-reports')  # Trends reports
 app.register_blueprint(simulation_routes, url_prefix='/api/simulation')  # Simulation API
 app.register_blueprint(ml_routes)  # ML Intelligence API
+app.register_blueprint(ml_training_routes)  # ML Training API
 app.register_blueprint(demo_routes, url_prefix='/api/demo')  # Demo scenarios API
 app.register_blueprint(system_routes, url_prefix='/api/dashboard/system')  # System status & cache API
 app.register_blueprint(cache_settings_routes, url_prefix='/api/dashboard/cache-settings')  # Cache settings API

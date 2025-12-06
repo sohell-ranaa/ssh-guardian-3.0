@@ -3,89 +3,13 @@
     <div class="page-header">
         <div>
             <h1 class="page-title">System Status</h1>
-            <p class="page-subtitle">Cache management, time settings, and system health</p>
+            <p class="page-subtitle">Cache management and system health monitoring</p>
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
             <span id="current-time-display" style="font-size: 14px; color: var(--text-secondary);"></span>
             <button id="system-refresh-btn" class="btn btn-secondary">
                 Refresh
             </button>
-        </div>
-    </div>
-
-    <!-- Time Settings Section -->
-    <div class="settings-section" style="margin-bottom: 24px;">
-        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">Time Settings</h2>
-        </div>
-
-        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
-                <!-- Timezone Selection -->
-                <div>
-                    <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
-                        Display Timezone
-                    </label>
-                    <select id="timezone-select" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                        <option value="local">Browser Local Time</option>
-                        <option value="UTC">UTC (Coordinated Universal Time)</option>
-                        <option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (UTC+8)</option>
-                        <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
-                        <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
-                        <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
-                        <option value="Asia/Jakarta">Asia/Jakarta (UTC+7)</option>
-                        <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
-                        <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
-                        <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
-                        <option value="Europe/London">Europe/London (UTC+0/+1)</option>
-                        <option value="Europe/Paris">Europe/Paris (UTC+1/+2)</option>
-                        <option value="Europe/Berlin">Europe/Berlin (UTC+1/+2)</option>
-                        <option value="America/New_York">America/New York (UTC-5/-4)</option>
-                        <option value="America/Los_Angeles">America/Los Angeles (UTC-8/-7)</option>
-                        <option value="America/Chicago">America/Chicago (UTC-6/-5)</option>
-                        <option value="Australia/Sydney">Australia/Sydney (UTC+10/+11)</option>
-                    </select>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                        All timestamps in the dashboard will be displayed in this timezone
-                    </p>
-                </div>
-
-                <!-- Time Format -->
-                <div>
-                    <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
-                        Time Format
-                    </label>
-                    <select id="time-format-select" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                        <option value="24h">24-hour (14:30:00)</option>
-                        <option value="12h">12-hour (2:30:00 PM)</option>
-                    </select>
-                </div>
-
-                <!-- Date Format -->
-                <div>
-                    <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
-                        Date Format
-                    </label>
-                    <select id="date-format-select" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                        <option value="YYYY-MM-DD">2025-12-05 (ISO)</option>
-                        <option value="DD/MM/YYYY">05/12/2025 (EU)</option>
-                        <option value="MM/DD/YYYY">12/05/2025 (US)</option>
-                        <option value="DD MMM YYYY">05 Dec 2025</option>
-                    </select>
-                </div>
-            </div>
-
-            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <span style="font-size: 14px; color: var(--text-secondary);">Preview: </span>
-                        <span id="time-preview" style="font-size: 14px; font-weight: 500; color: var(--text-primary);"></span>
-                    </div>
-                    <button id="save-time-settings-btn" class="btn btn-primary">
-                        Save Time Settings
-                    </button>
-                </div>
-            </div>
         </div>
     </div>
 

@@ -1,12 +1,13 @@
-<!-- SSH Guardian v3.0 - Simulation Page -->
+<!-- SSH Guardian v3.0 - Simulation Page (3-Tab Revamp) -->
+<!-- Version: v3.1.0 - Multi-Factor Analysis with Context-Aware Recommendations -->
 <div id="page-simulation" class="page-content" style="display: none;">
     <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
-                Attack Simulation
+                Threat Simulation & Analysis
             </h2>
             <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
-                Generate realistic SSH attack scenarios to test detection and response
+                Multi-factor threat intelligence with context-aware security recommendations
             </p>
         </div>
         <div class="page-header-actions">
@@ -19,1017 +20,744 @@
         </div>
     </div>
 
-    <!-- Simulation Statistics -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-        <div class="card" style="padding: 20px;">
-            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Simulations</div>
-            <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="sim-total-count">0</div>
-        </div>
-        <div class="card" style="padding: 20px;">
-            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Events Generated</div>
-            <div style="font-size: 28px; font-weight: 600; color: var(--azure-blue);" id="sim-events-count">0</div>
-        </div>
-        <div class="card" style="padding: 20px;">
-            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">IPs Blocked</div>
-            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="sim-blocked-count">0</div>
-        </div>
-        <div class="card" style="padding: 20px;">
-            <div style="color: var(--text-secondary); font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Templates</div>
-            <div style="font-size: 28px; font-weight: 600; color: #2EA44F;" id="sim-templates-count">0</div>
-        </div>
-    </div>
-
-    <!-- Live Demo Section -->
-    <div class="card" style="padding: 20px; margin-bottom: 24px; border: 2px solid #E6A502;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div>
-                <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">🎯</span> Live Threat Detection Demo
-                </h3>
-                <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
-                    Run real threat intelligence lookups against known malicious IPs to demonstrate detection capabilities
-                </p>
-            </div>
-            <button id="demo-run-all-btn" style="padding: 10px 20px; background: #E6A502; color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                <span>▶ Run Full Demo</span>
-            </button>
-        </div>
-
-        <!-- Demo Scenarios Grid -->
-        <div id="demo-scenarios-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px;">
-            <div style="text-align: center; padding: 30px; color: var(--text-secondary);">Loading demo scenarios...</div>
-        </div>
-
-        <!-- Demo Results Panel -->
-        <div id="demo-results-panel" style="display: none; margin-top: 20px; padding: 16px; background: var(--background); border-radius: 8px; border: 1px solid var(--border);">
-            <h4 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600;">Detection Results</h4>
-            <div id="demo-results-content"></div>
-        </div>
-    </div>
-
-    <!-- Run Simulation Section -->
-    <div class="card" style="padding: 20px; margin-bottom: 24px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Run New Simulation</h3>
-
-        <!-- Template Selection -->
-        <div style="margin-bottom: 20px;">
-            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary);">Select Attack Template</label>
-            <div id="sim-templates-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
-                <div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading templates...</div>
-            </div>
-        </div>
-
-        <!-- Selected Template Details -->
-        <div id="sim-template-details" style="display: none; margin-bottom: 20px; padding: 16px; background: var(--background); border-radius: 8px; border: 1px solid var(--border);">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                <div>
-                    <h4 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;" id="sim-selected-name">-</h4>
-                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary);" id="sim-selected-desc">-</p>
-                </div>
-                <span id="sim-selected-severity" style="padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase;">-</span>
-            </div>
-
-            <!-- Customization Options -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;">
-                <div>
-                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Number of Attempts</label>
-                    <input type="number" id="sim-param-attempts" value="10" min="1" max="100" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Time Window (seconds)</label>
-                    <input type="number" id="sim-param-timewindow" value="60" min="10" max="600" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Target Username</label>
-                    <input type="text" id="sim-param-username" placeholder="root" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 12px; margin-bottom: 4px; color: var(--text-secondary);">Target Server</label>
-                    <input type="text" id="sim-param-server" placeholder="prod-web-01" style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--card-bg);">
-                </div>
-            </div>
-        </div>
-
-        <!-- Execute Button -->
-        <button id="sim-execute-btn" disabled style="padding: 12px 24px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            <span>Run Simulation</span>
+    <!-- Tab Navigation -->
+    <div class="simulation-tabs" style="display: flex; gap: 8px; border-bottom: 2px solid var(--border); margin-bottom: 24px; position: sticky; top: 0; z-index: 100; background: var(--background); padding: 8px 0;">
+        <button class="sim-tab-btn active" data-tab="scenarios" onclick="switchSimulationTab('scenarios')">
+            <span style="font-size: 18px;">🎯</span> Scenarios
+        </button>
+        <button class="sim-tab-btn" data-tab="analysis" onclick="switchSimulationTab('analysis')">
+            <span style="font-size: 18px;">📊</span> Analysis
+        </button>
+        <button class="sim-tab-btn" data-tab="results" onclick="switchSimulationTab('results')">
+            <span style="font-size: 18px;">💡</span> Results
         </button>
     </div>
 
-    <!-- Execution Progress -->
-    <div id="sim-progress" class="card" style="padding: 20px; margin-bottom: 24px; display: none;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Simulation Progress</h3>
-        <div style="margin-bottom: 12px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span style="font-size: 13px; color: var(--text-secondary);">Processing...</span>
-                <span id="sim-progress-percent" style="font-size: 13px; font-weight: 600;">0%</span>
+    <!-- TAB 1: SCENARIOS -->
+    <div id="tab-scenarios" class="sim-tab-content active">
+        <!-- Demo Scenarios -->
+        <div class="card" style="padding: 24px; margin-bottom: 24px; border: 2px solid #E6A502;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">🎯</span> Demo Scenarios
+                    </h3>
+                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
+                        Pre-configured real-world threat scenarios with verified threat intelligence
+                    </p>
+                </div>
             </div>
-            <div style="height: 8px; background: var(--background); border-radius: 4px; overflow: hidden;">
-                <div id="sim-progress-bar" style="height: 100%; background: var(--azure-blue); border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
+            <div id="demo-scenarios-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+                <!-- Loaded dynamically -->
             </div>
         </div>
-        <div id="sim-progress-log" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px;"></div>
     </div>
 
-    <!-- Simulation History -->
-    <div class="card" style="padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Simulation History</h3>
-            <button id="sim-refresh-btn" style="padding: 6px 12px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px;">
-                Refresh
-            </button>
+    <!-- TAB 2: ANALYSIS -->
+    <div id="tab-analysis" class="sim-tab-content" style="display: none;">
+        <div id="analysis-empty-state" style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+            <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text-primary);">No Analysis Available</h3>
+            <p style="margin: 0; font-size: 14px;">Run a scenario from the Scenarios tab to see detailed threat analysis</p>
         </div>
-
-        <!-- Filters -->
-        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-            <select id="sim-filter-type" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--background); min-width: 180px;">
-                <option value="">All Attack Types</option>
-            </select>
-        </div>
-
-        <!-- History Table -->
-        <div class="table-wrapper">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">ID</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Attack Type</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Events</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Blocked</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Duration</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Executed</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="sim-history-body">
-                    <tr>
-                        <td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Pagination -->
-        <div id="sim-pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"></div>
+        <div id="analysis-content" style="display: none;"></div>
     </div>
 
-    <!-- Simulation Details Modal -->
-    <div id="sim-details-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-        <div style="background: var(--card-bg); border-radius: 8px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; margin: 20px;">
-            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Simulation Details</h3>
-                <button id="sim-modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
-            </div>
-            <div id="sim-modal-content" style="padding: 20px;">
-                <!-- Content loaded dynamically -->
-            </div>
+    <!-- TAB 3: RESULTS -->
+    <div id="tab-results" class="sim-tab-content" style="display: none;">
+        <div id="results-empty-state" style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+            <div style="font-size: 48px; margin-bottom: 16px;">💡</div>
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text-primary);">No Recommendations Available</h3>
+            <p style="margin: 0; font-size: 14px;">Run a scenario to receive context-aware security recommendations</p>
         </div>
+        <div id="results-content" style="display: none;"></div>
     </div>
 </div>
 
+<style>
+.simulation-tabs { display: flex; gap: 8px; border-bottom: 2px solid var(--border); }
+.sim-tab-btn { padding: 12px 24px; background: transparent; border: none; border-bottom: 3px solid transparent; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+.sim-tab-btn:hover { color: var(--text-primary); background: var(--hover-bg); }
+.sim-tab-btn.active { color: var(--azure-blue); border-bottom-color: var(--azure-blue); background: rgba(0, 120, 212, 0.05); }
+.sim-tab-content { display: none; }
+.sim-tab-content.active { display: block; animation: fadeIn 0.3s ease-in; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.demo-scenario-card { padding: 16px; background: var(--card-bg); border-radius: 8px; border: 2px solid var(--border); cursor: pointer; transition: all 0.2s; }
+.demo-scenario-card:hover { border-color: var(--azure-blue); box-shadow: 0 4px 12px rgba(0, 120, 212, 0.2); transform: translateY(-2px); }
+.demo-scenario-card.running { border-color: #E6A502; background: linear-gradient(135deg, var(--card-bg), rgba(230, 165, 2, 0.1)); }
+.recommendation-card { padding: 20px; background: var(--card-bg); border-radius: 12px; border-left: 5px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.2s; margin-bottom: 16px; }
+.recommendation-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); transform: translateY(-2px); }
+.recommendation-card.critical { border-left-color: #D13438; background: linear-gradient(135deg, var(--card-bg), rgba(209, 52, 56, 0.05)); }
+.recommendation-card.high { border-left-color: #E6A502; background: linear-gradient(135deg, var(--card-bg), rgba(230, 165, 2, 0.05)); }
+.recommendation-card.medium { border-left-color: #0078D4; background: linear-gradient(135deg, var(--card-bg), rgba(0, 120, 212, 0.05)); }
+.recommendation-card.low { border-left-color: #2EA44F; background: linear-gradient(135deg, var(--card-bg), rgba(46, 164, 79, 0.05)); }
+</style>
+
 <script>
-(function() {
-    let selectedTemplate = null;
-    let currentPage = 1;
-    const pageSize = 10;
+// Global state
+let currentAnalysisData = null;
 
-    // Initialize when page becomes visible
-    function initSimulation() {
-        loadTemplates();
-        loadHistory();
-        loadStats();
-        loadAttackTypes();
-    }
-
-    // Load templates
-    async function loadTemplates() {
-        try {
-            const response = await fetch('/api/simulation/templates', { credentials: 'same-origin' });
-            const data = await response.json();
-
-            if (data.success && data.templates) {
-                document.getElementById('sim-templates-count').textContent = data.templates.length;
-                renderTemplates(data.templates);
-            }
-        } catch (error) {
-            console.error('Error loading templates:', error);
-        }
-    }
-
-    function renderTemplates(templates) {
-        const grid = document.getElementById('sim-templates-grid');
-        grid.innerHTML = templates.map(t => `
-            <div class="sim-template-card" data-template="${t.id}"
-                 style="padding: 16px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                    <span style="font-weight: 600; font-size: 14px;">${t.name}</span>
-                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
-                          background: ${getSeverityColor(t.severity)}20; color: ${getSeverityColor(t.severity)};">${t.severity}</span>
-                </div>
-                <p style="margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${t.description}</p>
-                <div style="margin-top: 8px; font-size: 11px; color: var(--text-tertiary);">Category: ${t.category}</div>
-            </div>
-        `).join('');
-
-        // Add click handlers
-        grid.querySelectorAll('.sim-template-card').forEach(card => {
-            card.addEventListener('click', () => selectTemplate(card.dataset.template, templates));
-        });
-    }
-
-    function getSeverityColor(severity) {
-        const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
-        return colors[severity] || '#666';
-    }
-
-    function selectTemplate(templateId, templates) {
-        selectedTemplate = templates.find(t => t.id === templateId);
-        if (!selectedTemplate) return;
-
-        // Update UI
-        document.querySelectorAll('.sim-template-card').forEach(card => {
-            card.style.borderColor = card.dataset.template === templateId ? 'var(--azure-blue)' : 'var(--border)';
-            card.style.background = card.dataset.template === templateId ? 'var(--azure-blue)10' : 'transparent';
-        });
-
-        // Show details
-        const details = document.getElementById('sim-template-details');
-        details.style.display = 'block';
-        document.getElementById('sim-selected-name').textContent = selectedTemplate.name;
-        document.getElementById('sim-selected-desc').textContent = selectedTemplate.description;
-
-        const severitySpan = document.getElementById('sim-selected-severity');
-        severitySpan.textContent = selectedTemplate.severity;
-        severitySpan.style.background = getSeverityColor(selectedTemplate.severity) + '20';
-        severitySpan.style.color = getSeverityColor(selectedTemplate.severity);
-
-        // Set default params from template
-        const tpl = selectedTemplate.template;
-        document.getElementById('sim-param-attempts').value = tpl.attempts || tpl.attempts_per_ip * 5 || 10;
-        document.getElementById('sim-param-timewindow').value = tpl.time_window_seconds || 60;
-        document.getElementById('sim-param-username').value = Array.isArray(tpl.username) ? tpl.username[0] : (tpl.username || 'root');
-        document.getElementById('sim-param-server').value = tpl.server_hostname || 'prod-web-01';
-
-        // Enable execute button
-        document.getElementById('sim-execute-btn').disabled = false;
-    }
-
-    // Execute simulation
-    document.getElementById('sim-execute-btn').addEventListener('click', async () => {
-        if (!selectedTemplate) return;
-
-        const btn = document.getElementById('sim-execute-btn');
-        const progress = document.getElementById('sim-progress');
-        const progressBar = document.getElementById('sim-progress-bar');
-        const progressPercent = document.getElementById('sim-progress-percent');
-        const progressLog = document.getElementById('sim-progress-log');
-
-        btn.disabled = true;
-        btn.innerHTML = '<span>Running...</span>';
-        progress.style.display = 'block';
-        progressLog.innerHTML = '';
-        progressBar.style.width = '0%';
-
-        const params = {
-            attempts: parseInt(document.getElementById('sim-param-attempts').value),
-            time_window_seconds: parseInt(document.getElementById('sim-param-timewindow').value),
-            username: document.getElementById('sim-param-username').value || undefined,
-            server_hostname: document.getElementById('sim-param-server').value || undefined
-        };
-
-        try {
-            addLog(progressLog, 'Starting simulation: ' + selectedTemplate.name);
-            progressBar.style.width = '10%';
-            progressPercent.textContent = '10%';
-
-            const response = await fetch('/api/simulation/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    template_name: selectedTemplate.id,
-                    parameters: params
-                })
-            });
-
-            progressBar.style.width = '50%';
-            progressPercent.textContent = '50%';
-
-            const data = await response.json();
-
-            if (data.success) {
-                progressBar.style.width = '100%';
-                progressPercent.textContent = '100%';
-                addLog(progressLog, 'Simulation completed successfully!', 'success');
-                addLog(progressLog, `Events: ${data.summary.successful_submissions}/${data.summary.total_events}`);
-                addLog(progressLog, `Unique IPs: ${data.summary.unique_ips}`);
-                addLog(progressLog, `Completion: ${data.summary.completion_rate.toFixed(1)}%`);
-
-                // Reload history and stats
-                loadHistory();
-                loadStats();
-            } else {
-                addLog(progressLog, 'Error: ' + (data.error || 'Unknown error'), 'error');
-            }
-        } catch (error) {
-            addLog(progressLog, 'Error: ' + error.message, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<span>Run Simulation</span>';
-        }
+// Tab switching
+function switchSimulationTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.sim-tab-content').forEach(tab => {
+        tab.classList.remove('active');
+        tab.style.display = 'none';
     });
 
-    function addLog(container, message, type = 'info') {
-        const colors = { info: '#d4d4d4', success: '#4ec9b0', error: '#f14c4c', warning: '#cca700' };
-        const timestamp = new Date().toLocaleTimeString();
-        container.innerHTML += `<div style="color: ${colors[type]};">[${timestamp}] ${message}</div>`;
-        container.scrollTop = container.scrollHeight;
+    // Deactivate all tab buttons
+    document.querySelectorAll('.sim-tab-btn').forEach(btn => btn.classList.remove('active'));
+
+    // Show selected tab
+    const selectedTab = document.getElementById('tab-' + tabName);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+        selectedTab.style.display = 'block';
     }
 
-    // Load history
-    async function loadHistory() {
-        try {
-            const filter = document.getElementById('sim-filter-type').value;
-            const url = `/api/simulation/history?limit=${pageSize}&offset=${(currentPage-1)*pageSize}` +
-                        (filter ? `&attack_type=${encodeURIComponent(filter)}` : '');
+    // Activate selected tab button
+    const selectedBtn = document.querySelector(`[data-tab="${tabName}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
 
-            const response = await fetch(url, { credentials: 'same-origin' });
-            const data = await response.json();
+    console.log('[Simulation] Switched to tab:', tabName);
+}
 
-            if (data.success) {
-                renderHistory(data.history);
-                renderPagination(data.total);
-                updateStats(data);
-            }
-        } catch (error) {
-            console.error('Error loading history:', error);
+// Load page
+async function loadSimulationPage() {
+    console.log('[Simulation] Loading page...');
+    const startTime = performance.now();
+
+    // Set loading state for cache indicator
+    if (typeof CacheManager !== 'undefined') {
+        CacheManager.setLoading('simulation');
+    }
+
+    try {
+        // Load demo scenarios
+        await loadDemoScenarios();
+
+        // Load other data that dashboard expects (for cache status)
+        await Promise.all([
+            loadSimulationTemplates(),
+            loadSimulationHistory()
+        ]);
+
+        const loadTime = Math.round(performance.now() - startTime);
+        console.log('[Simulation] Page loaded successfully in', loadTime, 'ms');
+
+        // Update cache status to "fresh" (not from cache)
+        if (typeof CacheManager !== 'undefined') {
+            CacheManager.updateStatus('simulation', false, loadTime);
+        }
+    } catch (error) {
+        console.error('[Simulation] Error loading page:', error);
+
+        // Set error state for cache indicator
+        if (typeof CacheManager !== 'undefined') {
+            CacheManager.setError('simulation', 'Failed to load simulation data');
         }
     }
+}
 
-    function renderHistory(history) {
-        const tbody = document.getElementById('sim-history-body');
+// Load simulation templates (for dashboard cache)
+async function loadSimulationTemplates() {
+    try {
+        const response = await fetch('/api/simulation/templates', { credentials: 'same-origin' });
+        await response.json();
+    } catch (error) {
+        console.error('[Simulation] Error loading templates:', error);
+    }
+}
 
-        if (!history || history.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);">No simulations found</td></tr>';
-            return;
+// Load simulation history (for dashboard cache)
+async function loadSimulationHistory() {
+    try {
+        const response = await fetch('/api/simulation/history?limit=10&offset=0', { credentials: 'same-origin' });
+        await response.json();
+    } catch (error) {
+        console.error('[Simulation] Error loading history:', error);
+    }
+}
+
+// Load demo scenarios
+async function loadDemoScenarios() {
+    try {
+        console.log('[Demo] Fetching scenarios...');
+        const response = await fetch('/api/demo/scenarios', { credentials: 'same-origin' });
+        const data = await response.json();
+        console.log('[Demo] Scenarios response:', data);
+        if (data.success) {
+            console.log('[Demo] Rendering', data.scenarios.length, 'scenarios');
+            renderDemoScenarios(data.scenarios);
+        } else {
+            console.error('[Demo] Failed to load scenarios:', data.error);
+            const grid = document.getElementById('demo-scenarios-grid');
+            if (grid) grid.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Failed to load scenarios. Please refresh the page.</div>';
         }
-
-        tbody.innerHTML = history.map(sim => `
-            <tr style="border-bottom: 1px solid var(--border);">
-                <td style="padding: 12px;">#${sim.id}</td>
-                <td style="padding: 12px;">${sim.template_display_name || sim.template_name}</td>
-                <td style="padding: 12px;">
-                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
-                          background: ${getStatusColor(sim.status)}20; color: ${getStatusColor(sim.status)};">
-                        ${sim.status}
-                    </span>
-                </td>
-                <td style="padding: 12px;">${sim.events_generated || 0}</td>
-                <td style="padding: 12px;">${sim.ips_blocked || 0}</td>
-                <td style="padding: 12px;">${sim.duration_seconds ? sim.duration_seconds + 's' : '-'}</td>
-                <td style="padding: 12px;">${formatDate(sim.started_at)}</td>
-                <td style="padding: 12px;">
-                    <button onclick="viewSimDetails(${sim.id})" style="padding: 4px 8px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                        View
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    function getStatusColor(status) {
-        const colors = { completed: '#2EA44F', running: '#0078D4', failed: '#D13438', pending: '#E6A502' };
-        return colors[status] || '#666';
-    }
-
-    function formatDate(dateStr) {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return date.toLocaleString();
-    }
-
-    function renderPagination(total) {
-        const container = document.getElementById('sim-pagination');
-        const totalPages = Math.ceil(total / pageSize);
-
-        if (totalPages <= 1) {
-            container.innerHTML = '';
-            return;
-        }
-
-        let html = '';
-        for (let i = 1; i <= totalPages; i++) {
-            html += `<button onclick="goToPage(${i})" style="padding: 6px 12px; border: 1px solid var(--border);
-                     background: ${i === currentPage ? 'var(--azure-blue)' : 'var(--background)'};
-                     color: ${i === currentPage ? 'white' : 'var(--text-primary)'};
-                     border-radius: 4px; cursor: pointer;">${i}</button>`;
-        }
-        container.innerHTML = html;
-    }
-
-    window.goToPage = function(page) {
-        currentPage = page;
-        loadHistory();
-    };
-
-    // Load stats
-    async function loadStats() {
-        try {
-            const response = await fetch('/api/simulation/history?limit=1000', { credentials: 'same-origin' });
-            const data = await response.json();
-
-            if (data.success) {
-                document.getElementById('sim-total-count').textContent = data.total;
-
-                let totalEvents = 0, totalBlocked = 0;
-                data.history.forEach(sim => {
-                    totalEvents += sim.events_generated || 0;
-                    totalBlocked += sim.ips_blocked || 0;
-                });
-
-                document.getElementById('sim-events-count').textContent = totalEvents;
-                document.getElementById('sim-blocked-count').textContent = totalBlocked;
-            }
-        } catch (error) {
-            console.error('Error loading stats:', error);
-        }
-    }
-
-    function updateStats(data) {
-        document.getElementById('sim-total-count').textContent = data.total;
-    }
-
-    // Load attack types for filter
-    async function loadAttackTypes() {
-        try {
-            const response = await fetch('/api/simulation/attack-types', { credentials: 'same-origin' });
-            const data = await response.json();
-
-            if (data.success && data.attack_types) {
-                const select = document.getElementById('sim-filter-type');
-                data.attack_types.forEach(at => {
-                    const option = document.createElement('option');
-                    option.value = at.template_name;
-                    option.textContent = at.template_display_name || at.template_name;
-                    select.appendChild(option);
-                });
-            }
-        } catch (error) {
-            console.error('Error loading attack types:', error);
-        }
-    }
-
-    // View simulation details
-    window.viewSimDetails = async function(simId) {
-        const modal = document.getElementById('sim-details-modal');
-        const content = document.getElementById('sim-modal-content');
-
-        modal.style.display = 'flex';
-        content.innerHTML = '<p style="text-align: center;">Loading...</p>';
-
-        try {
-            const [detailsRes, logsRes, analyticsRes] = await Promise.all([
-                fetch(`/api/simulation/history/${simId}`, { credentials: 'same-origin' }),
-                fetch(`/api/simulation/logs/${simId}`, { credentials: 'same-origin' }),
-                fetch(`/api/simulation/analytics/${simId}`, { credentials: 'same-origin' })
-            ]);
-
-            const details = await detailsRes.json();
-            const logs = await logsRes.json();
-            const analytics = await analyticsRes.json();
-
-            if (details.success) {
-                content.innerHTML = `
-                    <div style="margin-bottom: 20px;">
-                        <h4 style="margin: 0 0 8px 0;">${details.simulation.template_display_name}</h4>
-                        <p style="margin: 0; color: var(--text-secondary); font-size: 13px;">
-                            Status: <span style="color: ${getStatusColor(details.simulation.status)}">${details.simulation.status}</span> |
-                            Duration: ${details.simulation.duration_seconds || 0}s |
-                            Events: ${details.simulation.events_generated || 0}
-                        </p>
-                    </div>
-
-                    ${analytics.success && analytics.ip_statistics ? `
-                    <div style="margin-bottom: 20px;">
-                        <h5 style="margin: 0 0 12px 0; font-size: 14px;">IP Statistics</h5>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-                            ${analytics.ip_statistics.slice(0, 6).map(ip => `
-                                <div style="padding: 12px; background: var(--background); border-radius: 6px;">
-                                    <div style="font-weight: 600; font-size: 13px;">${ip.ip_address}</div>
-                                    <div style="font-size: 12px; color: var(--text-secondary);">
-                                        Events: ${ip.event_count} | Risk: ${Math.round(ip.avg_risk_score || 0)}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    ` : ''}
-
-                    <div>
-                        <h5 style="margin: 0 0 12px 0; font-size: 14px;">Execution Logs</h5>
-                        <div style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 11px; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px;">
-                            ${logs.success && logs.logs ? logs.logs.map(log => `
-                                <div style="color: ${log.level === 'SUCCESS' ? '#4ec9b0' : log.level === 'ERROR' ? '#f14c4c' : '#d4d4d4'};">
-                                    [${log.stage}] ${log.message}
-                                </div>
-                            `).join('') : 'No logs available'}
-                        </div>
-                    </div>
-                `;
-            } else {
-                content.innerHTML = '<p style="color: var(--text-secondary);">Failed to load details</p>';
-            }
-        } catch (error) {
-            content.innerHTML = '<p style="color: #D13438;">Error loading details: ' + error.message + '</p>';
-        }
-    };
-
-    // Modal close
-    document.getElementById('sim-modal-close').addEventListener('click', () => {
-        document.getElementById('sim-details-modal').style.display = 'none';
-    });
-
-    document.getElementById('sim-details-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'sim-details-modal') {
-            document.getElementById('sim-details-modal').style.display = 'none';
-        }
-    });
-
-    // Refresh button
-    document.getElementById('sim-refresh-btn').addEventListener('click', () => {
-        loadHistory();
-        loadStats();
-    });
-
-    // Filter change
-    document.getElementById('sim-filter-type').addEventListener('change', () => {
-        currentPage = 1;
-        loadHistory();
-    });
-
-    // Initialize on page load
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.target.id === 'page-simulation' && mutation.target.style.display !== 'none') {
-                initSimulation();
-            }
-        });
-    });
-
-    const simPage = document.getElementById('page-simulation');
-    if (simPage) {
-        observer.observe(simPage, { attributes: true, attributeFilter: ['style'] });
-        // Also init if already visible
-        if (simPage.style.display !== 'none') {
-            initSimulation();
-        }
-    }
-
-    // Check hash on load
-    if (window.location.hash === '#simulation') {
-        setTimeout(initSimulation, 100);
-    }
-
-    // =====================================================
-    // DEMO FUNCTIONALITY
-    // =====================================================
-
-    let demoScenarios = [];
-
-    async function loadDemoScenarios() {
-        try {
-            const response = await fetch('/api/demo/scenarios', { credentials: 'same-origin' });
-            const data = await response.json();
-
-            if (data.success && data.scenarios) {
-                demoScenarios = data.scenarios;
-                renderDemoScenarios(data.scenarios);
-            }
-        } catch (error) {
-            console.error('Error loading demo scenarios:', error);
-            document.getElementById('demo-scenarios-grid').innerHTML =
-                '<div style="color: #D13438; padding: 20px;">Failed to load demo scenarios</div>';
-        }
-    }
-
-    function renderDemoScenarios(scenarios) {
+    } catch (error) {
+        console.error('[Demo] Error loading scenarios:', error);
         const grid = document.getElementById('demo-scenarios-grid');
-        grid.innerHTML = scenarios.map(s => `
-            <div class="demo-scenario-card" data-scenario="${s.id}"
-                 style="padding: 16px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: var(--card-bg);">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 18px;">${getDemoIcon(s.category)}</span>
-                        <span style="font-weight: 600; font-size: 14px;">${s.name}</span>
-                    </div>
-                    <span style="padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
-                          background: ${getSeverityColor(s.severity)}20; color: ${getSeverityColor(s.severity)};">${s.severity}</span>
-                </div>
-                <p style="margin: 0 0 10px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${s.description}</p>
-                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--border);">
-                    <code style="font-size: 11px; color: var(--azure-blue); background: var(--background); padding: 2px 6px; border-radius: 3px;">${s.ip}</code>
-                    <button class="demo-run-btn" data-scenario="${s.id}"
-                            style="padding: 6px 14px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-                        Run
-                    </button>
-                </div>
-                <div class="demo-expected" style="margin-top: 10px; font-size: 11px; color: var(--text-tertiary);">
-                    Expected: AbuseIPDB ${s.expected_results.abuseipdb_score} | Threat: ${s.expected_results.threat_level}
-                </div>
+        if (grid) grid.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Error loading scenarios. Please check console.</div>';
+    }
+}
+
+// Render demo scenarios
+function renderDemoScenarios(scenarios) {
+    const grid = document.getElementById('demo-scenarios-grid');
+    const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
+    const icons = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
+    
+    grid.innerHTML = scenarios.map(s => `
+        <div class="demo-scenario-card" data-scenario="${s.id}" onclick="runDemoScenario('${s.id}')">
+            <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${s.name}</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">${s.description}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: ${colors[s.severity]}; color: white;">
+                    ${icons[s.severity]} ${s.severity}
+                </span>
+                <span style="font-family: monospace; font-size: 12px; color: var(--azure-blue); font-weight: 600;">${s.ip}</span>
             </div>
-        `).join('');
+        </div>
+    `).join('');
+}
 
-        // Add click handlers for individual scenario run buttons
-        grid.querySelectorAll('.demo-run-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                runDemoScenario(btn.dataset.scenario);
-            });
-        });
-    }
+// Run demo scenario
+async function runDemoScenario(scenarioId) {
+    console.log('[Demo] Running scenario:', scenarioId);
+    const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenarioId}"]`);
+    card.classList.add('running');
 
-    function getDemoIcon(category) {
-        const icons = {
-            'anonymization': '🧅',
-            'reputation': '🚨',
-            'malware': '🤖',
-            'reconnaissance': '🔍',
-            'geographic': '🌍',
-            'baseline': '✅'
-        };
-        return icons[category] || '⚠️';
-    }
+    try {
+        const response = await fetch(`/api/demo/run/${scenarioId}`, { method: 'POST', credentials: 'same-origin' });
+        const data = await response.json();
 
-    async function runDemoScenario(scenarioId) {
-        const btn = document.querySelector(`.demo-run-btn[data-scenario="${scenarioId}"]`);
-        const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenarioId}"]`);
-        const resultsPanel = document.getElementById('demo-results-panel');
-        const resultsContent = document.getElementById('demo-results-content');
+        console.log('[Demo] Response:', data);
 
-        // Show loading state
-        btn.disabled = true;
-        btn.textContent = 'Running...';
-        card.style.borderColor = '#E6A502';
+        if (data.success) {
+            currentAnalysisData = data;
+            try {
+                populateAnalysisTab(data);
+                populateResultsTab(data);
+                switchSimulationTab('analysis');
 
-        try {
-            const response = await fetch(`/api/demo/run/${scenarioId}`, {
-                method: 'POST',
-                credentials: 'same-origin'
-            });
-            const data = await response.json();
+                // Update cache indicator based on whether threat intel was cached
+                if (typeof CacheManager !== 'undefined') {
+                    const wasCached = data.actual_results?.threat_intel?.from_cache || false;
+                    CacheManager.updateStatus('simulation', wasCached, 0);
+                }
 
-            if (data.success) {
-                // Show results
-                resultsPanel.style.display = 'block';
-                card.style.borderColor = '#2EA44F';
-
-                resultsContent.innerHTML = renderDemoResult(data);
-
-                // Scroll to results
-                resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } else {
-                card.style.borderColor = '#D13438';
-                resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${data.error}</div>`;
-                resultsPanel.style.display = 'block';
+                showToast(`✅ ${data.scenario_name} completed`, 'success');
+            } catch (renderError) {
+                console.error('[Demo] Render error:', renderError);
+                showToast(`❌ Rendering failed: ${renderError.message}`, 'error');
             }
-        } catch (error) {
-            card.style.borderColor = '#D13438';
-            resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${error.message}</div>`;
-            resultsPanel.style.display = 'block';
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Run';
+        } else {
+            showToast(`❌ Failed: ${data.error}`, 'error');
         }
+    } catch (error) {
+        console.error('[Demo] Error:', error);
+        showToast('❌ Failed to run scenario', 'error');
+    } finally {
+        setTimeout(() => card.classList.remove('running'), 500);
     }
+}
 
-    function renderDemoResult(data) {
-        const ti = data.results.threat_intel || {};
-        const ml = data.results.ml || {};
-        const geo = data.results.geo || {};
-        const history = data.results.history || {};
-        const recommendations = data.results.recommendations || [];
+// Populate Analysis Tab
+function populateAnalysisTab(data) {
+    console.log('[Analysis] Populating tab with data:', data);
 
-        const abuseScore = ti.abuseipdb_score !== null ? ti.abuseipdb_score : 'N/A';
-        const vtPositives = ti.virustotal_positives !== null ? ti.virustotal_positives : 0;
-        const vtTotal = ti.virustotal_total !== null ? ti.virustotal_total : 0;
-        const threatLevel = ti.threat_level || 'unknown';
-        const riskScore = ml.risk_score !== null ? ml.risk_score : 'N/A';
-        const isAnomaly = ml.is_anomaly;
+    document.getElementById('analysis-empty-state').style.display = 'none';
+    const content = document.getElementById('analysis-content');
+    content.style.display = 'block';
 
-        // Build network flags string
-        let networkFlags = [];
-        if (geo.is_tor) networkFlags.push('<span style="color: #D13438;">Tor Exit</span>');
-        if (geo.is_vpn) networkFlags.push('<span style="color: #E6A502;">VPN</span>');
-        if (geo.is_proxy) networkFlags.push('<span style="color: #E6A502;">Proxy</span>');
-        if (geo.is_datacenter) networkFlags.push('<span style="color: #0078D4;">Datacenter</span>');
-        const networkFlagsStr = networkFlags.length > 0 ? networkFlags.join(' | ') : '<span style="color: #2EA44F;">Clean</span>';
+    const composite = data.composite_risk || {};
+    const behavioral = data.behavioral_analysis || {};
+    const geo = data.geographic_intelligence || {};
+    const ti = data.results?.threat_intel || {};
+    const ml = data.results?.ml || {};
+    const history = data.results?.history || {};
 
-        return `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-                <!-- Scenario Info -->
-                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
-                    <h5 style="margin: 0 0 8px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Scenario</h5>
-                    <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">${data.scenario_name}</div>
-                    <code style="font-size: 12px; color: var(--azure-blue);">${data.ip}</code>
-                    <div style="margin-top: 8px; font-size: 11px; color: var(--text-tertiary);">Event ID: ${data.event_id}</div>
+    console.log('[Analysis] Composite:', composite);
+    console.log('[Analysis] Behavioral:', behavioral);
+    console.log('[Analysis] Geographic:', geo);
+
+    try {
+        const html = `
+            ${renderCompositeRisk(composite, data.ip, behavioral.pattern)}
+            ${renderRiskBreakdown(composite.breakdown)}
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                ${renderThreatIntel(ti)}
+                ${renderMLAnalysis(ml)}
+                ${renderBehavioral(behavioral)}
+                ${renderGeographic(geo, data.results?.geo)}
+            </div>
+            ${renderHistorical(history)}
+        `;
+        console.log('[Analysis] HTML generated, length:', html.length);
+        content.innerHTML = html;
+        console.log('[Analysis] Content updated successfully');
+    } catch (err) {
+        console.error('[Analysis] Error rendering HTML:', err);
+        content.innerHTML = `<div class="card" style="padding: 20px; background: #fee; color: #c00;">Error rendering analysis: ${err.message}</div>`;
+    }
+}
+
+// Copy to clipboard helper
+function copyToClipboard(text, label) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`✅ ${label} copied: ${text}`, 'success');
+    }).catch(err => {
+        console.error('Copy failed:', err);
+        showToast('❌ Copy failed', 'error');
+    });
+}
+
+// Render Composite Risk
+function renderCompositeRisk(composite, ip, pattern) {
+    const score = composite.overall_score || 0;
+    const level = composite.threat_level || 'UNKNOWN';
+    const confidence = composite.confidence || 0;
+    const colors = { CRITICAL: '#D13438', HIGH: '#E6A502', MODERATE: '#0078D4', LOW: '#2EA44F', CLEAN: '#2EA44F' };
+
+    return `
+    <div class="card" style="padding: 24px; margin-bottom: 24px; background: linear-gradient(135deg, var(--card-bg), var(--background));">
+        <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;"><span style="font-size: 20px;">🎯</span> Overall Threat Assessment</h3>
+        <div style="display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center;">
+            <div style="width: 140px; height: 140px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 8px solid ${colors[level]}; background: var(--card-bg);">
+                <div style="font-size: 42px; font-weight: 700;">${score.toFixed(1)}</div>
+                <div style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">RISK SCORE</div>
+            </div>
+            <div>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <span style="padding: 6px 16px; border-radius: 6px; font-size: 14px; font-weight: 700; text-transform: uppercase; background: ${colors[level]}; color: white;">${level}</span>
+                    <span
+                        onclick="copyToClipboard('${ip}', 'IP Address')"
+                        style="font-size: 16px; font-weight: 600; font-family: monospace; color: var(--azure-blue); cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;"
+                        onmouseover="this.style.background='rgba(0,120,212,0.1)'"
+                        onmouseout="this.style.background='transparent'"
+                        title="Click to copy IP address">
+                        ${ip} 📋
+                    </span>
                 </div>
+                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Analysis Confidence: <strong>${confidence.toFixed(1)}%</strong></div>
+                <div style="font-size: 13px; color: var(--text-secondary);">Pattern Detected: <strong>${pattern || 'Unknown'}</strong></div>
+            </div>
+        </div>
+    </div>
+    `;
+}
 
-                <!-- Threat Intel Results -->
-                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
-                    <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Threat Intelligence</h5>
-                    <div style="display: grid; gap: 8px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">AbuseIPDB Score:</span>
-                            <span style="font-weight: 600; color: ${getScoreColor(abuseScore)};">${abuseScore}/100</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">AbuseIPDB Reports:</span>
-                            <span style="font-weight: 600;">${ti.abuseipdb_reports || 0}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">VirusTotal:</span>
-                            <span style="font-weight: 600; color: ${vtPositives > 0 ? '#D13438' : '#2EA44F'};">${vtPositives}/${vtTotal}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">Threat Level:</span>
-                            <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
-                                  background: ${getThreatLevelColor(threatLevel)}20; color: ${getThreatLevelColor(threatLevel)};">
-                                ${threatLevel.toUpperCase()}
-                            </span>
-                        </div>
+// Render Risk Breakdown
+function renderRiskBreakdown(breakdown) {
+    if (!breakdown) return '';
+    const components = [
+        { key: 'threat_intel', label: 'Threat Intelligence', color: '#D13438' },
+        { key: 'ml_prediction', label: 'ML Prediction', color: '#0078D4' },
+        { key: 'behavioral', label: 'Behavioral Analysis', color: '#E6A502' },
+        { key: 'geographic', label: 'Geographic Risk', color: '#2EA44F' }
+    ];
+    
+    return `
+    <div class="card" style="padding: 24px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600;"><span style="font-size: 20px;">📈</span> Multi-Factor Risk Breakdown</h3>
+        ${components.map(c => {
+            const comp = breakdown[c.key] || {};
+            const score = comp.score || 0;
+            const weighted = comp.weighted || 0;
+            const weight = comp.weight || 0;
+            return `
+            <div style="margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                    <span><strong>${c.label}</strong> <span style="color: var(--text-secondary);">(×${weight})</span></span>
+                    <span><strong>${score.toFixed(1)}</strong>/100 = <strong style="color: ${c.color};">${weighted.toFixed(1)}</strong> points</span>
+                </div>
+                <div style="height: 24px; background: var(--background); border-radius: 4px; overflow: hidden;">
+                    <div style="height: 100%; width: ${score}%; background: linear-gradient(90deg, ${c.color}, ${c.color}aa); display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: white; font-size: 12px; font-weight: 600; transition: width 0.5s;"></div>
+                </div>
+            </div>
+            `;
+        }).join('')}
+    </div>
+    `;
+}
+
+// Render sections (simplified for space)
+function renderThreatIntel(ti) {
+    return `<div class="card" style="padding: 20px; border-left: 4px solid #D13438;"><h4 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;"><span>🔍</span> Threat Intelligence</h4><div style="font-size: 13px;">AbuseIPDB: <strong>${ti.abuseipdb_score || 0}</strong>/100<br>VirusTotal: <strong>${ti.virustotal_positives || 0}</strong>/${ti.virustotal_total || 70} vendors<br>Threat Level: <strong>${(ti.threat_level || 'unknown').toUpperCase()}</strong></div></div>`;
+}
+
+function renderMLAnalysis(ml) {
+    return `<div class="card" style="padding: 20px; border-left: 4px solid #0078D4;"><h4 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;"><span>🤖</span> ML Analysis</h4><div style="font-size: 13px;">Risk Score: <strong>${ml.risk_score || 0}</strong>/100<br>Confidence: <strong>${ml.confidence ? (ml.confidence*100).toFixed(1) : 0}%</strong><br>Anomaly: <strong>${ml.is_anomaly ? 'YES' : 'NO'}</strong><br>Type: <strong>${ml.threat_type || 'Unknown'}</strong></div></div>`;
+}
+
+function renderBehavioral(b) {
+    return `<div class="card" style="padding: 20px; border-left: 4px solid #E6A502;"><h4 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;"><span>⚡</span> Behavioral Analysis</h4><div style="font-size: 13px;">Pattern: <strong>${b.pattern || 'Unknown'}</strong><br>Velocity: <strong>${b.velocity || 0}</strong>/min<br>Failure Rate: <strong>${b.failure_rate || 0}%</strong><br>Indicators: <ul style="margin: 8px 0 0 0; padding-left: 20px;">${(b.indicators || []).map(i => `<li>${i}</li>`).join('')}</ul></div></div>`;
+}
+
+function renderGeographic(gi, geo) {
+    const country = geo?.country || 'Unknown';
+    const city = geo?.city || 'Unknown';
+    const location = city !== 'Unknown' ? `${city}, ${country}` : country;
+
+    return `<div class="card" style="padding: 20px; border-left: 4px solid #2EA44F;">
+        <h4 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;"><span>🌍</span> Geographic Intelligence</h4>
+        <div style="font-size: 13px;">
+            Country: <strong
+                onclick="copyToClipboard('${location}', 'Location')"
+                style="cursor: pointer; padding: 2px 6px; border-radius: 3px; transition: background 0.2s;"
+                onmouseover="this.style.background='rgba(46,164,79,0.1)'"
+                onmouseout="this.style.background='transparent'"
+                title="Click to copy location">
+                ${country} 📋
+            </strong><br>
+            ${city !== 'Unknown' ? `City: <strong>${city}</strong><br>` : ''}
+            Risk Score: <strong>${gi.score || 0}</strong>/100<br>
+            High-Risk Region: <strong>${gi.is_high_risk_region ? 'YES' : 'NO'}</strong><br>
+            Anonymized: <strong>${gi.is_anonymized ? 'YES' : 'NO'}</strong><br>
+            Factors:
+            <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                ${(gi.factors || []).map(f => `<li>${f}</li>`).join('')}
+            </ul>
+        </div>
+    </div>`;
+}
+
+function renderHistorical(h) {
+    return `<div class="card" style="padding: 24px;"><h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;"><span>📜</span> Historical Context</h3><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;"><div><div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Total Events</div><div style="font-size: 24px; font-weight: 700;">${h.total_events || 0}</div></div><div><div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Failed Attempts</div><div style="font-size: 24px; font-weight: 700;">${h.failed_attempts || 0}</div></div><div><div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Unique Usernames</div><div style="font-size: 24px; font-weight: 700;">${h.unique_usernames || 0}</div></div><div><div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Anomalies</div><div style="font-size: 24px; font-weight: 700;">${h.anomaly_count || 0}</div></div></div></div>`;
+}
+
+// Populate Results Tab
+function populateResultsTab(data) {
+    console.log('[Results] Populating tab with data:', data);
+
+    document.getElementById('results-empty-state').style.display = 'none';
+    const content = document.getElementById('results-content');
+    content.style.display = 'block';
+
+    const recs = data.results?.recommendations || [];
+    console.log('[Results] Total recommendations:', recs.length);
+
+    const immediate = recs.filter(r => r.urgency === 'immediate');
+    const shortTerm = recs.filter(r => r.urgency === 'short_term');
+    const longTerm = recs.filter(r => r.urgency === 'long_term');
+
+    console.log('[Results] Grouped:', { immediate: immediate.length, shortTerm: shortTerm.length, longTerm: longTerm.length });
+
+    try {
+        const html = `
+            ${renderQuickActions(recs.slice(0, 3))}
+            ${immediate.length > 0 ? `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><span style="font-size: 24px;">🚨</span><h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #D13438;">Immediate Actions (Next 5 Minutes)</h3></div>${immediate.map(renderRecommendation).join('')}</div>` : ''}
+            ${shortTerm.length > 0 ? `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><span style="font-size: 24px;">📅</span><h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #E6A502;">Short-Term Actions (Next Hour)</h3></div>${shortTerm.map(renderRecommendation).join('')}</div>` : ''}
+            ${longTerm.length > 0 ? `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><span style="font-size: 24px;">🛡️</span><h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #0078D4;">Long-Term Hardening (This Week)</h3></div>${longTerm.map(renderRecommendation).join('')}</div>` : ''}
+        `;
+        console.log('[Results] HTML generated, length:', html.length);
+        content.innerHTML = html;
+        console.log('[Results] Content updated successfully');
+    } catch (err) {
+        console.error('[Results] Error rendering HTML:', err);
+        content.innerHTML = `<div class="card" style="padding: 20px; background: #fee; color: #c00;">Error rendering results: ${err.message}</div>`;
+    }
+}
+
+// Render Quick Actions
+function renderQuickActions(topRecs) {
+    if (!topRecs || topRecs.length === 0) return '';
+
+    const priorityColors = {
+        'critical': '#D13438',
+        'high': '#E6A502',
+        'medium': '#0078D4',
+        'low': '#2EA44F'
+    };
+
+    return `
+    <div class="card" style="padding: 24px; margin-bottom: 24px; background: linear-gradient(135deg, rgba(0, 120, 212, 0.05), rgba(230, 165, 2, 0.05)); border: 2px solid #E6A502;">
+        <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600;">
+            <span>⚡</span> Quick Actions
+        </h3>
+        <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-secondary);">
+            Most critical recommendations - displayed as cards below
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+            ${topRecs.map(r => {
+                const color = priorityColors[r.priority] || '#0078D4';
+                const confidence = r.confidence ? (r.confidence * 100).toFixed(0) : r.ai_confidence ? (r.ai_confidence * 100).toFixed(0) : 0;
+                return `
+                <div style="padding: 16px; background: var(--card-bg); border-left: 4px solid ${color}; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px; color: ${color};">
+                        ${r.icon || '🔹'} ${r.action}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                        ${confidence}% confidence · ${r.urgency || 'N/A'} priority
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-secondary); font-style: italic;">
+                        See full details in recommendations below
                     </div>
                 </div>
+                `;
+            }).join('')}
+        </div>
+    </div>`;
+}
 
-                <!-- ML Results -->
-                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
-                    <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">ML Analysis</h5>
-                    ${ml.ml_available ? `
-                        <div style="display: grid; gap: 8px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-size: 13px;">Risk Score:</span>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <div style="width: 80px; height: 8px; background: var(--background); border-radius: 4px; overflow: hidden;">
-                                        <div style="width: ${riskScore}%; height: 100%; background: ${getScoreColor(riskScore)}; border-radius: 4px;"></div>
-                                    </div>
-                                    <span style="font-weight: 600; color: ${getScoreColor(riskScore)};">${riskScore}/100</span>
-                                </div>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="font-size: 13px;">Threat Type:</span>
-                                <span style="font-weight: 600;">${ml.threat_type || 'Normal'}</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="font-size: 13px;">Confidence:</span>
-                                <span style="font-weight: 600;">${(ml.confidence * 100).toFixed(1)}%</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="font-size: 13px;">Anomaly:</span>
-                                <span style="font-weight: 600; color: ${isAnomaly ? '#D13438' : '#2EA44F'};">
-                                    ${isAnomaly ? '🚨 YES' : '✓ NO'}
-                                </span>
-                            </div>
-                        </div>
-                    ` : '<div style="color: var(--text-secondary); font-size: 13px;">ML model not available</div>'}
+// Render Recommendation
+function renderRecommendation(rec) {
+    const confidence = rec.confidence ? (rec.confidence * 100).toFixed(0) : rec.ai_confidence ? (rec.ai_confidence * 100).toFixed(0) : 0;
+    return `
+    <div class="recommendation-card ${rec.priority}">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+            <h4 style="margin: 0; font-size: 16px; font-weight: 600;">${rec.icon || '🔹'} ${rec.action}</h4>
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">${confidence}% confidence</span>
+        </div>
+        <div style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">${rec.reason}</div>
+        ${rec.why && rec.why.length > 0 ? `<div style="margin-bottom: 12px;"><strong style="font-size: 13px;">Why:</strong><ul style="margin: 4px 0 0 0; padding-left: 20px; font-size: 13px;">${rec.why.map(w => `<li>${w}</li>`).join('')}</ul></div>` : ''}
+        ${rec.impact ? `<div style="margin-bottom: 12px; font-size: 13px;"><strong>Impact:</strong> ${rec.impact}</div>` : ''}
+        ${rec.risk_if_ignored ? `<div style="padding: 8px 12px; background: rgba(209, 52, 56, 0.1); border-left: 3px solid #D13438; margin-bottom: 12px; font-size: 13px;"><strong>Risk if Ignored:</strong> ${rec.risk_if_ignored}</div>` : ''}
+        ${rec.alternatives && rec.alternatives.length > 0 ? `<div style="margin-bottom: 12px;"><strong style="font-size: 13px;">Alternatives:</strong>${rec.alternatives.map(alt => `<div style="padding: 6px; background: var(--background); border-radius: 4px; margin-top: 4px; font-size: 12px;"><strong>${alt.action}:</strong> ${alt.impact}</div>`).join('')}</div>` : ''}
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+            ${getActionButton(rec)}
+        </div>
+    </div>
+    `;
+}
+
+// Get Action Button
+function getActionButton(rec) {
+    const type = rec.action_type;
+    const data = rec.action_data;
+    if (type === 'block_ip') return `<button onclick="blockIPWithModal('${data.ip}')" style="padding: 8px 16px; background: #D13438; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">🚫 Block IP</button>`;
+    if (type === 'add_blocklist') return `<button onclick="blockIPWithModal('${data.ip}')" style="padding: 8px 16px; background: #E6A502; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">📋 Add to Blocklist</button>`;
+    if (type === 'view_events') return `<button onclick="window.location.href='/dashboard?page=events-live'" style="padding: 8px 16px; background: #0078D4; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">👁️ View Events</button>`;
+    return `<button style="padding: 8px 16px; background: var(--background); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">ℹ️ Learn More</button>`;
+}
+
+// Execute Action
+function executeAction(actionType, actionData) {
+    console.log('[Action]', actionType, actionData);
+    if (actionType === 'block_ip') blockIPInline(actionData.ip);
+    else if (actionType === 'add_blocklist') window.location.href = '/dashboard?page=ip-blocks';
+    else if (actionType === 'view_events') window.location.href = '/dashboard?page=events-live';
+}
+
+// Block IP with Modal Confirmation
+async function blockIPWithModal(ip) {
+    console.log('[Block] Checking IP status:', ip);
+
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = 'background: var(--card-bg); border-radius: 12px; padding: 24px; max-width: 600px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.3);';
+
+    // Show loading state
+    modalContent.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">🔍 Checking IP Status...</h3>
+        <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 48px;">⏳</div>
+            <p style="margin: 16px 0 0 0; color: var(--text-secondary);">Checking if ${ip} is already blocked on any agent...</p>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    try {
+        // Check global block status
+        const globalResponse = await fetch(`/api/dashboard/blocking/blocks/check/${ip}`, { credentials: 'same-origin' });
+        const globalStatus = await globalResponse.json();
+
+        // Get all agents
+        const agentsResponse = await fetch('/api/agents/list', { credentials: 'same-origin' });
+        const agentsData = await agentsResponse.json();
+        const agents = agentsData.agents || [];
+
+        // Check each agent
+        const agentChecks = await Promise.all(
+            agents.map(async (agent) => {
+                try {
+                    const resp = await fetch(`/api/agents/${agent.id}/blocked-ips`, { credentials: 'same-origin' });
+                    const data = await resp.json();
+                    const isBlocked = data.blocked_ips?.some(blocked => blocked.ip_address === ip);
+                    return { agent: agent.hostname, id: agent.id, blocked: isBlocked };
+                } catch (err) {
+                    console.error(`[Block] Error checking agent ${agent.hostname}:`, err);
+                    return { agent: agent.hostname, id: agent.id, blocked: false, error: true };
+                }
+            })
+        );
+
+        const blockedOnAgents = agentChecks.filter(a => a.blocked);
+        const isAlreadyBlocked = globalStatus.is_blocked || blockedOnAgents.length > 0;
+
+        // Update modal with results
+        modalContent.innerHTML = `
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">
+                ${isAlreadyBlocked ? '⚠️' : '🚫'} Block IP Address
+            </h3>
+            <div style="background: var(--background); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                <div style="font-family: monospace; font-size: 18px; font-weight: 600; color: var(--azure-blue);">${ip}</div>
+            </div>
+
+            ${isAlreadyBlocked ? `
+                <div style="background: rgba(230, 165, 2, 0.1); border-left: 4px solid #E6A502; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                    <strong style="color: #E6A502;">⚠️ Already Blocked</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 14px;">This IP is already blocked on the following:</p>
+                    <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+                        ${globalStatus.is_blocked ? `<li><strong>Global Blocklist</strong> (${globalStatus.reason || 'No reason specified'})</li>` : ''}
+                        ${blockedOnAgents.map(a => `<li><strong>Agent:</strong> ${a.agent}</li>`).join('')}
+                    </ul>
                 </div>
+            ` : `
+                <div style="background: rgba(209, 52, 56, 0.1); border-left: 4px solid #D13438; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 14px;"><strong>⚠️ Warning:</strong> This will block the IP address on all SSH Guardian agents.</p>
+                </div>
+            `}
 
-                <!-- GeoIP -->
-                <div style="padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
-                    <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">GeoLocation</h5>
-                    <div style="display: grid; gap: 8px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">Country:</span>
-                            <span style="font-weight: 600;">${geo.country || 'Unknown'} ${geo.country_code ? '(' + geo.country_code + ')' : ''}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">City:</span>
-                            <span style="font-weight: 600;">${geo.city || 'Unknown'}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">ISP:</span>
-                            <span style="font-weight: 600; font-size: 11px;">${geo.isp || 'Unknown'}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 13px;">Network:</span>
-                            <span style="font-size: 11px;">${networkFlagsStr}</span>
-                        </div>
-                    </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Block Reason:</label>
+                <input id="block-reason" type="text" value="Threat detected via simulation analysis" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--background); color: var(--text-primary);">
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px;">Block Duration:</label>
+                <select id="block-duration" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--background); color: var(--text-primary);">
+                    <option value="permanent">Permanent</option>
+                    <option value="24h">24 Hours</option>
+                    <option value="7d">7 Days</option>
+                    <option value="30d">30 Days</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 16px; font-size: 13px; color: var(--text-secondary);">
+                <strong>Status Check Results:</strong>
+                <div style="margin-top: 8px;">
+                    <div>✓ Checked ${agents.length} agent(s)</div>
+                    <div>✓ Global blocklist status: ${globalStatus.is_blocked ? 'Blocked' : 'Not blocked'}</div>
                 </div>
             </div>
 
-            <!-- Historical Analysis -->
-            ${history && history.total_events > 0 ? `
-            <div style="margin-top: 16px; padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
-                <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Historical Analysis (From Database)</h5>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px;">
-                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: var(--azure-blue);">${history.total_events}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">Total Events</div>
-                    </div>
-                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: #D13438;">${history.failed_attempts}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">Failed Attempts</div>
-                    </div>
-                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: #2EA44F;">${history.successful_logins}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">Successful Logins</div>
-                    </div>
-                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: #E6A502;">${history.unique_usernames}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">Unique Usernames</div>
-                    </div>
-                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600;">${history.unique_servers}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">Target Servers</div>
-                    </div>
-                    <div style="text-align: center; padding: 10px; background: var(--background); border-radius: 6px;">
-                        <div style="font-size: 20px; font-weight: 600; color: ${getScoreColor(history.avg_risk_score)};">${history.avg_risk_score}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">Avg Risk Score</div>
-                    </div>
-                </div>
-                ${history.top_usernames && history.top_usernames.length > 0 ? `
-                <div style="margin-top: 10px;">
-                    <span style="font-size: 12px; color: var(--text-secondary);">Most Targeted Usernames:</span>
-                    <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
-                        ${history.top_usernames.map(u => `
-                            <span style="padding: 3px 8px; background: var(--background); border-radius: 4px; font-size: 11px;">
-                                ${u.target_username} <span style="color: var(--text-tertiary);">(${u.attempts})</span>
-                            </span>
-                        `).join('')}
-                    </div>
-                </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button onclick="this.closest('[style*=fixed]').remove()" style="padding: 10px 20px; background: var(--background); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                    Cancel
+                </button>
+                ${!isAlreadyBlocked ? `
+                <button onclick="executeIPBlock('${ip}')" style="padding: 10px 20px; background: #D13438; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                    🚫 Block IP
+                </button>
                 ` : ''}
-                ${history.first_seen ? `
-                <div style="margin-top: 10px; font-size: 11px; color: var(--text-tertiary);">
-                    First seen: ${new Date(history.first_seen).toLocaleString()} | Last seen: ${new Date(history.last_seen).toLocaleString()}
-                </div>
-                ` : ''}
             </div>
-            ` : ''}
+        `;
 
-            <!-- Recommendations -->
-            ${recommendations && recommendations.length > 0 ? `
-            <div style="margin-top: 16px; padding: 16px; background: var(--card-bg); border-radius: 8px; border: 2px solid ${recommendations[0].priority === 'critical' ? '#D13438' : recommendations[0].priority === 'high' ? '#E6A502' : 'var(--border)'};">
-                <h5 style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-secondary); text-transform: uppercase;">Security Recommendations</h5>
-                <div style="display: grid; gap: 10px;">
-                    ${recommendations.map(rec => `
-                        <div style="display: flex; align-items: start; gap: 12px; padding: 10px; background: ${getPriorityBg(rec.priority)}; border-radius: 6px; border-left: 3px solid ${getPriorityColor(rec.priority)};">
-                            <span style="font-size: 18px;">${rec.icon}</span>
-                            <div style="flex: 1;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                    <span style="font-weight: 600; font-size: 13px; color: ${getPriorityColor(rec.priority)};">${rec.action}</span>
-                                    <span style="padding: 2px 6px; background: ${getPriorityColor(rec.priority)}20; color: ${getPriorityColor(rec.priority)}; font-size: 9px; font-weight: 600; border-radius: 3px; text-transform: uppercase;">${rec.priority}</span>
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">${rec.reason}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
+    } catch (error) {
+        console.error('[Block] Error checking status:', error);
+        modalContent.innerHTML = `
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">❌ Error</h3>
+            <p style="margin: 0 0 16px 0;">Failed to check IP status: ${error.message}</p>
+            <button onclick="this.closest('[style*=fixed]').remove()" style="padding: 10px 20px; background: var(--background); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 600;">
+                Close
+            </button>
         `;
     }
+}
 
-    function getPriorityColor(priority) {
-        const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
-        return colors[priority] || '#666';
-    }
+// Execute IP Block
+async function executeIPBlock(ip) {
+    const reason = document.getElementById('block-reason').value;
+    const duration = document.getElementById('block-duration').value;
+    const modal = document.querySelector('[style*="position: fixed"]');
 
-    function getPriorityBg(priority) {
-        const colors = { critical: 'rgba(209, 52, 56, 0.1)', high: 'rgba(230, 165, 2, 0.1)', medium: 'rgba(0, 120, 212, 0.05)', low: 'rgba(46, 164, 79, 0.05)' };
-        return colors[priority] || 'var(--background)';
-    }
+    console.log('[Block] Executing block:', { ip, reason, duration });
 
-    function getScoreColor(score) {
-        if (score === 'N/A') return 'var(--text-secondary)';
-        if (score >= 80) return '#D13438';
-        if (score >= 50) return '#E6A502';
-        if (score >= 20) return '#0078D4';
-        return '#2EA44F';
-    }
-
-    function getThreatLevelColor(level) {
-        const colors = {
-            'high': '#D13438',
-            'medium': '#E6A502',
-            'low': '#0078D4',
-            'clean': '#2EA44F',
-            'unknown': '#666'
-        };
-        return colors[level?.toLowerCase()] || '#666';
-    }
-
-    // Run All Demo
-    document.getElementById('demo-run-all-btn').addEventListener('click', async () => {
-        const btn = document.getElementById('demo-run-all-btn');
-        const resultsPanel = document.getElementById('demo-results-panel');
-        const resultsContent = document.getElementById('demo-results-content');
-
-        btn.disabled = true;
-        btn.innerHTML = '<span>Running all scenarios...</span>';
-
-        // Reset all cards
-        document.querySelectorAll('.demo-scenario-card').forEach(card => {
-            card.style.borderColor = 'var(--border)';
+    try {
+        const response = await fetch('/api/dashboard/blocking/blocks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                ip_address: ip,
+                reason: reason,
+                duration: duration
+            })
         });
 
-        try {
-            const response = await fetch('/api/demo/run-all', {
-                method: 'POST',
-                credentials: 'same-origin'
-            });
-            const data = await response.json();
+        const result = await response.json();
 
-            if (data.success) {
-                resultsPanel.style.display = 'block';
-
-                // Mark successful scenarios
-                data.results.forEach(r => {
-                    const card = document.querySelector(`.demo-scenario-card[data-scenario="${r.scenario_id}"]`);
-                    if (card) {
-                        card.style.borderColor = r.success ? '#2EA44F' : '#D13438';
-                    }
-                });
-
-                // Render summary
-                resultsContent.innerHTML = `
-                    <div style="margin-bottom: 16px; padding: 16px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border);">
-                        <h5 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600;">Demo Summary</h5>
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; text-align: center;">
-                            <div>
-                                <div style="font-size: 24px; font-weight: 600;">${data.summary.total_scenarios}</div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">Total Scenarios</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 24px; font-weight: 600; color: #2EA44F;">${data.summary.successful}</div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">Successful</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 24px; font-weight: 600; color: #D13438;">${data.summary.anomalies_detected}</div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">Anomalies Detected</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 24px; font-weight: 600; color: #E6A502;">${data.summary.high_risk_detected}</div>
-                                <div style="font-size: 12px; color: var(--text-secondary);">High Risk (>60)</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                            <thead>
-                                <tr style="background: var(--background);">
-                                    <th style="padding: 10px; text-align: left;">Scenario</th>
-                                    <th style="padding: 10px; text-align: left;">IP</th>
-                                    <th style="padding: 10px; text-align: center;">AbuseIPDB</th>
-                                    <th style="padding: 10px; text-align: center;">VirusTotal</th>
-                                    <th style="padding: 10px; text-align: center;">Risk Score</th>
-                                    <th style="padding: 10px; text-align: center;">Anomaly</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.results.map(r => `
-                                    <tr style="border-bottom: 1px solid var(--border);">
-                                        <td style="padding: 10px;">${r.scenario_name || r.scenario_id}</td>
-                                        <td style="padding: 10px;"><code style="font-size: 11px;">${r.ip || '-'}</code></td>
-                                        <td style="padding: 10px; text-align: center; font-weight: 600; color: ${getScoreColor(r.results?.abuseipdb_score)};">
-                                            ${r.results?.abuseipdb_score !== null ? r.results.abuseipdb_score : '-'}
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            ${r.results?.virustotal_positives !== null ? r.results.virustotal_positives : '-'}
-                                        </td>
-                                        <td style="padding: 10px; text-align: center; font-weight: 600; color: ${getScoreColor(r.results?.risk_score)};">
-                                            ${r.results?.risk_score !== null ? r.results.risk_score : '-'}
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            ${r.results?.is_anomaly ? '🚨' : (r.results?.ml_available ? '✓' : '-')}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-
-                resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } else {
-                resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${data.error}</div>`;
-                resultsPanel.style.display = 'block';
-            }
-        } catch (error) {
-            resultsContent.innerHTML = `<div style="color: #D13438; padding: 10px;">Error: ${error.message}</div>`;
-            resultsPanel.style.display = 'block';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<span>▶ Run Full Demo</span>';
+        if (result.success) {
+            showToast(`✅ IP ${ip} blocked successfully`, 'success');
+            modal.remove();
+        } else {
+            showToast(`❌ Failed to block IP: ${result.error}`, 'error');
         }
+    } catch (error) {
+        console.error('[Block] Error:', error);
+        showToast('❌ Failed to block IP', 'error');
+    }
+}
+
+// Legacy function for backward compatibility
+async function blockIPInline(ip) {
+    blockIPWithModal(ip);
+}
+
+// Toast notification
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: ${type === 'success' ? '#2EA44F' : type === 'error' ? '#D13438' : '#0078D4'}; color: white; border-radius: 6px; font-weight: 600; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Track if page has been initialized
+let isSimulationPageInitialized = false;
+
+// Auto-initialize when page becomes visible
+function initializeSimulationPageIfVisible() {
+    const pageEl = document.getElementById('page-simulation');
+    if (!pageEl) return;
+
+    const isVisible = pageEl.style.display !== 'none' && pageEl.classList.contains('active');
+
+    if (isVisible && !isSimulationPageInitialized) {
+        console.log('[Simulation] Page became visible, loading data...');
+        isSimulationPageInitialized = true;
+        loadSimulationPage();
+    }
+}
+
+// Set up MutationObserver to watch for page visibility changes
+function setupPageVisibilityWatcher() {
+    const pageEl = document.getElementById('page-simulation');
+    if (!pageEl) {
+        console.log('[Simulation] Page element not found, retrying...');
+        setTimeout(setupPageVisibilityWatcher, 100);
+        return;
+    }
+
+    console.log('[Simulation] Setting up visibility watcher...');
+
+    // Check immediately
+    initializeSimulationPageIfVisible();
+
+    // Watch for attribute changes (style, class)
+    const observer = new MutationObserver(() => {
+        initializeSimulationPageIfVisible();
     });
 
-    // Load demo scenarios when simulation page is initialized
-    const origInitSimulation = initSimulation;
-    initSimulation = function() {
-        origInitSimulation();
-        loadDemoScenarios();
-    };
-})();
+    observer.observe(pageEl, {
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
+}
+
+// Initialize based on document ready state
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupPageVisibilityWatcher);
+} else {
+    setupPageVisibilityWatcher();
+}
 </script>
+</div>

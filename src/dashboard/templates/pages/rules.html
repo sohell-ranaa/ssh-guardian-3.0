@@ -5,6 +5,36 @@
         <p class="page-subtitle">Manage automatic blocking rules and thresholds</p>
     </div>
 
+    <!-- Overall Blocking Statistics -->
+    <div id="overallBlockingStats" class="card" style="margin-bottom: 20px; display: none;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+            <div style="text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: var(--azure-blue);" id="statTotalBlocks">-</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Total Blocks (All Time)</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: #107C10;" id="statActiveBlocks">-</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Currently Active</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: #8A8886;" id="statManualBlocks">-</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Manual Blocks</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: #0078D4;" id="statRuleBlocks">-</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Rule-Based Blocks</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: #FFB900;" id="statRecent24h">-</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Last 24 Hours</div>
+            </div>
+        </div>
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); font-size: 12px; color: var(--text-secondary); text-align: center;">
+            💡 <strong>Note:</strong> Manual blocks from Simulation page show here, but don't increment individual rule statistics below.
+            <a href="#ip-blocks" onclick="navigateToPage('ip-blocks'); return false;" style="color: var(--azure-blue); text-decoration: underline; cursor: pointer;">View all blocked IPs →</a>
+        </div>
+    </div>
+
     <!-- Quick Actions -->
     <div class="card" style="margin-bottom: 20px;">
         <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">

@@ -57,25 +57,38 @@ async function loadIPBlocks() {
             // Use ip_address field from API (not ip_address_text)
             const ipAddress = block.ip_address || block.ip_address_text;
 
-            const actionButton = block.is_active
-                ? `<button
-                    onclick="unblockIPFromTable('${escapeHtml(ipAddress)}', ${block.id})"
-                    style="padding: 6px 12px; border: 1px solid #107C10; background: var(--surface); color: #107C10; border-radius: 3px; cursor: pointer; font-size: 12px;"
-                    title="Unblock IP"
-                >
-                    Unblock
-                </button>`
-                : `<button
-                    onclick="reblockIPFromTable('${escapeHtml(ipAddress)}')"
-                    style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
-                    title="Block IP again"
-                >
-                    Block Again
-                </button>`;
+            // Action buttons based on status
+            let actionButtons = '';
+            if (block.is_active) {
+                actionButtons = `
+                    <button
+                        onclick="disableBlockFromTable('${escapeHtml(ipAddress)}', ${block.id})"
+                        style="padding: 6px 12px; border: 1px solid #CA5010; background: var(--surface); color: #CA5010; border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 4px;"
+                        title="Disable block (keep record)"
+                    >
+                        Disable
+                    </button>
+                    <button
+                        onclick="confirmDeleteBlock('${escapeHtml(ipAddress)}', ${block.id})"
+                        style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
+                        title="Delete block record"
+                    >
+                        Delete
+                    </button>`;
+            } else {
+                actionButtons = `
+                    <button
+                        onclick="reblockIPFromTable('${escapeHtml(ipAddress)}')"
+                        style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
+                        title="Block IP again"
+                    >
+                        Block Again
+                    </button>`;
+            }
 
             // View Details button
             const viewDetailsBtn = `<button
-                onclick="if(typeof showIpDetails === 'function') showIpDetails('${escapeHtml(ipAddress)}')"
+                onclick="showBlockIpDetails('${escapeHtml(ipAddress)}')"
                 style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 12px; margin-right: 8px;"
                 title="View IP Details"
             >
@@ -101,8 +114,8 @@ async function loadIPBlocks() {
                         ${unblockTime}
                     </td>
                     <td style="padding: 12px; text-align: center;">${statusBadge}</td>
-                    <td style="padding: 12px; text-align: right;">
-                        ${viewDetailsBtn}${actionButton}
+                    <td style="padding: 12px; text-align: right; white-space: nowrap;">
+                        ${viewDetailsBtn}${actionButtons}
                     </td>
                 </tr>
             `;
@@ -506,4 +519,597 @@ async function enrichBlocksLocationData() {
             });
         }
     }
+}
+
+// Show IP Details Modal (self-contained version)
+async function showBlockIpDetails(ipAddress) {
+    if (!ipAddress) {
+        showBlockNotification('No IP address provided', 'error');
+        return;
+    }
+
+    // Show loading modal
+    showBlockModal('Loading...', `
+        <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 24px; margin-bottom: 16px;">⏳</div>
+            <p>Loading details for ${escapeHtml(ipAddress)}...</p>
+        </div>
+    `);
+
+    try {
+        // Fetch IP status and geolocation info in parallel
+        const [statusResponse, geoResponse] = await Promise.all([
+            fetch(`/api/dashboard/event-actions/ip-status/${encodeURIComponent(ipAddress)}`),
+            fetch(`/api/dashboard/ip-info/lookup/${encodeURIComponent(ipAddress)}`)
+        ]);
+
+        const status = await statusResponse.json();
+        const geoInfo = await geoResponse.json();
+
+        // Build status badges
+        const statusBadges = [];
+        if (status && status.is_blocked) {
+            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #D83B01; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Blocked</span>');
+        }
+        if (status && status.is_whitelisted) {
+            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #107C10; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Whitelisted</span>');
+        }
+        if (status && status.is_watched) {
+            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #FFB900; color: #323130; border-radius: 3px; font-size: 11px; margin-right: 5px;">Watched</span>');
+        }
+        if (geoInfo && geoInfo.is_proxy) {
+            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #8764B8; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Proxy/VPN</span>');
+        }
+        if (statusBadges.length === 0) {
+            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #605E5C; color: white; border-radius: 3px; font-size: 11px;">No Special Status</span>');
+        }
+
+        // Build geolocation section
+        let geoSection = '';
+        if (geoInfo && geoInfo.success) {
+            const flagImg = geoInfo.country_code && geoInfo.country_code !== 'N/A'
+                ? `<img src="https://flagcdn.com/24x18/${geoInfo.country_code.toLowerCase()}.png" alt="${geoInfo.country_code}" style="vertical-align: middle; margin-right: 6px;">`
+                : '';
+
+            geoSection = `
+                <div class="ip-detail-section">
+                    <div class="ip-detail-section-title">Geolocation</div>
+                    <div class="ip-detail-grid">
+                        <div>
+                            <div class="ip-detail-item-label">Country</div>
+                            <div class="ip-detail-item-value">${flagImg}${escapeHtml(geoInfo.country || 'Unknown')} (${escapeHtml(geoInfo.country_code || 'N/A')})</div>
+                        </div>
+                        <div>
+                            <div class="ip-detail-item-label">City</div>
+                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.city || 'Unknown')}</div>
+                        </div>
+                        <div>
+                            <div class="ip-detail-item-label">Region</div>
+                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.region || 'Unknown')}</div>
+                        </div>
+                        <div>
+                            <div class="ip-detail-item-label">Timezone</div>
+                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.timezone || 'N/A')}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ip-detail-section">
+                    <div class="ip-detail-section-title">Network</div>
+                    <div class="ip-detail-grid">
+                        <div>
+                            <div class="ip-detail-item-label">ISP / Organization</div>
+                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.isp || 'Unknown')}</div>
+                        </div>
+                        <div>
+                            <div class="ip-detail-item-label">ASN</div>
+                            <div class="ip-detail-item-value">AS${escapeHtml(geoInfo.asn || 'N/A')}</div>
+                        </div>
+                        <div>
+                            <div class="ip-detail-item-label">Coordinates</div>
+                            <div class="ip-detail-item-value">${geoInfo.latitude || 0}, ${geoInfo.longitude || 0}</div>
+                        </div>
+                        <div>
+                            <div class="ip-detail-item-label">Continent</div>
+                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.continent || 'Unknown')}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            geoSection = `
+                <div class="ip-detail-section">
+                    <div style="text-align: center; color: var(--text-secondary); padding: 12px;">
+                        Geolocation info unavailable
+                    </div>
+                </div>
+            `;
+        }
+
+        const content = `
+            <div style="display: grid; gap: 20px;">
+                <div>
+                    <div class="ip-detail-item-label">IP Address</div>
+                    <div style="font-family: 'SF Mono', 'Consolas', monospace; font-size: 22px; font-weight: 600; color: var(--text-primary);">${escapeHtml(ipAddress)}</div>
+                </div>
+                <div>
+                    <div class="ip-detail-item-label" style="margin-bottom: 8px;">Status</div>
+                    <div>${statusBadges.join('')}</div>
+                </div>
+                <div class="ip-detail-grid">
+                    <div class="ip-stat-box">
+                        <div class="ip-stat-value" style="color: #0078D4;">${status?.notes_count || 0}</div>
+                        <div class="ip-stat-label">Notes</div>
+                    </div>
+                    <div class="ip-stat-box">
+                        <div class="ip-stat-value" style="color: #F7630C;">${status?.reports_count || 0}</div>
+                        <div class="ip-stat-label">Reports</div>
+                    </div>
+                </div>
+                ${geoSection}
+            </div>
+        `;
+
+        showBlockModal(`IP Details: ${ipAddress}`, content, { icon: '<span style="font-size: 20px; margin-right: 6px;">🌐</span>' });
+
+    } catch (error) {
+        console.error('Error loading IP details:', error);
+        showBlockModal('Error', `
+            <div style="text-align: center; padding: 20px; color: #D13438;">
+                <div style="font-size: 24px; margin-bottom: 12px;">❌</div>
+                <p>Error loading IP details</p>
+            </div>
+        `);
+    }
+}
+
+// Inject modal styles if not present
+function injectBlockModalStyles() {
+    if (document.getElementById('block-modal-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'block-modal-styles';
+    style.textContent = `
+        .block-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            z-index: 10000;
+            padding: 60px 20px 20px 20px;
+            overflow-y: auto;
+            animation: blockModalFadeIn 0.2s ease-out;
+            box-sizing: border-box;
+        }
+
+        @keyframes blockModalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes blockModalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .block-modal {
+            background: var(--card-bg, #ffffff);
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05);
+            max-width: 520px;
+            width: 100%;
+            animation: blockModalSlideIn 0.25s ease-out;
+            margin: 0 auto 40px auto;
+            flex-shrink: 0;
+        }
+
+        .block-modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border, #e0e0e0);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface, #fafafa);
+            border-radius: 8px 8px 0 0;
+        }
+
+        .block-modal-title {
+            font-size: 17px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary, #323130);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .block-modal-close {
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: var(--text-secondary, #605E5C);
+            padding: 0;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .block-modal-close:hover {
+            background: var(--hover-bg, #f0f0f0);
+            color: var(--text-primary, #323130);
+        }
+
+        .block-modal-body {
+            padding: 24px;
+        }
+
+        .block-modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border, #e0e0e0);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: var(--surface, #fafafa);
+            border-radius: 0 0 8px 8px;
+        }
+
+        .block-modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+
+        .block-modal-btn-primary {
+            background: var(--azure-blue, #0078D4);
+            color: white;
+        }
+
+        .block-modal-btn-primary:hover {
+            background: #106EBE;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);
+        }
+
+        .block-modal-btn-secondary {
+            background: var(--surface, #f0f0f0);
+            color: var(--text-primary, #323130);
+            border: 1px solid var(--border, #e0e0e0);
+        }
+
+        .block-modal-btn-secondary:hover {
+            background: var(--hover-bg, #e8e8e8);
+        }
+
+        .block-modal-btn-danger {
+            background: #D13438;
+            color: white;
+        }
+
+        .block-modal-btn-danger:hover:not(:disabled) {
+            background: #C42B30;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(209, 52, 56, 0.3);
+        }
+
+        .block-modal-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* IP Details specific styles */
+        .ip-detail-section {
+            border-top: 1px solid var(--border, #e0e0e0);
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .ip-detail-section-title {
+            font-size: 11px;
+            color: var(--text-secondary, #605E5C);
+            margin-bottom: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .ip-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .ip-detail-item-label {
+            font-size: 11px;
+            color: var(--text-secondary, #605E5C);
+            margin-bottom: 2px;
+        }
+
+        .ip-detail-item-value {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary, #323130);
+        }
+
+        .ip-stat-box {
+            background: var(--hover-bg, #f5f5f5);
+            padding: 14px;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.15s ease;
+        }
+
+        .ip-stat-box:hover {
+            transform: translateY(-2px);
+        }
+
+        .ip-stat-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .ip-stat-label {
+            font-size: 12px;
+            color: var(--text-secondary, #605E5C);
+            margin-top: 2px;
+        }
+
+        /* Delete confirmation specific */
+        .delete-confirm-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid var(--border, #e0e0e0);
+            border-radius: 6px;
+            font-size: 15px;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            transition: all 0.2s ease;
+        }
+
+        .delete-confirm-input:focus {
+            outline: none;
+            border-color: var(--azure-blue, #0078D4);
+            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+        }
+
+        .delete-confirm-input.error {
+            border-color: #D13438;
+            box-shadow: 0 0 0 3px rgba(209, 52, 56, 0.1);
+        }
+
+        .delete-confirm-input.success {
+            border-color: #107C10;
+            box-shadow: 0 0 0 3px rgba(16, 124, 16, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .block-modal-overlay {
+                padding: 20px 10px;
+            }
+            .ip-detail-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Show Block Modal (improved design)
+function showBlockModal(title, content, options = {}) {
+    injectBlockModalStyles();
+
+    // Remove existing modals
+    document.querySelectorAll('.block-modal-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'block-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'block-modal';
+
+    const titleIcon = options.icon || '';
+
+    modal.innerHTML = `
+        <div class="block-modal-header">
+            <h3 class="block-modal-title">${titleIcon}${escapeHtml(title)}</h3>
+            <button class="block-modal-close" title="Close">&times;</button>
+        </div>
+        <div class="block-modal-body">${content}</div>
+        <div class="block-modal-footer">
+            <button class="block-modal-btn block-modal-btn-primary modal-close-action">Close</button>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+
+    const closeModal = () => {
+        overlay.style.animation = 'blockModalFadeIn 0.15s ease-out reverse';
+        modal.style.animation = 'blockModalSlideIn 0.15s ease-out reverse';
+        setTimeout(() => {
+            overlay.remove();
+            document.body.style.overflow = '';
+        }, 140);
+    };
+
+    // Close handlers
+    modal.querySelector('.block-modal-close').onclick = closeModal;
+    modal.querySelector('.modal-close-action').onclick = closeModal;
+    overlay.onclick = (e) => {
+        if (e.target === overlay) closeModal();
+    };
+
+    // ESC to close
+    const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', keyHandler);
+        }
+    };
+    document.addEventListener('keydown', keyHandler);
+
+    return { overlay, modal, closeModal };
+}
+
+// Disable block (unblock but keep record)
+async function disableBlockFromTable(ipAddress, blockId) {
+    if (!confirm(`Disable block for IP: ${ipAddress}?\n\nThis will unblock the IP but keep the record for reference.`)) {
+        return;
+    }
+
+    await unblockIPAddress(ipAddress, 'Disabled from IP Blocks page');
+}
+
+// Confirm delete with type-to-confirm (improved design)
+function confirmDeleteBlock(ipAddress, blockId) {
+    injectBlockModalStyles();
+
+    // Remove existing modals
+    document.querySelectorAll('.block-modal-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'block-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'block-modal';
+
+    modal.innerHTML = `
+        <div class="block-modal-header" style="background: linear-gradient(135deg, #D13438 0%, #A4262C 100%);">
+            <h3 class="block-modal-title" style="color: white;">
+                <span style="font-size: 20px;">⚠️</span>
+                Delete Block Record
+            </h3>
+            <button class="block-modal-close" style="color: rgba(255,255,255,0.8);" title="Close">&times;</button>
+        </div>
+        <div class="block-modal-body">
+            <p style="margin: 0 0 16px 0; color: var(--text-primary); font-size: 14px; line-height: 1.5;">
+                You are about to <strong>permanently delete</strong> the block record for:
+            </p>
+            <div style="background: linear-gradient(135deg, var(--hover-bg, #f5f5f5) 0%, var(--surface, #fafafa) 100%); padding: 16px; border-radius: 8px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 18px; font-weight: 600; text-align: center; margin-bottom: 20px; border: 1px solid var(--border);">
+                ${escapeHtml(ipAddress)}
+            </div>
+            <div style="background: rgba(209, 52, 56, 0.08); border: 1px solid rgba(209, 52, 56, 0.2); border-radius: 6px; padding: 12px 14px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                    <span style="font-size: 16px;">🚫</span>
+                    <p style="margin: 0; color: #A4262C; font-size: 13px; line-height: 1.5;">
+                        This action <strong>cannot be undone</strong>. The IP will be unblocked and all associated block history will be permanently removed.
+                    </p>
+                </div>
+            </div>
+            <div>
+                <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; color: var(--text-primary);">
+                    Type the IP address to confirm deletion:
+                </label>
+                <input type="text" id="confirmDeleteInput" class="delete-confirm-input" placeholder="Enter ${ipAddress}" autocomplete="off">
+            </div>
+        </div>
+        <div class="block-modal-footer">
+            <button class="block-modal-btn block-modal-btn-secondary modal-cancel-btn">Cancel</button>
+            <button id="confirmDeleteBtn" class="block-modal-btn block-modal-btn-danger" disabled>
+                <span style="display: flex; align-items: center; gap: 6px;">
+                    🗑️ Delete Permanently
+                </span>
+            </button>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+
+    const confirmInput = modal.querySelector('#confirmDeleteInput');
+    const confirmBtn = modal.querySelector('#confirmDeleteBtn');
+
+    const closeModal = () => {
+        overlay.style.animation = 'blockModalFadeIn 0.15s ease-out reverse';
+        modal.style.animation = 'blockModalSlideIn 0.15s ease-out reverse';
+        setTimeout(() => {
+            overlay.remove();
+            document.body.style.overflow = '';
+        }, 140);
+    };
+
+    // Enable button only when IP matches
+    confirmInput.oninput = () => {
+        const matches = confirmInput.value.trim() === ipAddress;
+        confirmBtn.disabled = !matches;
+        confirmInput.classList.remove('error', 'success');
+        if (confirmInput.value.trim()) {
+            confirmInput.classList.add(matches ? 'success' : 'error');
+        }
+    };
+
+    // Delete action
+    confirmBtn.onclick = async () => {
+        if (confirmInput.value.trim() !== ipAddress) return;
+
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 6px;"><span class="loading-spinner-small"></span> Deleting...</span>';
+
+        try {
+            const response = await fetch(`/api/dashboard/blocking/blocks/${blockId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                closeModal();
+                showBlockNotification(`Block record for ${ipAddress} deleted successfully`, 'success');
+                setTimeout(() => loadIPBlocks(), 500);
+            } else {
+                showBlockNotification(`Failed to delete: ${data.error || 'Unknown error'}`, 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 6px;">🗑️ Delete Permanently</span>';
+            }
+        } catch (error) {
+            console.error('Error deleting block:', error);
+            showBlockNotification('Error deleting block record', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 6px;">🗑️ Delete Permanently</span>';
+        }
+    };
+
+    // Close handlers
+    modal.querySelector('.block-modal-close').onclick = closeModal;
+    modal.querySelector('.modal-cancel-btn').onclick = closeModal;
+    overlay.onclick = (e) => {
+        if (e.target === overlay) closeModal();
+    };
+
+    // ESC to close
+    const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', keyHandler);
+        }
+    };
+    document.addEventListener('keydown', keyHandler);
+
+    // Focus input
+    setTimeout(() => confirmInput.focus(), 100);
 }

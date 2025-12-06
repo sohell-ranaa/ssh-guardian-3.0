@@ -15,6 +15,7 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 
 # Known malicious IPs with verified threat intelligence
 # These are real IPs that will return results from AbuseIPDB/VirusTotal
+# Each scenario can have multiple IPs for rotation
 DEMO_SCENARIOS = {
     "tor_exit_attack": {
         "id": "tor_exit_attack",
@@ -23,6 +24,8 @@ DEMO_SCENARIOS = {
         "severity": "critical",
         "category": "anonymization",
         "ip": "185.220.101.1",  # Known Tor exit node
+        "alternate_ips": ["185.220.101.2", "185.220.101.3", "185.220.102.1"],  # More Tor exits
+        "rotate_ips": True,
         "expected_results": {
             "abuseipdb_score": ">90",
             "virustotal": "Multiple detections",
@@ -39,6 +42,8 @@ DEMO_SCENARIOS = {
         "severity": "critical",
         "category": "reputation",
         "ip": "45.142.212.61",  # Commonly reported attacker
+        "alternate_ips": ["185.220.101.1", "193.56.28.103"],
+        "rotate_ips": True,
         "expected_results": {
             "abuseipdb_score": ">50",
             "virustotal": "Possible detections",
@@ -55,6 +60,8 @@ DEMO_SCENARIOS = {
         "severity": "critical",
         "category": "malware",
         "ip": "193.56.28.103",  # Known malicious infrastructure
+        "alternate_ips": ["45.142.212.61", "185.156.73.0"],
+        "rotate_ips": True,
         "expected_results": {
             "abuseipdb_score": "Variable",
             "virustotal": "Multiple detections",
@@ -71,6 +78,8 @@ DEMO_SCENARIOS = {
         "severity": "high",
         "category": "reconnaissance",
         "ip": "91.240.118.172",  # Known scanner
+        "alternate_ips": ["162.142.125.0", "185.220.101.1"],
+        "rotate_ips": True,
         "expected_results": {
             "abuseipdb_score": "Variable",
             "virustotal": "Possible detections",
@@ -87,6 +96,8 @@ DEMO_SCENARIOS = {
         "severity": "medium",
         "category": "geographic",
         "ip": "218.92.0.107",  # China-based IP
+        "alternate_ips": ["39.96.0.0", "45.142.212.61"],
+        "rotate_ips": True,
         "expected_results": {
             "abuseipdb_score": "Variable",
             "virustotal": "Possible detections",
@@ -103,6 +114,8 @@ DEMO_SCENARIOS = {
         "severity": "low",
         "category": "baseline",
         "ip": "8.8.8.8",  # Google DNS - known clean
+        "alternate_ips": ["8.8.4.4", "1.1.1.1"],  # Cloudflare DNS
+        "rotate_ips": False,
         "expected_results": {
             "abuseipdb_score": "0-10",
             "virustotal": "0 detections",
@@ -110,6 +123,133 @@ DEMO_SCENARIOS = {
             "ml_anomaly": False
         },
         "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Accepted publickey for deploy from {ip} port {port} ssh2"
+    },
+
+    # NEW SCENARIOS
+    "vpn_proxy_attack": {
+        "id": "vpn_proxy_attack",
+        "name": "VPN/Proxy Attack",
+        "description": "Attack from known VPN/proxy service - demonstrates anonymization detection",
+        "severity": "high",
+        "category": "anonymization",
+        "ip": "103.216.221.19",  # Known VPN IP
+        "alternate_ips": ["45.142.212.61", "91.240.118.172"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">40",
+            "virustotal": "Possible detections",
+            "threat_level": "MEDIUM-HIGH",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for admin from {ip} port {port} ssh2"
+    },
+
+    "credential_stuffing": {
+        "id": "credential_stuffing",
+        "name": "Credential Stuffing Attack",
+        "description": "Automated credential stuffing with multiple usernames - demonstrates pattern recognition",
+        "severity": "critical",
+        "category": "authentication",
+        "ip": "45.227.254.0",  # Known credential stuffing source
+        "alternate_ips": ["193.56.28.103", "185.220.101.1"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">60",
+            "virustotal": "Multiple detections",
+            "threat_level": "HIGH",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for invalid user {username} from {ip} port {port} ssh2"
+    },
+
+    "datacenter_attack": {
+        "id": "datacenter_attack",
+        "name": "Datacenter/Hosting IP Attack",
+        "description": "Attack from datacenter IP - often indicates compromised VPS",
+        "severity": "high",
+        "category": "infrastructure",
+        "ip": "167.172.248.37",  # DigitalOcean datacenter
+        "alternate_ips": ["206.189.156.201", "159.89.133.246"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">30",
+            "virustotal": "Possible detections",
+            "threat_level": "MEDIUM",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for root from {ip} port {port} ssh2"
+    },
+
+    "port_scanner": {
+        "id": "port_scanner",
+        "name": "Port Scanner Attack",
+        "description": "Automated port scanning activity - demonstrates reconnaissance detection",
+        "severity": "medium",
+        "category": "reconnaissance",
+        "ip": "162.142.125.0",  # Known scanner
+        "alternate_ips": ["91.240.118.172", "185.220.101.1"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">20",
+            "virustotal": "Possible detections",
+            "threat_level": "LOW-MEDIUM",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for invalid user test from {ip} port {port} ssh2"
+    },
+
+    "ransomware_c2": {
+        "id": "ransomware_c2",
+        "name": "Ransomware C2 Server",
+        "description": "Known ransomware command & control server - critical threat",
+        "severity": "critical",
+        "category": "malware",
+        "ip": "185.220.101.54",  # Known malicious infra
+        "alternate_ips": ["193.56.28.103", "45.142.212.61"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">80",
+            "virustotal": "Multiple detections",
+            "threat_level": "CRITICAL",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for root from {ip} port {port} ssh2"
+    },
+
+    "ddos_botnet": {
+        "id": "ddos_botnet",
+        "name": "DDoS Botnet Node",
+        "description": "Compromised host in DDoS botnet - demonstrates botnet detection",
+        "severity": "critical",
+        "category": "malware",
+        "ip": "185.156.73.0",  # Known botnet IP
+        "alternate_ips": ["91.240.118.172", "193.56.28.103"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">70",
+            "virustotal": "Multiple detections",
+            "threat_level": "HIGH",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for invalid user admin from {ip} port {port} ssh2"
+    },
+
+    "nation_state_apt": {
+        "id": "nation_state_apt",
+        "name": "Nation-State APT",
+        "description": "Advanced Persistent Threat from nation-state actor - demonstrates high-sophistication attacks",
+        "severity": "critical",
+        "category": "apt",
+        "ip": "39.96.0.0",  # Alibaba Cloud - often used by APTs
+        "alternate_ips": ["218.92.0.107", "45.142.212.61"],
+        "rotate_ips": True,
+        "expected_results": {
+            "abuseipdb_score": ">50",
+            "virustotal": "Multiple detections",
+            "threat_level": "HIGH",
+            "ml_anomaly": True
+        },
+        "log_template": "Dec {day} {time} prod-server sshd[{pid}]: Failed password for root from {ip} port {port} ssh2"
     }
 }
 
@@ -135,8 +275,36 @@ def get_demo_scenario(scenario_id: str) -> Optional[Dict]:
     return DEMO_SCENARIOS.get(scenario_id)
 
 
-def generate_demo_log(scenario_id: str) -> Optional[str]:
-    """Generate a log line for a demo scenario"""
+def get_rotated_ip(scenario_id: str) -> str:
+    """
+    Get IP for scenario with optional rotation.
+
+    Returns:
+        IP address - either default or rotated from alternate_ips
+    """
+    import random
+
+    scenario = DEMO_SCENARIOS.get(scenario_id)
+    if not scenario:
+        return None
+
+    # Check if rotation is enabled
+    if scenario.get('rotate_ips', False) and scenario.get('alternate_ips'):
+        # Randomly choose between default IP and alternates
+        all_ips = [scenario['ip']] + scenario['alternate_ips']
+        return random.choice(all_ips)
+
+    return scenario['ip']
+
+
+def generate_demo_log(scenario_id: str, custom_ip: str = None) -> Optional[str]:
+    """
+    Generate a log line for a demo scenario
+
+    Args:
+        scenario_id: ID of the scenario
+        custom_ip: Optional custom IP to use (for rotation)
+    """
     import random
 
     scenario = DEMO_SCENARIOS.get(scenario_id)
@@ -144,12 +312,21 @@ def generate_demo_log(scenario_id: str) -> Optional[str]:
         return None
 
     now = datetime.now()
-    log = scenario["log_template"].format(
+    ip_to_use = custom_ip if custom_ip else get_rotated_ip(scenario_id)
+
+    # Get template and handle special cases
+    template = scenario["log_template"]
+
+    # For credential stuffing, add random usernames
+    usernames = ['admin', 'root', 'user', 'oracle', 'postgres', 'mysql', 'test', 'ubuntu', 'deploy']
+
+    log = template.format(
         day=now.day,
         time=now.strftime("%H:%M:%S"),
         pid=random.randint(10000, 99999),
-        ip=scenario["ip"],
-        port=random.randint(40000, 65000)
+        ip=ip_to_use,
+        port=random.randint(40000, 65000),
+        username=random.choice(usernames) if '{username}' in template else ''
     )
     return log
 
@@ -180,11 +357,13 @@ def run_demo_scenario(scenario_id: str, verbose: bool = True) -> Dict:
         print(f"Expected: {scenario['expected_results']}")
         print(f"{'='*60}")
 
-    # Generate log line
-    log_line = generate_demo_log(scenario_id)
+    # Generate log line with rotated IP
+    rotated_ip = get_rotated_ip(scenario_id)
+    log_line = generate_demo_log(scenario_id, custom_ip=rotated_ip)
 
     if verbose:
-        print(f"\nLog: {log_line}")
+        print(f"\nUsing IP: {rotated_ip} (Rotation: {'ON' if scenario.get('rotate_ips') else 'OFF'})")
+        print(f"Log: {log_line}")
         print(f"\nProcessing...")
 
     # Process through full pipeline
@@ -197,7 +376,9 @@ def run_demo_scenario(scenario_id: str, verbose: bool = True) -> Dict:
             "success": True,
             "scenario_id": scenario_id,
             "scenario_name": scenario["name"],
-            "ip": scenario["ip"],
+            "ip": rotated_ip,  # Use the actual rotated IP
+            "default_ip": scenario["ip"],  # Keep default for reference
+            "ip_rotated": rotated_ip != scenario["ip"],  # Flag if IP was rotated
             "expected": scenario["expected_results"],
             "event_id": result.get('event_id'),
             "event_type": result.get('event_type'),
@@ -228,7 +409,9 @@ def run_demo_scenario(scenario_id: str, verbose: bool = True) -> Dict:
             if ml.get('ml_available'):
                 print(f"\nML Risk Score: {ml.get('risk_score')}/100")
                 print(f"ML Threat Type: {ml.get('threat_type')}")
-                print(f"ML Confidence: {ml.get('confidence', 0)*100:.1f}%")
+                # Convert confidence to float to handle Decimal types
+                confidence = float(ml.get('confidence', 0)) if ml.get('confidence') else 0.0
+                print(f"ML Confidence: {confidence*100:.1f}%")
                 print(f"Anomaly Detected: {'YES' if ml.get('is_anomaly') else 'NO'}")
 
             print(f"{'='*60}\n")

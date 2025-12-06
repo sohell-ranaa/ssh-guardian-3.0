@@ -464,6 +464,10 @@ function getFlagEmoji(countryCode) {
  */
 function formatDateTime(dateString) {
     if (!dateString) return '-';
+    // Use TimeSettings if available
+    if (window.TimeSettings?.isLoaded()) {
+        return window.TimeSettings.formatFull(dateString);
+    }
     const date = new Date(dateString);
     return date.toLocaleString();
 }

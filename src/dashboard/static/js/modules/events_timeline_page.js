@@ -378,6 +378,10 @@
 
             // Handle hour format (e.g., "2024-12-05 14:00:00")
             if (interval === 'hour') {
+                // Use TimeSettings for short format if available
+                if (window.TimeSettings?.isLoaded()) {
+                    return window.TimeSettings.formatShort(dateString);
+                }
                 const date = new Date(dateString);
                 if (!isNaN(date.getTime())) {
                     return date.toLocaleString('en-US', {
@@ -389,7 +393,11 @@
                 }
             }
 
-            // Handle day format
+            // Handle day format - use TimeSettings for date if available
+            if (window.TimeSettings?.isLoaded()) {
+                return window.TimeSettings.formatDate(dateString);
+            }
+
             const date = new Date(dateString);
             if (!isNaN(date.getTime())) {
                 return date.toLocaleDateString('en-US', {

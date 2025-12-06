@@ -590,19 +590,15 @@
     }
 
     /**
-     * Format date/time
+     * Format date/time using TimeSettings
      */
     function formatDateTime(dateStr) {
         if (!dateStr) return '-';
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.formatFull(dateStr);
+        }
         const date = new Date(dateStr);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
+        return date.toLocaleString();
     }
 
     /**

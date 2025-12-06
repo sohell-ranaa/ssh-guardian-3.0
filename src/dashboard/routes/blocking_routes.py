@@ -16,6 +16,14 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 from connection import get_connection
 from blocking_engine import BlockingEngine, block_ip_manual, unblock_ip
 from cache import get_cache, cache_key, cache_key_hash
+from auth import AuditLogger
+
+
+def get_current_user_id():
+    """Get current user ID from request context"""
+    if hasattr(request, 'current_user') and request.current_user:
+        return request.current_user.get('user_id') or request.current_user.get('id')
+    return None
 
 # Create Blueprint
 blocking_routes = Blueprint('blocking_routes', __name__, url_prefix='/api/dashboard/blocking')
@@ -218,13 +226,25 @@ def manual_block():
         result = block_ip_manual(
             ip_address=ip_address,
             reason=reason,
-            user_id=None,  # TODO: Get from session
+            user_id=get_current_user_id(),
             duration_minutes=duration_minutes
         )
 
         if result['success']:
             # Invalidate cache
             invalidate_blocking_cache()
+
+            # Audit log
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='ip_blocked',
+                resource_type='ip_block',
+                resource_id=ip_address,
+                details={'ip_address': ip_address, 'reason': reason, 'duration_minutes': duration_minutes},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
             return jsonify(result), 201
         else:
             return jsonify(result), 400
@@ -264,12 +284,24 @@ def manual_unblock():
         result = unblock_ip(
             ip_address=ip_address,
             unblock_reason=reason,
-            unblocked_by_user_id=None  # TODO: Get from session
+            unblocked_by_user_id=get_current_user_id()
         )
 
         if result['success']:
             # Invalidate cache
             invalidate_blocking_cache()
+
+            # Audit log
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='ip_unblocked',
+                resource_type='ip_block',
+                resource_id=ip_address,
+                details={'ip_address': ip_address, 'reason': reason},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
             return jsonify(result), 200
         else:
             return jsonify(result), 400
@@ -356,6 +388,77 @@ def check_block_status(ip_address):
         return jsonify({
             'success': False,
             'error': 'Failed to check block status'
+        }), 500
+
+
+@blocking_routes.route('/blocks/<int:block_id>', methods=['DELETE'])
+def delete_block(block_id):
+    """
+    Permanently delete a block record
+
+    This removes the block record entirely from the database.
+    Use unblock endpoint if you just want to disable the block.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # First get the block info for logging
+            cursor.execute("""
+                SELECT id, ip_address_text, block_reason
+                FROM ip_blocks
+                WHERE id = %s
+            """, (block_id,))
+
+            block = cursor.fetchone()
+
+            if not block:
+                return jsonify({
+                    'success': False,
+                    'error': 'Block record not found'
+                }), 404
+
+            ip_address = block['ip_address_text']
+
+            # Delete the block record
+            cursor.execute("DELETE FROM ip_blocks WHERE id = %s", (block_id,))
+            conn.commit()
+
+            # Clear cache
+            cache = get_cache()
+            cache.delete_pattern('blocking')
+            cache.delete(cache_key('blocking', 'check', ip_address))
+
+            # Audit log
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='block_record_deleted',
+                resource_type='ip_block',
+                resource_id=ip_address,
+                details={'block_id': block_id, 'ip_address': ip_address, 'reason': block.get('block_reason')},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
+            print(f"🗑️ Block record deleted: {ip_address} (ID: {block_id})")
+
+            return jsonify({
+                'success': True,
+                'message': f'Block record for {ip_address} deleted successfully',
+                'deleted_id': block_id,
+                'ip_address': ip_address
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Error deleting block: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete block record'
         }), 500
 
 

@@ -55,91 +55,62 @@
         if (!container || !timeSettingsData) return;
 
         const html = `
-            <div class="settings-category-section" style="margin-bottom: 32px;">
-                <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--text-primary);">
-                    Time & Date Display
-                </h3>
-                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-                    <!-- Timezone -->
-                    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
-                                    Timezone
-                                </div>
-                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                                    Select your preferred timezone for displaying dates and times
-                                </div>
-                                <select id="time-setting-timezone"
-                                        style="width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                                    ${(timeSettingsData.available_timezones || []).map(tz =>
-                                        `<option value="${tz}" ${timeSettingsData.timezone === tz ? 'selected' : ''}>${tz}</option>`
-                                    ).join('')}
-                                </select>
-                            </div>
+            <div class="settings-section">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">Time & Date Display</h2>
+                </div>
+
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+                        <!-- Timezone Selection -->
+                        <div>
+                            <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                                Display Timezone
+                            </label>
+                            <select id="time-setting-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                                ${(timeSettingsData.available_timezones || []).map(tz =>
+                                    `<option value="${tz}" ${timeSettingsData.timezone === tz ? 'selected' : ''}>${tz}</option>`
+                                ).join('')}
+                            </select>
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                                All timestamps will be displayed in this timezone
+                            </p>
+                        </div>
+
+                        <!-- Time Format -->
+                        <div>
+                            <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                                Time Format
+                            </label>
+                            <select id="time-setting-time-format" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                                <option value="24h" ${timeSettingsData.time_format === '24h' ? 'selected' : ''}>24-hour (14:30:00)</option>
+                                <option value="12h" ${timeSettingsData.time_format === '12h' ? 'selected' : ''}>12-hour (2:30:00 PM)</option>
+                            </select>
+                        </div>
+
+                        <!-- Date Format -->
+                        <div>
+                            <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                                Date Format
+                            </label>
+                            <select id="time-setting-date-format" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                                ${(timeSettingsData.available_date_formats || []).map(fmt => {
+                                    const example = getDateFormatExample(fmt);
+                                    return `<option value="${fmt}" ${timeSettingsData.date_format === fmt ? 'selected' : ''}>${example} (${fmt})</option>`;
+                                }).join('')}
+                            </select>
                         </div>
                     </div>
 
-                    <!-- Time Format -->
-                    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
-                                    Time Format
-                                </div>
-                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                                    Choose between 12-hour (AM/PM) or 24-hour format
-                                </div>
-                                <div style="display: flex; gap: 16px;">
-                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="radio" name="time_format" value="12h"
-                                               ${timeSettingsData.time_format === '12h' ? 'checked' : ''}
-                                               style="width: 18px; height: 18px;">
-                                        <span style="font-size: 14px;">12-hour (1:30 PM)</span>
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="radio" name="time_format" value="24h"
-                                               ${timeSettingsData.time_format === '24h' ? 'checked' : ''}
-                                               style="width: 18px; height: 18px;">
-                                        <span style="font-size: 14px;">24-hour (13:30)</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Date Format -->
-                    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
-                                    Date Format
-                                </div>
-                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                                    Select how dates should be displayed
-                                </div>
-                                <select id="time-setting-date-format"
-                                        style="width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                                    ${(timeSettingsData.available_date_formats || []).map(fmt => {
-                                        const example = getDateFormatExample(fmt);
-                                        return `<option value="${fmt}" ${timeSettingsData.date_format === fmt ? 'selected' : ''}>${fmt} (${example})</option>`;
-                                    }).join('')}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Preview & Save -->
-                    <div style="padding: 20px; background: var(--hover-bg);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px;">
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Preview</div>
-                                <div id="time-preview" style="font-size: 16px; font-weight: 500; font-family: monospace; color: var(--text-primary);">
+                                <span style="font-size: 14px; color: var(--text-secondary);">Preview: </span>
+                                <span id="time-preview" style="font-size: 14px; font-weight: 500; font-family: monospace; color: var(--text-primary);">
                                     ${getCurrentTimePreview()}
-                                </div>
+                                </span>
                             </div>
-                            <button id="save-time-settings-btn"
-                                    style="padding: 10px 24px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                            <button id="save-time-settings-btn" class="btn btn-primary">
                                 Save Time Settings
                             </button>
                         </div>
@@ -182,7 +153,7 @@
         if (!timeSettingsData) return '';
 
         const timezone = document.getElementById('time-setting-timezone')?.value || timeSettingsData.timezone;
-        const timeFormat = document.querySelector('input[name="time_format"]:checked')?.value || timeSettingsData.time_format;
+        const timeFormat = document.getElementById('time-setting-time-format')?.value || timeSettingsData.time_format;
         const dateFormat = document.getElementById('time-setting-date-format')?.value || timeSettingsData.date_format;
 
         try {
@@ -235,9 +206,7 @@
 
         document.getElementById('time-setting-timezone')?.addEventListener('change', updatePreview);
         document.getElementById('time-setting-date-format')?.addEventListener('change', updatePreview);
-        document.querySelectorAll('input[name="time_format"]').forEach(radio => {
-            radio.addEventListener('change', updatePreview);
-        });
+        document.getElementById('time-setting-time-format')?.addEventListener('change', updatePreview);
 
         // Save button
         document.getElementById('save-time-settings-btn')?.addEventListener('click', saveTimeSettings);
@@ -259,11 +228,11 @@
     }
 
     /**
-     * Save time settings
+     * Save time settings to database
      */
     async function saveTimeSettings() {
         const timezone = document.getElementById('time-setting-timezone')?.value;
-        const timeFormat = document.querySelector('input[name="time_format"]:checked')?.value;
+        const timeFormat = document.getElementById('time-setting-time-format')?.value;
         const dateFormat = document.getElementById('time-setting-date-format')?.value;
 
         try {
@@ -289,9 +258,9 @@
                     timeSettingsData.date_format = dateFormat;
                 }
 
-                // Reload TimeSettings module if available
-                if (window.TimeSettings && typeof window.TimeSettings.load === 'function') {
-                    window.TimeSettings.load();
+                // Force reload TimeSettings module so all pages use new settings
+                if (window.TimeSettings && typeof window.TimeSettings.reload === 'function') {
+                    await window.TimeSettings.reload();
                 }
             } else {
                 showNotification('Failed to save time settings: ' + (data.error || 'Unknown error'), 'error');

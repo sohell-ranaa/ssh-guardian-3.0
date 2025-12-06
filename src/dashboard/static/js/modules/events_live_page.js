@@ -27,6 +27,11 @@
      */
     window.loadEventsLivePage = async function() {
         try {
+            // Ensure TimeSettings is loaded for proper date/time formatting
+            if (window.TimeSettings && !window.TimeSettings.isLoaded()) {
+                await window.TimeSettings.load();
+            }
+
             // Reset pagination
             currentPage = 0;
 
@@ -369,10 +374,15 @@
     }
 
     /**
-     * Format timestamp for display
+     * Format timestamp for display using saved time settings
      */
     function formatTimestamp(timestamp) {
         if (!timestamp) return 'N/A';
+        // Use TimeSettings module if available for consistent formatting
+        if (window.TimeSettings && window.TimeSettings.isLoaded()) {
+            return window.TimeSettings.format(timestamp, 'short');
+        }
+        // Fallback to browser locale
         const date = new Date(timestamp);
         return date.toLocaleString();
     }

@@ -200,6 +200,10 @@
      */
     function formatTimestamp(timestamp) {
         if (!timestamp) return 'N/A';
+        // Use TimeSettings if available
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.formatFull(timestamp);
+        }
         const date = new Date(timestamp);
         return date.toLocaleString();
     }

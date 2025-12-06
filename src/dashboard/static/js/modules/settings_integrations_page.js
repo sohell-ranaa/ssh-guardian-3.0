@@ -124,8 +124,10 @@
         // Last test info
         let lastTestInfo = '';
         if (integration.last_test_at) {
-            const testDate = new Date(integration.last_test_at);
-            lastTestInfo = `<div style="font-size: 11px; color: #605E5C; margin-top: 8px;">Last tested: ${testDate.toLocaleString()}</div>`;
+            const formattedDate = window.TimeSettings?.isLoaded()
+                ? window.TimeSettings.formatFull(integration.last_test_at)
+                : new Date(integration.last_test_at).toLocaleString();
+            lastTestInfo = `<div style="font-size: 11px; color: #605E5C; margin-top: 8px;">Last tested: ${formattedDate}</div>`;
         }
         if (integration.error_message) {
             lastTestInfo += `<div style="font-size: 11px; color: #D13438; margin-top: 4px;">Error: ${integration.error_message}</div>`;

@@ -224,6 +224,10 @@
      */
     function formatDateTime(dateStr) {
         if (!dateStr) return 'N/A';
+        // Use TimeSettings if available
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.formatFull(dateStr);
+        }
         const date = new Date(dateStr);
         return date.toLocaleString();
     }

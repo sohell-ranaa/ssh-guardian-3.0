@@ -19,13 +19,20 @@
 
     /**
      * Load time settings from server
+     * @param {boolean} forceReload - Force reload from server even if already loaded
      */
-    async function loadTimeSettings() {
-        if (loadPromise) return loadPromise;
+    async function loadTimeSettings(forceReload = false) {
+        // Return cached promise if already loading/loaded and not forcing reload
+        if (loadPromise && !forceReload) return loadPromise;
 
+        // Reset promise for fresh load
         loadPromise = (async () => {
             try {
-                const response = await fetch('/api/dashboard/settings/time');
+                // Add nocache param to bypass server cache when forcing reload
+                const url = forceReload
+                    ? '/api/dashboard/settings/time?nocache=1'
+                    : '/api/dashboard/settings/time';
+                const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.success) {
@@ -93,7 +100,7 @@
 
     /**
      * Format a date/time according to user's settings
-     * @param {string|Date} dateInput - Date string or Date object
+     * @param {string|Date} dateInput - Date string or Date object (assumed UTC if no timezone)
      * @param {string} format - 'time', 'date', 'datetime', or custom format
      * @returns {string} Formatted date/time string
      */
@@ -104,7 +111,12 @@
         if (dateInput instanceof Date) {
             date = dateInput;
         } else {
-            date = new Date(dateInput);
+            // If the string doesn't have timezone info, treat it as UTC
+            let dateStr = String(dateInput);
+            if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+                dateStr += 'Z';  // Append Z to indicate UTC
+            }
+            date = new Date(dateStr);
         }
 
         if (isNaN(date.getTime())) return 'Invalid Date';
@@ -247,12 +259,14 @@
     // Export functions globally
     window.TimeSettings = {
         load: loadTimeSettings,
+        reload: () => loadTimeSettings(true),  // Force reload from server
         save: saveTimeSettings,
         get: getTimeSettings,
         format: formatDateTime,
         formatDate: (d) => formatDateTime(d, 'date'),
         formatTime: (d) => formatDateTime(d, 'time'),
         formatShort: (d) => formatDateTime(d, 'short'),
+        formatFull: (d) => formatDateTime(d, 'datetime'),
         relative: getRelativeTime,
         isLoaded: () => settingsLoaded
     };

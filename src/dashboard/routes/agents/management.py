@@ -14,7 +14,15 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from cache import get_cache, cache_key
+from auth import AuditLogger
 from . import agent_routes
+
+
+def get_current_user_id():
+    """Get current user ID from request context"""
+    if hasattr(request, 'current_user') and request.current_user:
+        return request.current_user.get('user_id') or request.current_user.get('id')
+    return None
 
 # Cache TTLs
 AGENTS_LIST_TTL = 30  # 30 seconds for agent list
@@ -99,7 +107,19 @@ def approve_agent(agent_id):
     """Approve an agent"""
     try:
         conn = get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get agent info for audit log
+        cursor.execute("SELECT hostname, agent_id FROM agents WHERE id = %s", (agent_id,))
+        agent = cursor.fetchone()
+
+        if not agent:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
 
         cursor.execute("""
             UPDATE agents
@@ -110,18 +130,22 @@ def approve_agent(agent_id):
         """, (agent_id,))
 
         conn.commit()
-
-        if cursor.rowcount == 0:
-            return jsonify({
-                'success': False,
-                'error': 'Agent not found'
-            }), 404
-
         cursor.close()
         conn.close()
 
         # Invalidate cache
         invalidate_agents_cache()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='agent_approved',
+            resource_type='agent',
+            resource_id=str(agent_id),
+            details={'hostname': agent['hostname'], 'agent_uuid': agent['agent_id']},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
         return jsonify({
             'success': True,
@@ -140,7 +164,19 @@ def activate_agent(agent_id):
     """Activate an agent"""
     try:
         conn = get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get agent info for audit log
+        cursor.execute("SELECT hostname, agent_id FROM agents WHERE id = %s", (agent_id,))
+        agent = cursor.fetchone()
+
+        if not agent:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
 
         cursor.execute("""
             UPDATE agents
@@ -150,18 +186,22 @@ def activate_agent(agent_id):
         """, (agent_id,))
 
         conn.commit()
-
-        if cursor.rowcount == 0:
-            return jsonify({
-                'success': False,
-                'error': 'Agent not found'
-            }), 404
-
         cursor.close()
         conn.close()
 
         # Invalidate cache
         invalidate_agents_cache()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='agent_activated',
+            resource_type='agent',
+            resource_id=str(agent_id),
+            details={'hostname': agent['hostname'], 'agent_uuid': agent['agent_id']},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
         return jsonify({
             'success': True,
@@ -180,7 +220,19 @@ def deactivate_agent(agent_id):
     """Deactivate an agent"""
     try:
         conn = get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get agent info for audit log
+        cursor.execute("SELECT hostname, agent_id FROM agents WHERE id = %s", (agent_id,))
+        agent = cursor.fetchone()
+
+        if not agent:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
 
         cursor.execute("""
             UPDATE agents
@@ -191,18 +243,22 @@ def deactivate_agent(agent_id):
         """, (agent_id,))
 
         conn.commit()
-
-        if cursor.rowcount == 0:
-            return jsonify({
-                'success': False,
-                'error': 'Agent not found'
-            }), 404
-
         cursor.close()
         conn.close()
 
         # Invalidate cache
         invalidate_agents_cache()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='agent_deactivated',
+            resource_type='agent',
+            resource_id=str(agent_id),
+            details={'hostname': agent['hostname'], 'agent_uuid': agent['agent_id']},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
         return jsonify({
             'success': True,
@@ -412,4 +468,115 @@ def revoke_api_key(agent_id):
         return jsonify({
             'success': False,
             'error': f'Failed to revoke API key: {str(e)}'
+        }), 500
+
+
+@agent_routes.route('/agents/<int:agent_id>', methods=['DELETE'])
+def delete_agent(agent_id):
+    """Permanently delete an agent and all associated data"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # First, get the agent details for logging/confirmation
+        cursor.execute("""
+            SELECT id, agent_id, hostname, total_events_sent
+            FROM agents WHERE id = %s
+        """, (agent_id,))
+
+        agent = cursor.fetchone()
+
+        if not agent:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Agent not found'
+            }), 404
+
+        hostname = agent['hostname']
+        agent_uuid = agent['agent_id']
+
+        # Delete related data (cascaded by FK, but explicitly for clarity)
+        # Delete agent heartbeats
+        cursor.execute("DELETE FROM agent_heartbeats WHERE agent_id = %s", (agent_id,))
+        heartbeats_deleted = cursor.rowcount
+
+        # Delete agent log batches
+        cursor.execute("DELETE FROM agent_log_batches WHERE agent_id = %s", (agent_id,))
+        batches_deleted = cursor.rowcount
+
+        # Delete agent firewall state
+        cursor.execute("DELETE FROM agent_firewall_state WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent firewall rules
+        cursor.execute("DELETE FROM agent_firewall_rules WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent firewall port forwards
+        cursor.execute("DELETE FROM agent_port_forwards WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent firewall commands
+        cursor.execute("DELETE FROM agent_firewall_commands WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent listening ports
+        cursor.execute("DELETE FROM agent_listening_ports WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent system users
+        cursor.execute("DELETE FROM agent_system_users WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent active connections
+        cursor.execute("DELETE FROM agent_active_connections WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent command history
+        cursor.execute("DELETE FROM agent_command_history WHERE agent_id = %s", (agent_id,))
+
+        # Delete firewall suggestions
+        cursor.execute("DELETE FROM firewall_suggestions WHERE agent_id = %s", (agent_id,))
+
+        # Delete agent protected ports
+        cursor.execute("DELETE FROM agent_protected_ports WHERE agent_id = %s", (agent_id,))
+
+        # Finally, delete the agent itself
+        cursor.execute("DELETE FROM agents WHERE id = %s", (agent_id,))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        # Invalidate all caches
+        cache = get_cache()
+        cache.delete_pattern('agents')
+        cache.delete_pattern(f'firewall:{agent_id}')
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='agent_deleted',
+            resource_type='agent',
+            resource_id=str(agent_id),
+            details={
+                'hostname': hostname,
+                'agent_uuid': agent_uuid,
+                'heartbeats_deleted': heartbeats_deleted,
+                'batches_deleted': batches_deleted
+            },
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Agent "{hostname}" deleted successfully',
+            'deleted': {
+                'agent_id': agent_uuid,
+                'hostname': hostname,
+                'heartbeats': heartbeats_deleted,
+                'batches': batches_deleted
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to delete agent: {str(e)}'
         }), 500

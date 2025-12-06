@@ -13,8 +13,17 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from cache import get_cache, cache_key, cache_key_hash
+from auth import AuditLogger
 
 settings_routes = Blueprint('settings', __name__)
+
+
+def get_current_user_id():
+    """Get current user ID from request context"""
+    if hasattr(request, 'current_user') and request.current_user:
+        return request.current_user.get('user_id') or request.current_user.get('id')
+    return None
+
 
 # Cache TTLs - OPTIMIZED FOR PERFORMANCE
 SETTINGS_LIST_TTL = 1800      # 30 minutes for settings list
@@ -197,6 +206,17 @@ def update_setting(setting_id):
         # Invalidate cache after update
         invalidate_settings_cache()
 
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='setting_updated',
+            resource_type='setting',
+            resource_id=str(setting_id),
+            details={'setting_key': setting['setting_key'] if setting else None, 'new_value': setting_value},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
         return jsonify({
             'success': True,
             'message': 'Setting updated successfully',
@@ -248,6 +268,17 @@ def bulk_update_settings():
 
         # Invalidate cache after bulk update
         invalidate_settings_cache()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='settings_bulk_updated',
+            resource_type='setting',
+            resource_id='bulk',
+            details={'settings_count': len(settings), 'setting_ids': [s.get('id') for s in settings]},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
         return jsonify({
             'success': True,
@@ -359,6 +390,17 @@ def update_setting_by_key(setting_key):
 
         invalidate_settings_cache()
 
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='setting_updated',
+            resource_type='setting',
+            resource_id=setting_key,
+            details={'setting_key': setting_key, 'new_value': setting_value},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
         return jsonify({
             'success': True,
             'message': f'Setting "{setting_key}" updated successfully',
@@ -404,12 +446,30 @@ def get_time_settings():
         # Convert to dictionary
         time_settings = {row['setting_key']: row['setting_value'] for row in rows}
 
-        # Add common timezone list for frontend
+        # Add comprehensive timezone list for frontend
         time_settings['available_timezones'] = [
-            'UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-            'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
-            'Asia/Dubai', 'Asia/Kolkata', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Singapore',
-            'Australia/Sydney', 'Pacific/Auckland'
+            # UTC
+            'UTC',
+            # Americas
+            'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+            'America/Phoenix', 'America/Anchorage', 'America/Toronto', 'America/Vancouver',
+            'America/Mexico_City', 'America/Bogota', 'America/Lima', 'America/Santiago',
+            'America/Sao_Paulo', 'America/Buenos_Aires', 'America/Caracas',
+            # Europe
+            'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome',
+            'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Vienna',
+            'Europe/Warsaw', 'Europe/Prague', 'Europe/Stockholm', 'Europe/Oslo',
+            'Europe/Helsinki', 'Europe/Athens', 'Europe/Moscow', 'Europe/Istanbul',
+            # Asia
+            'Asia/Dubai', 'Asia/Riyadh', 'Asia/Tehran', 'Asia/Karachi', 'Asia/Kolkata',
+            'Asia/Dhaka', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Ho_Chi_Minh',
+            'Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai',
+            'Asia/Taipei', 'Asia/Seoul', 'Asia/Tokyo', 'Asia/Manila',
+            # Africa
+            'Africa/Cairo', 'Africa/Lagos', 'Africa/Johannesburg', 'Africa/Nairobi',
+            # Australia & Pacific
+            'Australia/Perth', 'Australia/Adelaide', 'Australia/Sydney', 'Australia/Brisbane',
+            'Australia/Melbourne', 'Pacific/Auckland', 'Pacific/Fiji', 'Pacific/Honolulu'
         ]
 
         time_settings['available_time_formats'] = ['12h', '24h']
@@ -470,6 +530,18 @@ def update_time_settings():
         conn.close()
 
         invalidate_settings_cache()
+
+        # Audit log
+        if updated:
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='time_settings_updated',
+                resource_type='setting',
+                resource_id='time',
+                details={'updated_keys': updated, 'new_values': {k: data.get(k) for k in updated}},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
 
         return jsonify({
             'success': True,

@@ -802,6 +802,10 @@
     function formatDateTime(dateString) {
         if (!dateString) return '-';
         try {
+            // Use TimeSettings if available
+            if (window.TimeSettings?.isLoaded()) {
+                return window.TimeSettings.formatFull(dateString);
+            }
             const date = new Date(dateString);
             return date.toLocaleString();
         } catch (e) {

@@ -15,3 +15,4 @@ from . import heartbeat
 from . import logs
 from . import management
 from . import statistics
+from . import firewall

@@ -14,8 +14,17 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from cache import get_cache, cache_key, cache_key_hash
+from auth import AuditLogger
 
 users_routes = Blueprint('users', __name__)
+
+
+def get_current_user_id():
+    """Get current user ID from request context"""
+    if hasattr(request, 'current_user') and request.current_user:
+        return request.current_user.get('user_id') or request.current_user.get('id')
+    return None
+
 
 # Cache TTLs
 USERS_LIST_TTL = 600         # 10 minutes for user list
@@ -266,6 +275,17 @@ def create_user():
             # Invalidate cache
             invalidate_users_cache()
 
+            # Audit log
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='user_created',
+                resource_type='user',
+                resource_id=str(new_user_id),
+                details={'email': email, 'full_name': full_name, 'role_id': role_id},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
             return jsonify({
                 'success': True,
                 'message': 'User created successfully',
@@ -369,6 +389,21 @@ def update_user(user_id):
 
             # Invalidate cache
             invalidate_users_cache()
+
+            # Audit log - track what fields were updated (exclude password)
+            updated_fields = {k: v for k, v in data.items() if k != 'password'}
+            if 'password' in data:
+                updated_fields['password_changed'] = True
+
+            AuditLogger.log_action(
+                user_id=get_current_user_id(),
+                action='user_updated',
+                resource_type='user',
+                resource_id=str(user_id),
+                details={'updated_fields': updated_fields},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
         except Exception as e:
             conn.rollback()
             if 'Duplicate entry' in str(e):
@@ -426,6 +461,17 @@ def toggle_user_active(user_id):
         # Invalidate cache
         invalidate_users_cache()
 
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='user_activated' if new_status else 'user_deactivated',
+            resource_type='user',
+            resource_id=str(user_id),
+            details={'new_status': new_status},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
         return jsonify({
             'success': True,
             'message': f"User {'activated' if new_status else 'deactivated'} successfully",
@@ -470,6 +516,17 @@ def unlock_user(user_id):
         # Invalidate cache
         invalidate_users_cache()
 
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='user_unlocked',
+            resource_type='user',
+            resource_id=str(user_id),
+            details={},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
         return jsonify({
             'success': True,
             'message': 'User account unlocked successfully'
@@ -494,7 +551,17 @@ def delete_user(user_id):
     cursor = None
     try:
         conn = get_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get user info for audit log before deletion
+        cursor.execute("SELECT id, email, full_name, role_id FROM users WHERE id = %s", (user_id,))
+        user_info = cursor.fetchone()
+
+        if not user_info:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
 
         # Prevent deleting the last super admin
         cursor.execute("""
@@ -503,10 +570,7 @@ def delete_user(user_id):
         """, (user_id,))
         result = cursor.fetchone()
 
-        cursor.execute("SELECT role_id FROM users WHERE id = %s", (user_id,))
-        user = cursor.fetchone()
-
-        if user and user[0] == 1 and result[0] == 0:
+        if user_info['role_id'] == 1 and result['count'] == 0:
             return jsonify({
                 'success': False,
                 'error': 'Cannot delete the last active Super Admin'
@@ -519,17 +583,21 @@ def delete_user(user_id):
         # Delete the user
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
-        if cursor.rowcount == 0:
-            conn.rollback()
-            return jsonify({
-                'success': False,
-                'error': 'User not found'
-            }), 404
-
         conn.commit()
 
         # Invalidate cache
         invalidate_users_cache()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='user_deleted',
+            resource_type='user',
+            resource_id=str(user_id),
+            details={'email': user_info['email'], 'full_name': user_info['full_name']},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
         return jsonify({
             'success': True,
@@ -585,6 +653,17 @@ def reset_user_password(user_id):
 
         # Invalidate cache
         invalidate_users_cache()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=get_current_user_id(),
+            action='user_password_reset',
+            resource_type='user',
+            resource_id=str(user_id),
+            details={},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
         return jsonify({
             'success': True,

@@ -1,13 +1,11 @@
 /**
  * System Status Page Module
- * Handles cache management, time settings, and system health monitoring
+ * Handles cache management and system health monitoring
  */
 
 (function() {
     'use strict';
 
-    // Time settings stored in localStorage
-    const TIME_SETTINGS_KEY = 'ssh_guardian_time_settings';
     let timeUpdateInterval = null;
 
     /**
@@ -15,9 +13,6 @@
      */
     window.loadSystemStatusPage = async function() {
         try {
-            // Load time settings from localStorage
-            loadTimeSettings();
-
             // Load cache stats
             await loadCacheStats();
 
@@ -30,145 +25,11 @@
             // Start time display update
             startTimeUpdate();
 
-            // Update time preview
-            updateTimePreview();
-
         } catch (error) {
             console.error('Error loading System Status page:', error);
             showNotification('Failed to load system status', 'error');
         }
     };
-
-    /**
-     * Load time settings from localStorage
-     */
-    function loadTimeSettings() {
-        const settings = getTimeSettings();
-
-        // Set select values
-        const timezoneSelect = document.getElementById('timezone-select');
-        const timeFormatSelect = document.getElementById('time-format-select');
-        const dateFormatSelect = document.getElementById('date-format-select');
-
-        if (timezoneSelect) timezoneSelect.value = settings.timezone;
-        if (timeFormatSelect) timeFormatSelect.value = settings.timeFormat;
-        if (dateFormatSelect) dateFormatSelect.value = settings.dateFormat;
-
-        // Update preview
-        updateTimePreview();
-    }
-
-    /**
-     * Get time settings from localStorage
-     */
-    function getTimeSettings() {
-        try {
-            const stored = localStorage.getItem(TIME_SETTINGS_KEY);
-            if (stored) {
-                return JSON.parse(stored);
-            }
-        } catch (e) {
-            console.error('Error reading time settings:', e);
-        }
-
-        // Default settings - use browser's local timezone
-        return {
-            timezone: 'local',
-            timeFormat: '24h',
-            dateFormat: 'YYYY-MM-DD'
-        };
-    }
-
-    /**
-     * Save time settings to localStorage
-     */
-    function saveTimeSettings(settings) {
-        try {
-            localStorage.setItem(TIME_SETTINGS_KEY, JSON.stringify(settings));
-            return true;
-        } catch (e) {
-            console.error('Error saving time settings:', e);
-            return false;
-        }
-    }
-
-    /**
-     * Format a date according to current settings
-     */
-    window.formatDateTime = function(dateString, showTime = true) {
-        if (!dateString) return '-';
-
-        const settings = getTimeSettings();
-        const date = new Date(dateString);
-
-        // Handle timezone
-        let options = {};
-        if (settings.timezone !== 'local' && settings.timezone !== 'UTC') {
-            options.timeZone = settings.timezone;
-        } else if (settings.timezone === 'UTC') {
-            options.timeZone = 'UTC';
-        }
-
-        // Format date part
-        let dateStr = '';
-        const year = date.toLocaleDateString('en-CA', { ...options, year: 'numeric' });
-        const month = date.toLocaleDateString('en-CA', { ...options, month: '2-digit' });
-        const day = date.toLocaleDateString('en-CA', { ...options, day: '2-digit' });
-        const monthShort = date.toLocaleDateString('en-US', { ...options, month: 'short' });
-
-        switch (settings.dateFormat) {
-            case 'YYYY-MM-DD':
-                dateStr = `${year}-${month}-${day}`;
-                break;
-            case 'DD/MM/YYYY':
-                dateStr = `${day}/${month}/${year}`;
-                break;
-            case 'MM/DD/YYYY':
-                dateStr = `${month}/${day}/${year}`;
-                break;
-            case 'DD MMM YYYY':
-                dateStr = `${day} ${monthShort} ${year}`;
-                break;
-            default:
-                dateStr = `${year}-${month}-${day}`;
-        }
-
-        if (!showTime) {
-            return dateStr;
-        }
-
-        // Format time part
-        let timeStr = '';
-        if (settings.timeFormat === '12h') {
-            timeStr = date.toLocaleTimeString('en-US', {
-                ...options,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-            });
-        } else {
-            timeStr = date.toLocaleTimeString('en-GB', {
-                ...options,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-        }
-
-        return `${dateStr} ${timeStr}`;
-    };
-
-    /**
-     * Update time preview display
-     */
-    function updateTimePreview() {
-        const previewEl = document.getElementById('time-preview');
-        if (previewEl) {
-            previewEl.textContent = formatDateTime(new Date().toISOString());
-        }
-    }
 
     /**
      * Start updating current time display
@@ -185,7 +46,6 @@
         // Update every second
         timeUpdateInterval = setInterval(() => {
             updateCurrentTimeDisplay();
-            updateTimePreview();
         }, 1000);
     }
 
@@ -195,9 +55,14 @@
     function updateCurrentTimeDisplay() {
         const timeEl = document.getElementById('current-time-display');
         if (timeEl) {
-            const settings = getTimeSettings();
-            const tzLabel = settings.timezone === 'local' ? Intl.DateTimeFormat().resolvedOptions().timeZone : settings.timezone;
-            timeEl.textContent = `${formatDateTime(new Date().toISOString())} (${tzLabel})`;
+            // Use TimeSettings module if available
+            if (window.TimeSettings && window.TimeSettings.isLoaded()) {
+                const settings = window.TimeSettings.get();
+                timeEl.textContent = `${window.TimeSettings.format(new Date(), 'short')} (${settings.timezone})`;
+            } else {
+                // Fallback to browser time
+                timeEl.textContent = new Date().toLocaleString();
+            }
         }
     }
 
@@ -308,34 +173,6 @@
      * Setup event listeners
      */
     function setupSystemStatusEventListeners() {
-        // Time setting changes - update preview
-        ['timezone-select', 'time-format-select', 'date-format-select'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('change', updateTimePreview);
-            }
-        });
-
-        // Save time settings
-        const saveTimeBtn = document.getElementById('save-time-settings-btn');
-        if (saveTimeBtn) {
-            saveTimeBtn.addEventListener('click', () => {
-                const settings = {
-                    timezone: document.getElementById('timezone-select').value,
-                    timeFormat: document.getElementById('time-format-select').value,
-                    dateFormat: document.getElementById('date-format-select').value
-                };
-
-                if (saveTimeSettings(settings)) {
-                    showNotification('Time settings saved successfully', 'success');
-                    // Update all times in the page
-                    updateCurrentTimeDisplay();
-                } else {
-                    showNotification('Failed to save time settings', 'error');
-                }
-            });
-        }
-
         // Refresh button
         const refreshBtn = document.getElementById('system-refresh-btn');
         if (refreshBtn) {

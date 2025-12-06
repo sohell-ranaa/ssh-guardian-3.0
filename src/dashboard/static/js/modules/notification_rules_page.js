@@ -567,6 +567,10 @@
      */
     function formatDateTime(dateStr) {
         if (!dateStr) return '-';
+        // Use TimeSettings if available
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.formatShort(dateStr);
+        }
         const date = new Date(dateStr);
         return date.toLocaleString('en-US', {
             month: 'short',

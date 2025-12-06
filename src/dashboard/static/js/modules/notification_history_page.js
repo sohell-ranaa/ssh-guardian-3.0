@@ -314,6 +314,10 @@
      */
     function formatTimeAgo(dateStr) {
         if (!dateStr) return 'N/A';
+        // Use TimeSettings relative time if available
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.relative(dateStr);
+        }
         const date = new Date(dateStr);
         const now = new Date();
         const diffMs = now - date;
@@ -333,6 +337,10 @@
      */
     function formatDateTime(dateStr) {
         if (!dateStr) return 'N/A';
+        // Use TimeSettings if available
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.formatFull(dateStr);
+        }
         const date = new Date(dateStr);
         return date.toLocaleString();
     }

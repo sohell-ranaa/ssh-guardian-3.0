@@ -7,6 +7,7 @@ Features:
 - Real-time log monitoring (/var/log/auth.log)
 - Batch submission to central server
 - Automatic heartbeat monitoring
+- Firewall (iptables) collection and management
 - Error handling and retry logic
 - Systemd service compatible
 """
@@ -23,9 +24,17 @@ import argparse
 import requests
 import platform
 import subprocess
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
+
+# Import firewall collector
+try:
+    from firewall_collector import FirewallCollector, FirewallManager
+    FIREWALL_AVAILABLE = True
+except ImportError:
+    FIREWALL_AVAILABLE = False
 
 # ============================================================================
 # CONFIGURATION
@@ -45,11 +54,15 @@ class AgentConfig:
         self.check_interval = int(os.getenv("SSH_GUARDIAN_CHECK_INTERVAL", "30"))  # seconds
         self.batch_size = int(os.getenv("SSH_GUARDIAN_BATCH_SIZE", "100"))  # logs per batch
         self.heartbeat_interval = int(os.getenv("SSH_GUARDIAN_HEARTBEAT_INTERVAL", "60"))  # seconds
+        self.firewall_sync_interval = int(os.getenv("SSH_GUARDIAN_FIREWALL_SYNC_INTERVAL", "300"))  # 5 minutes
 
         # Log file paths
         self.auth_log_path = "/var/log/auth.log"
         self.state_file = "/var/lib/ssh-guardian/agent-state.json"
         self.log_file = "/var/log/ssh-guardian-agent.log"
+
+        # Firewall management
+        self.firewall_enabled = os.getenv("SSH_GUARDIAN_FIREWALL_ENABLED", "true").lower() == "true"
 
         # Load from config file if provided
         if config_file and os.path.exists(config_file):
@@ -82,7 +95,9 @@ class AgentConfig:
             "hostname": self.hostname,
             "check_interval": self.check_interval,
             "batch_size": self.batch_size,
-            "heartbeat_interval": self.heartbeat_interval
+            "heartbeat_interval": self.heartbeat_interval,
+            "firewall_sync_interval": self.firewall_sync_interval,
+            "firewall_enabled": self.firewall_enabled
         }
 
         os.makedirs(os.path.dirname(config_file), exist_ok=True)
@@ -301,6 +316,91 @@ class GuardianAPIClient:
             logging.error(f"❌ Batch submission error: {e}")
             return False
 
+    # =========================================================================
+    # FIREWALL API METHODS
+    # =========================================================================
+
+    def submit_firewall_rules(self, firewall_data: Dict) -> bool:
+        """Submit firewall rules to central server"""
+        try:
+            payload = {
+                'agent_id': self.config.agent_id,
+                'hostname': self.config.hostname,
+                'firewall_data': firewall_data,
+                'submitted_at': datetime.now().isoformat()
+            }
+
+            url = f"{self.config.server_url}/api/agents/firewall/sync"
+            response = self.session.post(url, json=payload, timeout=60)
+
+            if response.status_code == 200:
+                data = response.json()
+                logging.info(f"🔥 Firewall rules synced: {data.get('rules_count', 0)} rules")
+                return True
+            else:
+                logging.error(f"❌ Firewall sync failed: {response.status_code} - {response.text}")
+                return False
+
+        except Exception as e:
+            logging.error(f"❌ Firewall sync error: {e}")
+            return False
+
+    def get_pending_firewall_commands(self) -> List[Dict]:
+        """Get pending firewall commands from central server"""
+        try:
+            url = f"{self.config.server_url}/api/agents/firewall/commands"
+            params = {'agent_id': self.config.agent_id}
+            response = self.session.get(url, params=params, timeout=30)
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('commands', [])
+            else:
+                logging.warning(f"Failed to get firewall commands: {response.status_code}")
+                return []
+
+        except Exception as e:
+            logging.error(f"Error getting firewall commands: {e}")
+            return []
+
+    def report_command_result(self, command_id: str, success: bool, message: str) -> bool:
+        """Report the result of a firewall command execution"""
+        try:
+            payload = {
+                'agent_id': self.config.agent_id,
+                'command_id': command_id,
+                'success': success,
+                'message': message,
+                'executed_at': datetime.now().isoformat()
+            }
+
+            url = f"{self.config.server_url}/api/agents/firewall/command-result"
+            response = self.session.post(url, json=payload, timeout=30)
+
+            return response.status_code == 200
+
+        except Exception as e:
+            logging.error(f"Error reporting command result: {e}")
+            return False
+
+    def submit_extended_data(self, extended_data: Dict) -> bool:
+        """Submit extended system data (ports, users, suggestions) to central server"""
+        try:
+            url = f"{self.config.server_url}/api/agents/firewall/sync-extended"
+            response = self.session.post(url, json=extended_data, timeout=60)
+
+            if response.status_code == 200:
+                data = response.json()
+                logging.debug(f"Extended data synced: {data.get('counts', {})}")
+                return True
+            else:
+                logging.error(f"❌ Extended data sync failed: {response.status_code} - {response.text}")
+                return False
+
+        except Exception as e:
+            logging.error(f"❌ Extended data sync error: {e}")
+            return False
+
     def _get_system_info(self) -> Dict:
         """Collect system information"""
         return {
@@ -388,6 +488,13 @@ class SSHGuardianAgent:
         self.api_client = GuardianAPIClient(config)
         self.running = False
 
+        # Initialize firewall components if available and enabled
+        self.firewall_collector = None
+        self.firewall_manager = None
+        if FIREWALL_AVAILABLE and config.firewall_enabled:
+            self.firewall_collector = FirewallCollector()
+            self.firewall_manager = FirewallManager()
+
     def setup_logging(self):
         """Setup logging configuration"""
         log_dir = os.path.dirname(self.config.log_file)
@@ -416,6 +523,9 @@ class SSHGuardianAgent:
         logging.info(f"Auth Log: {self.config.auth_log_path}")
         logging.info(f"Check Interval: {self.config.check_interval}s")
         logging.info(f"Batch Size: {self.config.batch_size}")
+        logging.info(f"Firewall Enabled: {self.config.firewall_enabled}")
+        if self.firewall_collector:
+            logging.info(f"Firewall Sync Interval: {self.config.firewall_sync_interval}s")
         logging.info("="*70)
 
         # Register agent
@@ -428,6 +538,7 @@ class SSHGuardianAgent:
     def run(self):
         """Main agent loop"""
         last_heartbeat_time = time.time()
+        last_firewall_sync_time = time.time()
 
         while self.running:
             try:
@@ -446,12 +557,22 @@ class SSHGuardianAgent:
                             self.state.total_batches_sent += 1
                             self.state.save()
 
-                # Send heartbeat if needed
                 current_time = time.time()
+
+                # Send heartbeat if needed
                 if current_time - last_heartbeat_time >= self.config.heartbeat_interval:
                     if self.api_client.send_heartbeat(self.state):
                         last_heartbeat_time = current_time
                         self.state.save()
+
+                # Firewall synchronization
+                if self.firewall_collector and self.config.firewall_enabled:
+                    if current_time - last_firewall_sync_time >= self.config.firewall_sync_interval:
+                        self._sync_firewall()
+                        last_firewall_sync_time = current_time
+
+                    # Process any pending firewall commands
+                    self._process_firewall_commands()
 
                 # Sleep until next check
                 time.sleep(self.config.check_interval)
@@ -462,6 +583,141 @@ class SSHGuardianAgent:
             except Exception as e:
                 logging.error(f"❌ Error in agent loop: {e}")
                 time.sleep(self.config.check_interval)
+
+    def _sync_firewall(self):
+        """Collect and sync firewall rules to central server"""
+        if not self.firewall_collector:
+            return
+
+        try:
+            logging.info("🔥 Collecting firewall rules...")
+            firewall_data = self.firewall_collector.collect_all()
+
+            if 'error' not in firewall_data:
+                self.api_client.submit_firewall_rules(firewall_data)
+
+                # Also sync extended data (ports, users, suggestions)
+                self._sync_extended_data(firewall_data)
+            else:
+                logging.warning(f"Firewall collection error: {firewall_data.get('error')}")
+
+        except Exception as e:
+            logging.error(f"Error syncing firewall: {e}")
+
+    def _sync_extended_data(self, firewall_data: dict = None):
+        """Sync extended data including ports, users, and suggestions"""
+        if not self.firewall_collector:
+            return
+
+        try:
+            logging.info("📊 Collecting extended system data...")
+
+            # Use collect_extended for full data
+            extended_data = self.firewall_collector.collect_extended()
+
+            # Generate suggestions
+            from firewall_collector import RuleSuggestionEngine
+            suggestion_engine = RuleSuggestionEngine(self.firewall_collector)
+            suggestions = suggestion_engine.generate_suggestions(extended_data)
+
+            # Prepare data for sync
+            sync_data = {
+                'agent_id': self.config.agent_id,
+                'listening_ports': extended_data.get('listening_ports', []),
+                'system_users': extended_data.get('system_users', []),
+                'active_connections': extended_data.get('active_connections', []),
+                'command_history': extended_data.get('command_history', []),
+                'protected_ports': extended_data.get('protected_ports', []),
+                'suggestions': suggestions,
+                'collected_at': datetime.now().isoformat()
+            }
+
+            # Submit to server
+            self.api_client.submit_extended_data(sync_data)
+            logging.info(f"📊 Synced extended data: {len(sync_data['listening_ports'])} ports, "
+                        f"{len(sync_data['system_users'])} users, "
+                        f"{len(sync_data['suggestions'])} suggestions")
+
+        except ImportError:
+            logging.debug("RuleSuggestionEngine not available, skipping suggestions")
+        except Exception as e:
+            logging.error(f"Error syncing extended data: {e}")
+
+    def _process_firewall_commands(self):
+        """Process pending firewall commands from central server"""
+        if not self.firewall_manager:
+            return
+
+        try:
+            commands = self.api_client.get_pending_firewall_commands()
+
+            for cmd in commands:
+                command_id = cmd.get('id')
+                action = cmd.get('action')
+                params = cmd.get('params', {})
+
+                logging.info(f"🔧 Processing firewall command: {action} (ID: {command_id})")
+
+                success = False
+                message = ""
+
+                try:
+                    if action == 'add_rule':
+                        success, message = self.firewall_manager.add_rule(params)
+                    elif action == 'delete_rule':
+                        success, message = self.firewall_manager.delete_rule(
+                            params.get('table', 'filter'),
+                            params.get('chain'),
+                            params.get('rule_num')
+                        )
+                    elif action == 'add_port_forward':
+                        success, message = self.firewall_manager.add_port_forward(
+                            params.get('external_port'),
+                            params.get('internal_ip'),
+                            params.get('internal_port'),
+                            params.get('protocol', 'tcp'),
+                            params.get('interface')
+                        )
+                    elif action == 'remove_port_forward':
+                        success, message = self.firewall_manager.remove_port_forward(
+                            params.get('external_port'),
+                            params.get('internal_ip'),
+                            params.get('internal_port'),
+                            params.get('protocol', 'tcp')
+                        )
+                    elif action == 'set_policy':
+                        success, message = self.firewall_manager.set_chain_policy(
+                            params.get('chain'),
+                            params.get('policy'),
+                            params.get('table', 'filter')
+                        )
+                    elif action == 'flush_chain':
+                        success, message = self.firewall_manager.flush_chain(
+                            params.get('chain'),
+                            params.get('table', 'filter')
+                        )
+                    elif action == 'save_rules':
+                        success, message = self.firewall_manager.save_rules(
+                            params.get('filepath', '/etc/iptables/rules.v4')
+                        )
+                    else:
+                        message = f"Unknown action: {action}"
+
+                except Exception as e:
+                    message = f"Error executing command: {str(e)}"
+
+                # Report result back to server
+                self.api_client.report_command_result(command_id, success, message)
+
+                if success:
+                    logging.info(f"✅ Command {command_id} executed: {message}")
+                    # Trigger immediate firewall sync after successful command
+                    self._sync_firewall()
+                else:
+                    logging.error(f"❌ Command {command_id} failed: {message}")
+
+        except Exception as e:
+            logging.error(f"Error processing firewall commands: {e}")
 
     def stop(self):
         """Stop the agent"""

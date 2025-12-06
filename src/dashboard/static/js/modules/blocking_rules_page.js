@@ -5,7 +5,35 @@
 
 // Load Blocking Rules page data
 async function loadBlockingRulesPage() {
-    await loadRules();
+    await Promise.all([
+        loadOverallStats(),
+        loadRules()
+    ]);
+}
+
+// Load overall blocking statistics
+async function loadOverallStats() {
+    try {
+        const response = await fetch('/api/dashboard/blocking/stats');
+        const data = await response.json();
+
+        if (data.success && data.stats) {
+            const stats = data.stats;
+
+            // Update statistics display
+            document.getElementById('statTotalBlocks').textContent = stats.total_blocks || 0;
+            document.getElementById('statActiveBlocks').textContent = stats.active_blocks || 0;
+            document.getElementById('statManualBlocks').textContent = stats.blocks_by_source?.manual || 0;
+            document.getElementById('statRuleBlocks').textContent = stats.blocks_by_source?.rule_based || 0;
+            document.getElementById('statRecent24h').textContent = stats.recent_24h || 0;
+
+            // Show the stats card
+            document.getElementById('overallBlockingStats').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading overall stats:', error);
+        // Don't show stats card if error
+    }
 }
 
 // Load all blocking rules
@@ -406,4 +434,120 @@ if (!document.getElementById('notification-styles')) {
         }
     `;
     document.head.appendChild(style);
+}
+
+// Initialize event listeners when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Refresh button
+    const refreshBtn = document.getElementById('refreshRules');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            loadOverallStats();
+            loadRules();
+        });
+    }
+
+    // Show create rule form button
+    const showCreateBtn = document.getElementById('showCreateRuleForm');
+    if (showCreateBtn) {
+        showCreateBtn.addEventListener('click', function() {
+            document.getElementById('createRuleForm').style.display = 'block';
+        });
+    }
+
+    // Cancel rule form button
+    const cancelBtn = document.getElementById('cancelRuleForm');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            resetEditForm();
+        });
+    }
+
+    // Rule type selector
+    const ruleTypeSelect = document.getElementById('ruleType');
+    if (ruleTypeSelect) {
+        ruleTypeSelect.addEventListener('change', function() {
+            // Hide all condition sections
+            document.getElementById('bruteForceConditions').style.display = 'none';
+            document.getElementById('threatConditions').style.display = 'none';
+
+            // Show relevant section
+            if (this.value === 'brute_force') {
+                document.getElementById('bruteForceConditions').style.display = 'block';
+            } else if (this.value === 'api_reputation' || this.value === 'threat_threshold') {
+                document.getElementById('threatConditions').style.display = 'block';
+            }
+        });
+    }
+
+    // Submit create rule button
+    const submitBtn = document.getElementById('submitCreateRule');
+    if (submitBtn) {
+        submitBtn.addEventListener('click', async function() {
+            // Only handle create, not update (update is handled by onclick)
+            if (this.textContent === 'Create Rule') {
+                await createRule();
+            }
+        });
+    }
+});
+
+// Create a new rule
+async function createRule() {
+    try {
+        const ruleName = document.getElementById('ruleName').value;
+        const ruleType = document.getElementById('ruleType').value;
+        const blockDuration = parseInt(document.getElementById('ruleBlockDuration').value);
+        const priority = parseInt(document.getElementById('rulePriority').value);
+        const description = document.getElementById('ruleDescription').value;
+
+        if (!ruleName || !ruleType) {
+            showNotification('Please fill in required fields', 'error');
+            return;
+        }
+
+        let conditions = {};
+
+        if (ruleType === 'brute_force') {
+            conditions = {
+                failed_attempts: parseInt(document.getElementById('failedAttempts').value),
+                time_window_minutes: parseInt(document.getElementById('timeWindow').value),
+                event_type: 'failed'
+            };
+        } else if (ruleType === 'api_reputation' || ruleType === 'threat_threshold') {
+            conditions = {
+                min_threat_level: document.getElementById('minThreatLevel').value,
+                min_confidence: parseFloat(document.getElementById('minConfidence').value),
+                sources: ['abuseipdb', 'virustotal', 'shodan']
+            };
+        }
+
+        const response = await fetch('/api/dashboard/blocking/rules/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rule_name: ruleName,
+                rule_type: ruleType,
+                conditions: conditions,
+                block_duration_minutes: blockDuration,
+                priority: priority,
+                description: description
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Rule created successfully', 'success');
+            setTimeout(() => {
+                resetEditForm();
+                loadRules();
+            }, 1500);
+        } else {
+            showNotification(`Failed to create rule: ${data.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error creating rule:', error);
+        showNotification('Error creating rule', 'error');
+    }
 }

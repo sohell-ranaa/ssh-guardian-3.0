@@ -244,6 +244,11 @@
         const date = new Date(timestamp);
         if (isNaN(date.getTime())) return 'Never';
 
+        // Use TimeSettings relative time if available
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.relative(timestamp);
+        }
+
         const now = new Date();
         const diffMs = now - date;
         const diffMins = Math.floor(diffMs / 60000);
