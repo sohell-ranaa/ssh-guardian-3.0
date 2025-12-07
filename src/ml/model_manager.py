@@ -254,6 +254,59 @@ class MLModelManager:
         # Determine threat type
         threat_type = self._classify_threat_type(event, features, risk_score, is_anomaly)
 
+        # =============================================================
+        # THREAT INTEL OVERRIDE - Known malicious IPs override ML
+        # This ensures external threat intelligence is respected even
+        # when ML model outputs lower scores due to feature dilution
+        # UPDATED: More aggressive thresholds per user configuration
+        # =============================================================
+        threat_data = event.get('threat', {}) or {}
+        geo_data = event.get('geo', {}) or {}
+        abuseipdb_score = float(threat_data.get('abuseipdb_score') or 0)
+        threat_level = str(threat_data.get('overall_threat_level', '') or '').lower()
+
+        # VPN/Proxy/Datacenter detection - add +15 risk (aggressive)
+        is_vpn = geo_data.get('is_vpn', False)
+        is_proxy = geo_data.get('is_proxy', False)
+        is_datacenter = geo_data.get('is_datacenter', False)
+        if is_vpn or is_proxy or is_datacenter:
+            risk_score = min(100, risk_score + 15)
+
+        # Critical AbuseIPDB score (>=90) = ALWAYS BLOCK, minimum risk 90
+        if abuseipdb_score >= 90:
+            risk_score = max(risk_score, 90 + int((abuseipdb_score - 90) * 0.5))
+            is_anomaly = True
+            threat_type = threat_type or 'critical_abuse_score'
+            confidence = max(confidence, 0.95)
+
+        # High AbuseIPDB score (>=70) = minimum risk 70, force anomaly (lowered from 80)
+        elif abuseipdb_score >= 70:
+            risk_score = max(risk_score, 70 + int((abuseipdb_score - 70) * 0.5))
+            is_anomaly = True
+            threat_type = threat_type or 'known_malicious'
+            confidence = max(confidence, 0.85)
+
+        # Medium AbuseIPDB (50-70) = minimum risk 50
+        elif abuseipdb_score >= 50:
+            risk_score = max(risk_score, 50 + int((abuseipdb_score - 50) * 0.5))
+
+        # Low-medium AbuseIPDB (25-50) = add partial risk
+        elif abuseipdb_score >= 25:
+            risk_score = min(100, risk_score + int(abuseipdb_score * 0.4))
+
+        # Critical/High threat level override
+        if threat_level == 'critical':
+            risk_score = max(risk_score, 95)
+            is_anomaly = True
+            threat_type = threat_type or 'critical_threat'
+            confidence = max(confidence, 0.95)
+        elif threat_level == 'high':
+            risk_score = max(risk_score, 75)
+            is_anomaly = True
+        elif threat_level == 'medium' and risk_score < 50:
+            risk_score = max(risk_score, 50)
+        # =============================================================
+
         # Log prediction to database
         self._log_prediction(event, risk_score, threat_type, confidence, is_anomaly)
 
@@ -332,6 +385,7 @@ class MLModelManager:
     def _fallback_prediction(self, event: Dict) -> Dict[str, Any]:
         """
         Heuristic-based prediction when ML models unavailable.
+        UPDATED: More aggressive thresholds per user configuration.
 
         Args:
             event: Event dict
@@ -348,42 +402,57 @@ class MLModelManager:
 
         # Failed login baseline
         if 'failed' in event_type:
-            risk_score += 20
+            risk_score += 25
 
         # Root/admin attempts
         if username in ('root', 'admin', 'administrator'):
-            risk_score += 30
+            risk_score += 35
 
         # Invalid user
         if event.get('failure_reason') == 'invalid_user':
-            risk_score += 20
+            risk_score += 25
 
-        # Geographic risk
+        # Geographic risk - more aggressive for high-risk countries
         geo = event.get('geo', {}) or {}
-        if geo.get('country_code') in self.feature_extractor.HIGH_RISK_COUNTRIES:
-            risk_score += 20
+        country_code = geo.get('country_code')
+        if country_code in self.feature_extractor.HIGH_RISK_COUNTRIES:
+            risk_score += 25  # Increased from 20
 
-        # Proxy/VPN/Tor
-        if geo.get('is_proxy') or geo.get('is_vpn') or geo.get('is_tor'):
+        # Proxy/VPN/Tor - more aggressive
+        if geo.get('is_tor'):
+            risk_score += 25  # Tor is high risk
+        elif geo.get('is_proxy') or geo.get('is_vpn') or geo.get('is_datacenter'):
             risk_score += 15
 
-        # Threat intel
+        # Threat intel - tiered approach
         threat = event.get('threat', {}) or {}
         abuse_score = int(threat.get('abuseipdb_score', 0) or 0)
-        if abuse_score > 50:
-            risk_score += min(30, abuse_score // 3)
+
+        if abuse_score >= 90:
+            # Critical - force high risk
+            risk_score = max(risk_score, 90)
+            threat_type = 'critical_abuse_score'
+        elif abuse_score >= 70:
+            risk_score = max(risk_score, 70)
+            threat_type = 'known_malicious'
+        elif abuse_score >= 50:
+            risk_score = max(risk_score, 50 + (abuse_score - 50) // 2)
+        elif abuse_score >= 25:
+            risk_score += int(abuse_score * 0.4)
 
         risk_score = min(100, risk_score)
-        is_anomaly = risk_score >= 50
+        is_anomaly = risk_score >= 50  # Lowered threshold
 
-        if risk_score >= 50:
+        if risk_score >= 70 and not threat_type:
+            threat_type = 'high_risk'
+        elif risk_score >= 50 and not threat_type:
             threat_type = 'suspicious_activity'
 
         return {
             'ml_available': False,
             'risk_score': risk_score,
             'threat_type': threat_type,
-            'confidence': 0.5,  # Low confidence for heuristic
+            'confidence': 0.6,  # Slightly higher confidence for improved heuristics
             'is_anomaly': is_anomaly,
             'model_used': 'heuristic'
         }

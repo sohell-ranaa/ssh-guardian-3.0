@@ -14,15 +14,16 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from geoip import GeoIPLookup
-from cache import get_cache, cache_key
+from cache import get_cache, cache_key, get_ttl, should_cache
 
 geoip_routes = Blueprint('geoip_routes', __name__)
 
-# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
-GEOIP_LOOKUP_TTL = 7200   # 2 hours - GeoIP data rarely changes
-GEOIP_STATS_TTL = 3600    # 1 hour for stats
-GEOIP_RECENT_TTL = 1800   # 30 minutes for recent list
-GEOIP_TOP_COUNTRIES_TTL = 7200  # 2 hours for top countries
+# Cache TTLs - NOW LOADED FROM DATABASE via get_ttl()
+# Fallback defaults only used if database unavailable
+GEOIP_LOOKUP_TTL = 7200
+GEOIP_STATS_TTL = 3600
+GEOIP_RECENT_TTL = 1800
+GEOIP_TOP_COUNTRIES_TTL = 7200
 
 
 def invalidate_geoip_cache():
@@ -38,14 +39,16 @@ def lookup_ip(ip_address):
         cache = get_cache()
         cache_k = cache_key('geoip', 'lookup', ip_address)
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
+        # Try cache first (if caching enabled)
+        endpoint_key = 'geoip_lookup'
+        if should_cache(endpoint_key):
+            cached = cache.get(cache_k, endpoint_key)
+            if cached is not None:
+                return jsonify({
+                    'success': True,
+                    'data': cached,
+                    'from_cache': True
+                })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -78,8 +81,10 @@ def lookup_ip(ip_address):
             if result.get('longitude') is not None:
                 result['longitude'] = float(result['longitude'])
 
-            # Cache the result
-            cache.set(cache_k, result, GEOIP_LOOKUP_TTL)
+            # Cache the result (if caching enabled)
+            if should_cache(endpoint_key):
+                ttl = get_ttl(endpoint_key=endpoint_key) or GEOIP_LOOKUP_TTL
+                cache.set(cache_k, result, ttl)
 
             return jsonify({
                 'success': True,
@@ -105,15 +110,17 @@ def get_stats():
     try:
         cache = get_cache()
         cache_k = cache_key('geoip', 'stats')
+        endpoint_key = 'geoip_stats'
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'stats': cached,
-                'from_cache': True
-            })
+        # Try cache first (with hit tracking)
+        if should_cache(endpoint_key):
+            cached = cache.get(cache_k, endpoint_key)
+            if cached is not None:
+                return jsonify({
+                    'success': True,
+                    'stats': cached,
+                    'from_cache': True
+                })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -159,8 +166,10 @@ def get_stats():
             'threat_indicators': threat_stats
         }
 
-        # Cache the result
-        cache.set(cache_k, stats, GEOIP_STATS_TTL)
+        # Cache the result (if caching enabled)
+        if should_cache(endpoint_key):
+            ttl = get_ttl(endpoint_key=endpoint_key) or GEOIP_STATS_TTL
+            cache.set(cache_k, stats, ttl)
 
         return jsonify({
             'success': True,

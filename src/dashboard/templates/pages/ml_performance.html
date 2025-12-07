@@ -72,12 +72,43 @@
                     <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-test-samples">-</div>
                 </div>
                 <div>
-                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Predictions Made</div>
-                    <div style="font-size: 14px; font-weight: 600; color: var(--azure-blue);" id="ml-detail-predictions">-</div>
+                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Total Events</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--azure-blue);" id="ml-detail-total-events">-</div>
                 </div>
                 <div>
                     <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;">Trained At</div>
                     <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-detail-trained-at">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hyperparameters Card -->
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Hyperparameters</h3>
+            <div id="ml-hyperparameters" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                <div style="color: var(--text-secondary);">No hyperparameters data</div>
+            </div>
+        </div>
+
+        <!-- Training Summary Card -->
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Training Summary</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <div style="background: var(--background); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 600; color: var(--azure-blue);" id="ml-detail-feature-count">-</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Features Used</div>
+                </div>
+                <div style="background: var(--background); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;" id="ml-detail-train-test-ratio">80/20</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Train/Test Split</div>
+                </div>
+                <div style="background: var(--background); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 600; color: var(--text-primary);" id="ml-detail-predictions">-</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Predictions Made</div>
+                </div>
+                <div style="background: var(--background); padding: 16px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 24px; font-weight: 600; color: #D13438;" id="ml-detail-threats-detected">-</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Threats Detected</div>
                 </div>
             </div>
         </div>
@@ -208,8 +239,23 @@ async function viewModelDetails(modelId) {
             document.getElementById('ml-detail-version').textContent = m.version;
             document.getElementById('ml-detail-train-samples').textContent = m.training_samples?.toLocaleString() || '-';
             document.getElementById('ml-detail-test-samples').textContent = m.test_samples?.toLocaleString() || '-';
+            document.getElementById('ml-detail-total-events').textContent = ((m.training_samples || 0) + (m.test_samples || 0)).toLocaleString();
             document.getElementById('ml-detail-predictions').textContent = m.predictions_made?.toLocaleString() || '0';
             document.getElementById('ml-detail-trained-at').textContent = m.training_completed_at ? new Date(m.training_completed_at).toLocaleString() : '-';
+
+            // Training summary
+            const featureCount = m.feature_names ? (Array.isArray(m.feature_names) ? m.feature_names.length : Object.keys(m.feature_names).length) : (m.feature_importance ? Object.keys(m.feature_importance).length : '-');
+            document.getElementById('ml-detail-feature-count').textContent = featureCount;
+
+            // Calculate threats detected from confusion matrix
+            if (m.confusion_matrix && m.confusion_matrix.length === 2) {
+                const tp = m.confusion_matrix[1][1];
+                const fp = m.confusion_matrix[0][1];
+                document.getElementById('ml-detail-threats-detected').textContent = (tp + fp).toLocaleString();
+            }
+
+            // Hyperparameters
+            renderHyperparameters(m.hyperparameters);
 
             // Status badge
             const badge = document.getElementById('ml-detail-status-badge');
@@ -244,36 +290,97 @@ function renderConfusionMatrix(matrix) {
         const fp = matrix[0][1];
         const fn = matrix[1][0];
         const tp = matrix[1][1];
+        const total = tn + fp + fn + tp;
+        const tnPct = ((tn / total) * 100).toFixed(1);
+        const fpPct = ((fp / total) * 100).toFixed(1);
+        const fnPct = ((fn / total) * 100).toFixed(1);
+        const tpPct = ((tp / total) * 100).toFixed(1);
 
         container.innerHTML = `
-            <div style="display: grid; grid-template-columns: auto 1fr 1fr; gap: 2px; max-width: 400px;">
-                <div></div>
-                <div style="text-align: center; padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">Predicted Normal</div>
-                <div style="text-align: center; padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">Predicted Threat</div>
+            <div style="width: 100%; max-width: 600px;">
+                <div style="display: grid; grid-template-columns: 120px 1fr 1fr; gap: 4px;">
+                    <div></div>
+                    <div style="text-align: center; padding: 12px; font-weight: 600; font-size: 13px; color: var(--text-secondary); background: var(--background); border-radius: 4px;">Predicted Benign</div>
+                    <div style="text-align: center; padding: 12px; font-weight: 600; font-size: 13px; color: var(--text-secondary); background: var(--background); border-radius: 4px;">Predicted Threat</div>
 
-                <div style="padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center;">Actual Normal</div>
-                <div style="background: rgba(46, 164, 79, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
-                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;">${tn}</div>
-                    <div style="font-size: 11px; color: var(--text-secondary);">True Negative</div>
-                </div>
-                <div style="background: rgba(209, 52, 56, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
-                    <div style="font-size: 24px; font-weight: 600; color: #D13438;">${fp}</div>
-                    <div style="font-size: 11px; color: var(--text-secondary);">False Positive</div>
-                </div>
+                    <div style="padding: 12px; font-weight: 600; font-size: 13px; color: var(--text-secondary); background: var(--background); border-radius: 4px; display: flex; align-items: center; justify-content: center;">Actual Benign</div>
+                    <div style="background: rgba(46, 164, 79, 0.15); padding: 24px; text-align: center; border-radius: 8px; border: 2px solid rgba(46, 164, 79, 0.3);">
+                        <div style="font-size: 28px; font-weight: 700; color: #2EA44F;">${tn.toLocaleString()}</div>
+                        <div style="font-size: 14px; color: #2EA44F; margin-top: 4px;">${tnPct}%</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">True Negative</div>
+                    </div>
+                    <div style="background: rgba(209, 52, 56, 0.15); padding: 24px; text-align: center; border-radius: 8px; border: 2px solid rgba(209, 52, 56, 0.3);">
+                        <div style="font-size: 28px; font-weight: 700; color: #D13438;">${fp.toLocaleString()}</div>
+                        <div style="font-size: 14px; color: #D13438; margin-top: 4px;">${fpPct}%</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">False Positive</div>
+                    </div>
 
-                <div style="padding: 8px; font-weight: 600; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center;">Actual Threat</div>
-                <div style="background: rgba(209, 52, 56, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
-                    <div style="font-size: 24px; font-weight: 600; color: #D13438;">${fn}</div>
-                    <div style="font-size: 11px; color: var(--text-secondary);">False Negative</div>
+                    <div style="padding: 12px; font-weight: 600; font-size: 13px; color: var(--text-secondary); background: var(--background); border-radius: 4px; display: flex; align-items: center; justify-content: center;">Actual Threat</div>
+                    <div style="background: rgba(209, 52, 56, 0.15); padding: 24px; text-align: center; border-radius: 8px; border: 2px solid rgba(209, 52, 56, 0.3);">
+                        <div style="font-size: 28px; font-weight: 700; color: #D13438;">${fn.toLocaleString()}</div>
+                        <div style="font-size: 14px; color: #D13438; margin-top: 4px;">${fnPct}%</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">False Negative</div>
+                    </div>
+                    <div style="background: rgba(46, 164, 79, 0.15); padding: 24px; text-align: center; border-radius: 8px; border: 2px solid rgba(46, 164, 79, 0.3);">
+                        <div style="font-size: 28px; font-weight: 700; color: #2EA44F;">${tp.toLocaleString()}</div>
+                        <div style="font-size: 14px; color: #2EA44F; margin-top: 4px;">${tpPct}%</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">True Positive</div>
+                    </div>
                 </div>
-                <div style="background: rgba(46, 164, 79, 0.2); padding: 20px; text-align: center; border-radius: 4px;">
-                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;">${tp}</div>
-                    <div style="font-size: 11px; color: var(--text-secondary);">True Positive</div>
+                <div style="margin-top: 16px; padding: 16px; background: var(--background); border-radius: 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; text-align: center;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Total Samples</div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">${total.toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Correct</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #2EA44F; margin-top: 4px;">${(tn + tp).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Incorrect</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #D13438; margin-top: 4px;">${(fp + fn).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Error Rate</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #D13438; margin-top: 4px;">${(((fp + fn) / total) * 100).toFixed(2)}%</div>
+                    </div>
                 </div>
             </div>
         `;
     } else {
         container.innerHTML = '<div style="color: var(--text-secondary);">No confusion matrix data available</div>';
+    }
+}
+
+function renderHyperparameters(params) {
+    const container = document.getElementById('ml-hyperparameters');
+
+    if (params && Object.keys(params).length > 0) {
+        const paramLabels = {
+            'n_estimators': 'Trees',
+            'max_depth': 'Max Depth',
+            'min_samples_split': 'Min Split',
+            'min_samples_leaf': 'Min Leaf',
+            'max_features': 'Max Features',
+            'bootstrap': 'Bootstrap',
+            'class_weight': 'Class Weight',
+            'n_jobs': 'CPU Cores',
+            'learning_rate': 'Learning Rate',
+            'random_state': 'Random Seed'
+        };
+
+        container.innerHTML = Object.entries(params).map(([key, value]) => {
+            const label = paramLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const displayValue = value === null ? 'None' : value === true ? 'Yes' : value === false ? 'No' : value;
+            return `
+                <div style="background: var(--background); padding: 12px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">${label}</div>
+                    <div style="font-size: 16px; font-weight: 600; color: var(--text-primary);">${displayValue}</div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        container.innerHTML = '<div style="color: var(--text-secondary);">No hyperparameters data available</div>';
     }
 }
 

@@ -142,17 +142,23 @@ def calculate_behavioral_score(history: dict, events_data: dict = None) -> dict:
         score += 10
         indicators.append(f'Elevated failure rate ({failure_rate*100:.0f}%)')
 
-    # Attack velocity (attempts per minute)
+    # Attack velocity (attempts per minute) - improved thresholds for low-velocity attacks
     velocity = failed_attempts / duration_minutes if duration_minutes > 0 else 0
     if velocity > 20:
         score += 30
         indicators.append(f'Rapid attempts ({velocity:.0f}/min)')
     elif velocity > 10:
-        score += 15
-        indicators.append(f'Moderate velocity ({velocity:.0f}/min)')
+        score += 20
+        indicators.append(f'Fast attempts ({velocity:.0f}/min)')
     elif velocity > 5:
-        score += 8
-        indicators.append(f'Elevated velocity ({velocity:.1f}/min)')
+        score += 12
+        indicators.append(f'Moderate velocity ({velocity:.1f}/min)')
+    elif velocity > 1:
+        score += 5
+        indicators.append(f'Low velocity persistent ({velocity:.1f}/min)')
+    elif velocity > 0 and failed_attempts >= 3:
+        score += 3
+        indicators.append(f'Slow persistent attack ({failed_attempts} attempts)')
 
     # Username diversity (credential stuffing / dictionary attack indicator)
     if unique_usernames > 10:
@@ -165,24 +171,37 @@ def calculate_behavioral_score(history: dict, events_data: dict = None) -> dict:
         score += 8
         indicators.append(f'Multiple usernames targeted ({unique_usernames})')
 
-    # Pattern matching against known attacks
+    # Pattern matching against known attacks - improved with fallback patterns
     pattern_type = 'Unknown'
     if velocity > 15 and failure_rate > 0.90:
         pattern_type = 'Brute Force'
-        score += 15
+        score += 20
         indicators.append('Pattern matches known brute force')
+    elif velocity > 10 and failure_rate > 0.85:
+        pattern_type = 'Brute Force'
+        score += 15
+        indicators.append('Pattern matches brute force attack')
     elif unique_usernames > 10 and velocity > 5:
         pattern_type = 'Credential Stuffing'
-        score += 15
+        score += 18
         indicators.append('Pattern matches credential stuffing')
     elif unique_usernames > 5 and failure_rate > 0.95:
         pattern_type = 'Username Enumeration'
-        score += 10
+        score += 12
         indicators.append('Pattern matches username enumeration')
     elif total_events > 3 and duration_minutes < 5:
         pattern_type = 'Reconnaissance'
-        score += 5
+        score += 8
         indicators.append('Rapid reconnaissance pattern')
+    # Fallback patterns for single-factor attacks
+    elif failure_rate > 0.90 and failed_attempts >= 3:
+        pattern_type = 'Targeted Attack'
+        score += 12
+        indicators.append('High failure rate targeted attack')
+    elif failure_rate > 0.80 and failed_attempts >= 2:
+        pattern_type = 'Suspicious Activity'
+        score += 8
+        indicators.append('Elevated failure rate suspicious activity')
 
     return {
         'score': min(100, score),
@@ -289,11 +308,11 @@ def calculate_composite_risk(threat_intel: dict, ml_analysis: dict, behavioral: 
     # Geographic Risk Score (0-100)
     geo_score = float(geographic.get('score', 0))
 
-    # Weighted composite
+    # Weighted composite - rebalanced for better behavioral weight
     overall = (
         threat_score * 0.35 +
-        ml_score * 0.30 +
-        behavioral_score * 0.25 +
+        ml_score * 0.25 +
+        behavioral_score * 0.30 +
         geo_score * 0.10
     )
 
@@ -349,14 +368,14 @@ def calculate_composite_risk(threat_intel: dict, ml_analysis: dict, behavioral: 
             },
             'ml_prediction': {
                 'score': round(ml_score, 1),
-                'weight': 0.30,
-                'weighted': round(ml_score * 0.30, 1),
+                'weight': 0.25,
+                'weighted': round(ml_score * 0.25, 1),
                 'confidence': ml_analysis.get('confidence', 0)
             },
             'behavioral': {
                 'score': round(behavioral_score, 1),
-                'weight': 0.25,
-                'weighted': round(behavioral_score * 0.25, 1),
+                'weight': 0.30,
+                'weighted': round(behavioral_score * 0.30, 1),
                 'pattern': behavioral.get('pattern', 'Unknown'),
                 'velocity': behavioral.get('velocity', 0),
                 'failure_rate': behavioral.get('failure_rate', 0)
@@ -916,6 +935,45 @@ def generate_smart_recommendations(
     return recommendations
 
 
+@demo_routes.route('/refresh-ips', methods=['POST'])
+@login_required
+def refresh_ips():
+    """Fetch fresh malicious IPs from external sources"""
+    try:
+        from simulation.ip_fetcher import fetch_and_save_all, get_pool_stats
+
+        # Fetch from all sources
+        result = fetch_and_save_all()
+
+        # Get updated stats
+        stats = get_pool_stats()
+
+        return jsonify({
+            'success': True,
+            'fetched': result['total'],
+            'sources': result['sources'],
+            'pool_stats': stats,
+            'timestamp': result['timestamp']
+        })
+    except Exception as e:
+        print(f"[Demo] Error refreshing IPs: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@demo_routes.route('/ip-pool/stats', methods=['GET'])
+@login_required
+def ip_pool_stats():
+    """Get statistics about the fresh IP pool"""
+    try:
+        from simulation.ip_fetcher import get_pool_stats
+        stats = get_pool_stats()
+        return jsonify({'success': True, **stats})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @demo_routes.route('/scenarios', methods=['GET'])
 @login_required
 def list_scenarios():
@@ -963,7 +1021,21 @@ def get_scenario_detail(scenario_id):
 def execute_scenario(scenario_id):
     """Execute a single demo scenario with enhanced multi-factor analysis"""
     try:
-        result = run_demo_scenario(scenario_id, verbose=False)
+        # Check for optional parameters
+        data = request.get_json() or {}
+        agent_id = data.get('agent_id')
+        run_full_pipeline = data.get('run_full_pipeline', False)
+
+        # Convert agent_id to int if provided
+        if agent_id:
+            agent_id = int(agent_id)
+
+        result = run_demo_scenario(
+            scenario_id,
+            verbose=False,
+            agent_id=agent_id,
+            run_full_pipeline=run_full_pipeline
+        )
 
         if result.get('success'):
             # Format response for UI
@@ -992,14 +1064,34 @@ def execute_scenario(scenario_id):
                     'longitude': float(geo.get('longitude')) if geo.get('longitude') else None
                 }
 
-            # Format threat intel data (convert Decimal to float/int)
+            # Format threat intel data (handle both nested and flat structures)
+            # Enrichment returns nested: {'abuseipdb': {'score': 100}, 'virustotal': {'positives': 4}}
+            # Database cache returns flat: {'abuseipdb_score': 100, 'virustotal_positives': 4}
+            abuseipdb_data = threat.get('abuseipdb', {}) if isinstance(threat.get('abuseipdb'), dict) else {}
+            virustotal_data = threat.get('virustotal', {}) if isinstance(threat.get('virustotal'), dict) else {}
+
             threat_formatted = {
-                'abuseipdb_score': float(threat.get('abuseipdb_score') or 0),
-                'abuseipdb_reports': int(threat.get('abuseipdb_reports') or 0),
-                'abuseipdb_confidence': float(threat.get('abuseipdb_confidence') or 0),
-                'virustotal_positives': int(threat.get('virustotal_positives') or 0),
-                'virustotal_total': int(threat.get('virustotal_total') or 70),
-                'threat_level': threat.get('overall_threat_level', 'unknown')
+                'abuseipdb_score': float(
+                    abuseipdb_data.get('score') or
+                    threat.get('abuseipdb_score') or 0
+                ),
+                'abuseipdb_reports': int(
+                    abuseipdb_data.get('reports') or
+                    threat.get('abuseipdb_reports') or 0
+                ),
+                'abuseipdb_confidence': float(
+                    abuseipdb_data.get('confidence') or
+                    threat.get('abuseipdb_confidence') or 0
+                ),
+                'virustotal_positives': int(
+                    virustotal_data.get('positives') or
+                    threat.get('virustotal_positives') or 0
+                ),
+                'virustotal_total': int(
+                    virustotal_data.get('total') or
+                    threat.get('virustotal_total') or 70
+                ),
+                'threat_level': threat.get('threat_level') or threat.get('overall_threat_level', 'unknown')
             }
 
             # Calculate behavioral score
@@ -1045,6 +1137,37 @@ def execute_scenario(scenario_id):
             # Limit to top recommendations
             recommendations = unique_recommendations[:8]
 
+            # Get blocking result
+            blocking_result = result.get('blocking', {}) or actual.get('blocking', {})
+
+            # If blocked, add a recommendation showing the action taken
+            if blocking_result.get('blocked'):
+                triggered_rules = blocking_result.get('triggered_rules', [])
+                duration = blocking_result.get('adjusted_duration', 0)
+                duration_str = f"{duration} minutes" if duration < 60 else f"{duration // 60} hours" if duration < 1440 else f"{duration // 1440} days"
+
+                # Add blocking action as top recommendation
+                recommendations.insert(0, {
+                    'urgency': 'immediate',
+                    'priority': 'critical',
+                    'action': 'IP BLOCKED',
+                    'reason': f'Auto-blocked by rules: {", ".join(triggered_rules)}',
+                    'why': [
+                        f'Block duration: {duration_str}',
+                        f'Block ID: {blocking_result.get("block_id")}',
+                        f'Rules triggered: {", ".join(triggered_rules)}'
+                    ],
+                    'impact': 'IP is now blocked from accessing the system',
+                    'confidence': 1.0,
+                    'action_type': 'blocked',
+                    'action_data': {
+                        'block_id': blocking_result.get('block_id'),
+                        'ip': ip_address,
+                        'duration': duration,
+                        'rules': triggered_rules
+                    }
+                })
+
             response = {
                 'success': True,
                 'scenario_id': result.get('scenario_id'),
@@ -1053,6 +1176,12 @@ def execute_scenario(scenario_id):
                 'event_id': result.get('event_id'),
                 'event_type': result.get('event_type'),
                 'expected': result.get('expected'),
+                # Pipeline integration
+                'agent_id': result.get('agent_id'),
+                'run_full_pipeline': result.get('run_full_pipeline', False),
+                'pipeline_steps': result.get('pipeline_steps'),
+                # Blocking result
+                'blocking': blocking_result,
                 # NEW: Composite risk assessment
                 'composite_risk': composite_risk,
                 # NEW: Enhanced analysis sections
@@ -1070,7 +1199,8 @@ def execute_scenario(scenario_id):
                     },
                     'geo': geo_formatted,
                     'history': history,
-                    'recommendations': recommendations
+                    'recommendations': recommendations,
+                    'blocking': blocking_result
                 }
             }
             # Invalidate events cache so new demo events appear immediately in Live Events

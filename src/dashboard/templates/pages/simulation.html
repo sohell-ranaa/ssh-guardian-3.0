@@ -1,13 +1,13 @@
-<!-- SSH Guardian v3.0 - Simulation Page (3-Tab Revamp) -->
-<!-- Version: v3.1.0 - Multi-Factor Analysis with Context-Aware Recommendations -->
+<!-- SSH Guardian v3.0 - Simulation Page (Simplified 3-Tab Flow) -->
+<!-- Version: v3.2.0 - Scenarios → Analysis → Recommendations -->
 <div id="page-simulation" class="page-content" style="display: none;">
     <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 600;">
-                Threat Simulation & Analysis
+                Threat Simulation
             </h2>
             <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
-                Multi-factor threat intelligence with context-aware security recommendations
+                Run attack scenarios, analyze threats, get recommendations
             </p>
         </div>
         <div class="page-header-actions">
@@ -20,34 +20,52 @@
         </div>
     </div>
 
-    <!-- Tab Navigation -->
+    <!-- Simplified 3-Tab Navigation -->
     <div class="simulation-tabs" style="display: flex; gap: 8px; border-bottom: 2px solid var(--border); margin-bottom: 24px; position: sticky; top: 0; z-index: 100; background: var(--background); padding: 8px 0;">
         <button class="sim-tab-btn active" data-tab="scenarios" onclick="switchSimulationTab('scenarios')">
-            <span style="font-size: 18px;">🎯</span> Scenarios
+            <span style="font-size: 18px;">1️⃣</span> Scenarios
         </button>
         <button class="sim-tab-btn" data-tab="analysis" onclick="switchSimulationTab('analysis')">
-            <span style="font-size: 18px;">📊</span> Analysis
+            <span style="font-size: 18px;">2️⃣</span> Analysis
         </button>
         <button class="sim-tab-btn" data-tab="results" onclick="switchSimulationTab('results')">
-            <span style="font-size: 18px;">💡</span> Results
+            <span style="font-size: 18px;">3️⃣</span> Recommendations
         </button>
     </div>
 
     <!-- TAB 1: SCENARIOS -->
     <div id="tab-scenarios" class="sim-tab-content active">
-        <!-- Demo Scenarios -->
-        <div class="card" style="padding: 24px; margin-bottom: 24px; border: 2px solid #E6A502;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div class="card" style="padding: 24px; margin-bottom: 24px;">
+            <!-- Header with Refresh IPs button -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                 <div>
-                    <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 20px;">🎯</span> Demo Scenarios
-                    </h3>
+                    <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600;">Attack Scenarios</h3>
                     <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
-                        Pre-configured real-world threat scenarios with verified threat intelligence
+                        Click a scenario to run threat analysis. Select an agent to also deploy UFW blocks.
                     </p>
                 </div>
+                <button id="refresh-ips-btn" onclick="refreshIPPool()" style="padding: 8px 16px; background: var(--background); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <span id="refresh-ips-icon">🔄</span> Refresh IPs
+                </button>
             </div>
-            <div id="demo-scenarios-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+
+            <!-- IP Pool Status -->
+            <div id="ip-pool-status" style="display: none; margin-bottom: 16px; padding: 10px 14px; background: rgba(46, 164, 79, 0.1); border: 1px solid #2EA44F; border-radius: 6px; font-size: 12px;">
+                <span id="ip-pool-count">0</span> fresh IPs available
+                <span style="color: var(--text-secondary); margin-left: 8px;">Last refresh: <span id="ip-pool-time">Never</span></span>
+            </div>
+
+            <!-- Agent Selection + Options -->
+            <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 20px; padding: 12px 16px; background: var(--background); border-radius: 8px; border: 1px solid var(--border);">
+                <label style="font-weight: 600; font-size: 13px; white-space: nowrap;">Deploy to:</label>
+                <select id="scenario-agent" style="flex: 1; max-width: 280px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--card-bg); color: var(--text-primary);">
+                    <option value="">Analysis Only</option>
+                </select>
+                <span id="scenario-agent-status" style="font-size: 12px; color: var(--text-secondary);"></span>
+            </div>
+
+            <!-- Scenarios Grid -->
+            <div id="demo-scenarios-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
                 <!-- Loaded dynamically -->
             </div>
         </div>
@@ -63,12 +81,12 @@
         <div id="analysis-content" style="display: none;"></div>
     </div>
 
-    <!-- TAB 3: RESULTS -->
+    <!-- TAB 3: RECOMMENDATIONS -->
     <div id="tab-results" class="sim-tab-content" style="display: none;">
         <div id="results-empty-state" style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
             <div style="font-size: 48px; margin-bottom: 16px;">💡</div>
-            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text-primary);">No Recommendations Available</h3>
-            <p style="margin: 0; font-size: 14px;">Run a scenario to receive context-aware security recommendations</p>
+            <h3 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text-primary);">No Recommendations Yet</h3>
+            <p style="margin: 0; font-size: 14px;">Run a scenario first, then check here for security recommendations</p>
         </div>
         <div id="results-content" style="display: none;"></div>
     </div>
@@ -82,20 +100,67 @@
 .sim-tab-content { display: none; }
 .sim-tab-content.active { display: block; animation: fadeIn 0.3s ease-in; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.demo-scenario-card { padding: 16px; background: var(--card-bg); border-radius: 8px; border: 2px solid var(--border); cursor: pointer; transition: all 0.2s; }
+.demo-scenario-card { padding: 16px; background: var(--card-bg); border-radius: 8px; border: 2px solid var(--border); cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
 .demo-scenario-card:hover { border-color: var(--azure-blue); box-shadow: 0 4px 12px rgba(0, 120, 212, 0.2); transform: translateY(-2px); }
-.demo-scenario-card.running { border-color: #E6A502; background: linear-gradient(135deg, var(--card-bg), rgba(230, 165, 2, 0.1)); }
+.demo-scenario-card.running { border-color: var(--azure-blue); background: linear-gradient(135deg, var(--card-bg), rgba(0, 120, 212, 0.1)); pointer-events: none; }
+
+/* Scenario Loading Overlay */
+.scenario-loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(0, 120, 212, 0.95), rgba(0, 90, 170, 0.95)); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 10; border-radius: 6px; }
+.scenario-spinner { width: 36px; height: 36px; border: 3px solid rgba(255, 255, 255, 0.3); border-top: 3px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.scenario-loading-text { font-size: 13px; font-weight: 600; color: #fff; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .recommendation-card { padding: 20px; background: var(--card-bg); border-radius: 12px; border-left: 5px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.2s; margin-bottom: 16px; }
 .recommendation-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); transform: translateY(-2px); }
 .recommendation-card.critical { border-left-color: #D13438; background: linear-gradient(135deg, var(--card-bg), rgba(209, 52, 56, 0.05)); }
 .recommendation-card.high { border-left-color: #E6A502; background: linear-gradient(135deg, var(--card-bg), rgba(230, 165, 2, 0.05)); }
 .recommendation-card.medium { border-left-color: #0078D4; background: linear-gradient(135deg, var(--card-bg), rgba(0, 120, 212, 0.05)); }
 .recommendation-card.low { border-left-color: #2EA44F; background: linear-gradient(135deg, var(--card-bg), rgba(46, 164, 79, 0.05)); }
+
+/* Mini Pipeline Steps for Scenarios */
+.pipeline-mini-step { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 12px; background: var(--card-bg); border: 2px solid var(--border); border-radius: 8px; min-width: 60px; transition: all 0.3s ease; }
+.pipeline-mini-step .step-icon { font-size: 18px; }
+.pipeline-mini-step .step-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.pipeline-mini-step[data-status="running"] { border-color: var(--azure-blue); background: rgba(0, 120, 212, 0.1); animation: pulse 1.5s infinite; }
+.pipeline-mini-step[data-status="success"] { border-color: #2EA44F; background: rgba(46, 164, 79, 0.1); }
+.pipeline-mini-step[data-status="success"] .step-label { color: #2EA44F; }
+.pipeline-mini-step[data-status="failed"] { border-color: #D13438; background: rgba(209, 52, 56, 0.1); }
+.pipeline-mini-step[data-status="failed"] .step-label { color: #D13438; }
+.pipeline-mini-step[data-status="skipped"] { opacity: 0.5; border-style: dashed; }
+.pipeline-connector { display: flex; align-items: center; color: var(--text-secondary); font-size: 16px; }
+
+/* Pipeline Flow Styles */
+.pipeline-flow { display: flex; flex-direction: column; gap: 0; }
+.pipeline-step { display: flex; align-items: flex-start; gap: 16px; padding: 20px; background: var(--card-bg); border: 2px solid var(--border); border-radius: 12px; margin-bottom: -1px; transition: all 0.3s ease; position: relative; }
+.pipeline-step:first-child { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.pipeline-step:last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; margin-bottom: 0; }
+.pipeline-step::after { content: ''; position: absolute; left: 38px; bottom: -12px; width: 2px; height: 12px; background: var(--border); z-index: 1; }
+.pipeline-step:last-child::after { display: none; }
+.pipeline-step .step-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--background); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; border: 2px solid var(--border); transition: all 0.3s ease; }
+.pipeline-step .step-content { flex: 1; }
+.pipeline-step .step-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.pipeline-step .step-status { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+.pipeline-step .step-details { font-size: 12px; color: var(--text-secondary); padding: 8px 12px; background: var(--background); border-radius: 6px; display: none; }
+.pipeline-step.running { border-color: var(--azure-blue); background: linear-gradient(135deg, var(--card-bg), rgba(0, 120, 212, 0.1)); }
+.pipeline-step.running .step-icon { border-color: var(--azure-blue); background: rgba(0, 120, 212, 0.2); animation: pulse 1.5s infinite; }
+.pipeline-step.success { border-color: #2EA44F; background: linear-gradient(135deg, var(--card-bg), rgba(46, 164, 79, 0.1)); }
+.pipeline-step.success .step-icon { border-color: #2EA44F; background: rgba(46, 164, 79, 0.2); }
+.pipeline-step.success .step-status { color: #2EA44F; font-weight: 600; }
+.pipeline-step.failed { border-color: #D13438; background: linear-gradient(135deg, var(--card-bg), rgba(209, 52, 56, 0.1)); }
+.pipeline-step.failed .step-icon { border-color: #D13438; background: rgba(209, 52, 56, 0.2); }
+.pipeline-step.failed .step-status { color: #D13438; font-weight: 600; }
+.pipeline-step.skipped { border-color: #8B8B8B; opacity: 0.7; }
+.pipeline-step.skipped .step-status { color: #8B8B8B; font-style: italic; }
+.pipeline-step .step-details.visible { display: block; }
+@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } }
 </style>
 
 <script>
 // Global state
 let currentAnalysisData = null;
+
+// ========================
+// HELPER FUNCTIONS
+// ========================
 
 // Tab switching
 function switchSimulationTab(tabName) {
@@ -138,6 +203,12 @@ async function loadSimulationPage() {
         // Load demo scenarios
         await loadDemoScenarios();
 
+        // Load scenario agent dropdown
+        await loadScenarioAgents();
+
+        // Load IP pool stats
+        await loadIPPoolStats();
+
         // Load other data that dashboard expects (for cache status)
         await Promise.all([
             loadSimulationTemplates(),
@@ -161,6 +232,24 @@ async function loadSimulationPage() {
     }
 }
 
+// Load agents for scenario dropdown
+async function loadScenarioAgents() {
+    try {
+        const response = await fetch('/api/pipeline-sim/agents', { credentials: 'same-origin' });
+        const data = await response.json();
+
+        const select = document.getElementById('scenario-agent');
+        if (data.success && data.agents.length > 0) {
+            select.innerHTML = '<option value="">No agent (analysis only)</option>' +
+                data.agents.map(agent =>
+                    `<option value="${agent.id}">${agent.display_name || agent.hostname} ${agent.is_active ? '(Active)' : '(Inactive)'}</option>`
+                ).join('');
+        }
+    } catch (error) {
+        console.error('[Simulation] Error loading scenario agents:', error);
+    }
+}
+
 // Load simulation templates (for dashboard cache)
 async function loadSimulationTemplates() {
     try {
@@ -181,25 +270,82 @@ async function loadSimulationHistory() {
     }
 }
 
+// Refresh IP Pool from external sources
+async function refreshIPPool() {
+    const btn = document.getElementById('refresh-ips-btn');
+    const icon = document.getElementById('refresh-ips-icon');
+
+    btn.disabled = true;
+    icon.textContent = '⏳';
+    btn.style.opacity = '0.7';
+
+    try {
+        const response = await fetch('/api/demo/refresh-ips', {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // Update pool status display
+            const statusEl = document.getElementById('ip-pool-status');
+            const countEl = document.getElementById('ip-pool-count');
+            const timeEl = document.getElementById('ip-pool-time');
+
+            statusEl.style.display = 'block';
+            countEl.textContent = data.pool_stats?.total_ips || data.fetched;
+            timeEl.textContent = new Date().toLocaleTimeString();
+
+            // Reload scenarios to get new IPs in the cards
+            await loadDemoScenarios();
+
+            showToast(`Fetched ${data.fetched} fresh IPs and updated scenarios`, 'success');
+        } else {
+            showToast(`Failed to refresh IPs: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showToast('Failed to refresh IP pool', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        icon.textContent = '🔄';
+    }
+}
+
+// Load IP pool stats on page load
+async function loadIPPoolStats() {
+    try {
+        const response = await fetch('/api/demo/ip-pool/stats', { credentials: 'same-origin' });
+        const data = await response.json();
+
+        if (data.success && data.total_ips > 0) {
+            const statusEl = document.getElementById('ip-pool-status');
+            const countEl = document.getElementById('ip-pool-count');
+            const timeEl = document.getElementById('ip-pool-time');
+
+            statusEl.style.display = 'block';
+            countEl.textContent = data.total_ips;
+            timeEl.textContent = data.last_refresh ? new Date(data.last_refresh).toLocaleTimeString() : 'Recently';
+        }
+    } catch (error) {
+        // Silent fail - pool stats are optional
+    }
+}
+
 // Load demo scenarios
 async function loadDemoScenarios() {
     try {
-        console.log('[Demo] Fetching scenarios...');
         const response = await fetch('/api/demo/scenarios', { credentials: 'same-origin' });
         const data = await response.json();
-        console.log('[Demo] Scenarios response:', data);
         if (data.success) {
-            console.log('[Demo] Rendering', data.scenarios.length, 'scenarios');
             renderDemoScenarios(data.scenarios);
         } else {
-            console.error('[Demo] Failed to load scenarios:', data.error);
             const grid = document.getElementById('demo-scenarios-grid');
-            if (grid) grid.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Failed to load scenarios. Please refresh the page.</div>';
+            if (grid) grid.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Failed to load scenarios.</div>';
         }
     } catch (error) {
-        console.error('[Demo] Error loading scenarios:', error);
         const grid = document.getElementById('demo-scenarios-grid');
-        if (grid) grid.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Error loading scenarios. Please check console.</div>';
+        if (grid) grid.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Error loading scenarios.</div>';
     }
 }
 
@@ -208,16 +354,23 @@ function renderDemoScenarios(scenarios) {
     const grid = document.getElementById('demo-scenarios-grid');
     const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
     const icons = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
-    
+
     grid.innerHTML = scenarios.map(s => `
         <div class="demo-scenario-card" data-scenario="${s.id}" onclick="runDemoScenario('${s.id}')">
-            <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${s.name}</div>
-            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">${s.description}</div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: ${colors[s.severity]}; color: white;">
-                    ${icons[s.severity]} ${s.severity}
-                </span>
-                <span style="font-family: monospace; font-size: 12px; color: var(--azure-blue); font-weight: 600;">${s.ip}</span>
+            <!-- Loading overlay (hidden by default) -->
+            <div class="scenario-loading-overlay" style="display: none;">
+                <div class="scenario-spinner"></div>
+                <div class="scenario-loading-text">Analyzing...</div>
+            </div>
+            <div class="scenario-card-content">
+                <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${s.name}</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">${s.description}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: ${colors[s.severity]}; color: white;">
+                        ${icons[s.severity]} ${s.severity}
+                    </span>
+                    <span class="scenario-ip" style="font-family: monospace; font-size: 12px; color: var(--azure-blue); font-weight: 600;">${s.ip}</span>
+                </div>
             </div>
         </div>
     `).join('');
@@ -225,43 +378,236 @@ function renderDemoScenarios(scenarios) {
 
 // Run demo scenario
 async function runDemoScenario(scenarioId) {
-    console.log('[Demo] Running scenario:', scenarioId);
     const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenarioId}"]`);
+    const loadingOverlay = card.querySelector('.scenario-loading-overlay');
+    const loadingText = card.querySelector('.scenario-loading-text');
+
+    // Show loading overlay
     card.classList.add('running');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+    }
+
+    // Get agent selection - if agent selected, run full pipeline automatically
+    const agentId = document.getElementById('scenario-agent')?.value || '';
+    const runFullPipeline = !!agentId;
+
+    // Update status indicator
+    const statusEl = document.getElementById('scenario-agent-status');
+    if (statusEl) {
+        statusEl.textContent = runFullPipeline ? 'Will block & deploy UFW rules' : '';
+        statusEl.style.color = runFullPipeline ? '#2EA44F' : 'var(--text-secondary)';
+    }
+
+    // Update loading text based on pipeline type
+    if (loadingText) {
+        loadingText.textContent = runFullPipeline ? 'Running full pipeline...' : 'Analyzing threat...';
+    }
 
     try {
-        const response = await fetch(`/api/demo/run/${scenarioId}`, { method: 'POST', credentials: 'same-origin' });
+        const response = await fetch(`/api/demo/run/${scenarioId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                agent_id: agentId ? parseInt(agentId) : null,
+                run_full_pipeline: runFullPipeline
+            })
+        });
         const data = await response.json();
-
-        console.log('[Demo] Response:', data);
 
         if (data.success) {
             currentAnalysisData = data;
+
+            // Check blocking status from enrichment result
+            const blocking = data.blocking || {};
+            const blocked = blocking.blocked || data.pipeline_steps?.ip_blocked?.is_blocked;
+            const skipped = blocking.skipped;
+            const alreadyBlocked = blocking.success === false &&
+                blocking.message && blocking.message.toLowerCase().includes('already blocked');
+            const triggeredRules = blocking.triggered_rules || data.pipeline_steps?.ip_blocked?.triggered_rules || [];
+
+            // Update loading text based on blocking status
+            if (loadingText) {
+                if (blocked) {
+                    loadingText.textContent = '🚫 BLOCKED!';
+                } else if (alreadyBlocked) {
+                    loadingText.textContent = '⚠️ Already Blocked';
+                } else if (skipped) {
+                    loadingText.textContent = '✅ Analyzed';
+                } else {
+                    loadingText.textContent = 'Complete!';
+                }
+            }
+
+            // Show toast for blocking result
+            if (blocked) {
+                const rulesText = triggeredRules.length > 0 ? ` (${triggeredRules.join(', ')})` : '';
+                showToast(`🚫 IP ${data.ip} AUTO-BLOCKED${rulesText}`, 'warning', 5000);
+            } else if (alreadyBlocked) {
+                showToast(`⚠️ IP ${data.ip} is already blocked (ID: #${blocking.block_id})`, 'warning', 5000);
+            } else if (skipped) {
+                showToast(`ℹ️ Analysis complete - select an agent to enable blocking`, 'info', 3000);
+            }
+
             try {
                 populateAnalysisTab(data);
                 populateResultsTab(data);
+
+                // Brief delay to show status before switching tabs
+                await new Promise(resolve => setTimeout(resolve, blocked || alreadyBlocked ? 800 : 300));
                 switchSimulationTab('analysis');
 
-                // Update cache indicator based on whether threat intel was cached
                 if (typeof CacheManager !== 'undefined') {
-                    const wasCached = data.actual_results?.threat_intel?.from_cache || false;
-                    CacheManager.updateStatus('simulation', wasCached, 0);
+                    CacheManager.updateStatus('simulation', false, 0);
                 }
 
-                showToast(`✅ ${data.scenario_name} completed`, 'success');
+                let suffix = '';
+                if (blocked) suffix = ' - IP BLOCKED';
+                else if (alreadyBlocked) suffix = ' - Already Blocked';
+                else if (runFullPipeline) suffix = ' + Deployed';
+                else if (skipped) suffix = ' (Analysis Only)';
+
+                const toastType = blocked ? 'warning' : (alreadyBlocked ? 'warning' : 'success');
+                showToast(`${data.scenario_name} completed${suffix}`, toastType);
             } catch (renderError) {
-                console.error('[Demo] Render error:', renderError);
-                showToast(`❌ Rendering failed: ${renderError.message}`, 'error');
+                showToast(`Rendering failed: ${renderError.message}`, 'error');
             }
         } else {
-            showToast(`❌ Failed: ${data.error}`, 'error');
+            if (loadingText) {
+                loadingText.textContent = 'Failed!';
+            }
+            showToast(`Failed: ${data.error}`, 'error');
         }
     } catch (error) {
         console.error('[Demo] Error:', error);
-        showToast('❌ Failed to run scenario', 'error');
+        if (loadingText) {
+            loadingText.textContent = 'Error!';
+        }
+        showToast('Failed to run scenario', 'error');
     } finally {
-        setTimeout(() => card.classList.remove('running'), 500);
+        // Hide loading overlay after a short delay
+        setTimeout(() => {
+            card.classList.remove('running');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
+        }, 500);
     }
+}
+
+// Render Blocking Banner
+function renderBlockingBanner(blocking) {
+    if (!blocking) return '';
+
+    // Case 1: Blocking was skipped (analysis-only mode)
+    if (blocking.skipped) {
+        return `
+        <div class="card" style="padding: 16px; margin-bottom: 24px; background: linear-gradient(135deg, rgba(0, 120, 212, 0.15), rgba(0, 120, 212, 0.05)); border: 2px solid var(--azure-blue); border-radius: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--azure-blue); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;">
+                    ℹ️
+                </div>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 700; color: var(--azure-blue);">
+                        ANALYSIS ONLY MODE
+                    </h3>
+                    <div style="font-size: 13px; color: var(--text-secondary);">
+                        No blocking applied. Select an agent to enable auto-blocking.
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    }
+
+    // Case 2: IP already blocked (blocking failed because duplicate)
+    const isAlreadyBlocked = blocking.success === false &&
+        blocking.message && blocking.message.toLowerCase().includes('already blocked');
+
+    if (isAlreadyBlocked) {
+        const blockId = blocking.block_id || 'N/A';
+        return `
+        <div class="card" style="padding: 20px; margin-bottom: 24px; background: linear-gradient(135deg, rgba(230, 165, 2, 0.15), rgba(230, 165, 2, 0.05)); border: 2px solid #E6A502; border-radius: 12px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: #E6A502; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0;">
+                    ⚠️
+                </div>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #E6A502;">
+                        IP ALREADY BLOCKED
+                    </h3>
+                    <div style="font-size: 14px; color: var(--text-primary); margin-bottom: 8px;">
+                        This IP is already in the block list. No duplicate block was created.
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px;">
+                        <span style="padding: 4px 10px; background: rgba(230, 165, 2, 0.2); border-radius: 4px; font-weight: 600;">
+                            🆔 Existing Block ID: #${blockId}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    }
+
+    // Case 3: Not blocked
+    if (!blocking.blocked) return '';
+
+    // Case 4: Successfully blocked (red banner)
+    const rules = blocking.triggered_rules || [];
+    const duration = blocking.adjusted_duration || blocking.base_duration || 0;
+    const blockId = blocking.block_id || 'N/A';
+
+    // Format duration
+    let durationText = '';
+    if (duration >= 10080) {
+        durationText = `${Math.round(duration / 10080)} week(s)`;
+    } else if (duration >= 1440) {
+        durationText = `${Math.round(duration / 1440)} day(s)`;
+    } else if (duration >= 60) {
+        durationText = `${Math.round(duration / 60)} hour(s)`;
+    } else {
+        durationText = `${duration} minute(s)`;
+    }
+
+    return `
+    <div class="card" style="padding: 20px; margin-bottom: 24px; background: linear-gradient(135deg, rgba(209, 52, 56, 0.15), rgba(209, 52, 56, 0.05)); border: 2px solid #D13438; border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="width: 60px; height: 60px; border-radius: 50%; background: #D13438; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0;">
+                🚫
+            </div>
+            <div style="flex: 1;">
+                <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #D13438;">
+                    IP AUTO-BLOCKED
+                </h3>
+                <div style="font-size: 14px; color: var(--text-primary); margin-bottom: 8px;">
+                    This IP was automatically blocked by the threat detection rules.
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px;">
+                    <span style="padding: 4px 10px; background: rgba(209, 52, 56, 0.2); border-radius: 4px; font-weight: 600;">
+                        ⏱️ Duration: ${durationText}
+                    </span>
+                    <span style="padding: 4px 10px; background: rgba(209, 52, 56, 0.2); border-radius: 4px; font-weight: 600;">
+                        🆔 Block ID: #${blockId}
+                    </span>
+                </div>
+                ${rules.length > 0 ? `
+                <div style="margin-top: 12px;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">TRIGGERED RULES:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${rules.map(rule => `
+                            <span style="padding: 4px 10px; background: #D13438; color: white; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                                ${rule}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    </div>
+    `;
 }
 
 // Populate Analysis Tab
@@ -278,13 +624,16 @@ function populateAnalysisTab(data) {
     const ti = data.results?.threat_intel || {};
     const ml = data.results?.ml || {};
     const history = data.results?.history || {};
+    const blocking = data.blocking || {};
 
     console.log('[Analysis] Composite:', composite);
     console.log('[Analysis] Behavioral:', behavioral);
     console.log('[Analysis] Geographic:', geo);
+    console.log('[Analysis] Blocking:', blocking);
 
     try {
         const html = `
+            ${renderBlockingBanner(blocking)}
             ${renderCompositeRisk(composite, data.ip, behavioral.pattern)}
             ${renderRiskBreakdown(composite.breakdown)}
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px;">
@@ -703,12 +1052,19 @@ async function blockIPInline(ip) {
 }
 
 // Toast notification
-function showToast(message, type) {
+function showToast(message, type, duration = 3000) {
     const toast = document.createElement('div');
     toast.textContent = message;
-    toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: ${type === 'success' ? '#2EA44F' : type === 'error' ? '#D13438' : '#0078D4'}; color: white; border-radius: 6px; font-weight: 600; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);`;
+    const colors = {
+        success: '#2EA44F',
+        error: '#D13438',
+        warning: '#E6A502',
+        info: '#0078D4'
+    };
+    const bgColor = colors[type] || colors.info;
+    toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: ${bgColor}; color: white; border-radius: 6px; font-weight: 600; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);`;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(() => toast.remove(), duration);
 }
 
 // Track if page has been initialized

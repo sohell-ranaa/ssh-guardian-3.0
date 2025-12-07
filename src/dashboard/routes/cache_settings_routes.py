@@ -14,7 +14,7 @@ sys.path.append(str(PROJECT_ROOT / "dbs"))
 sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
-from cache import get_cache, get_redis_client
+from cache import get_cache, get_redis_client, increment_ttl_version, CACHEABLE_ENDPOINTS
 
 cache_settings_routes = Blueprint('cache_settings', __name__)
 
@@ -222,6 +222,9 @@ def update_cache_setting(setting_id):
         cursor.close()
         conn.close()
 
+        # Signal TTL version change for immediate reload
+        increment_ttl_version()
+
         # Invalidate related cache key
         cache = get_cache()
         cache.delete_pattern(current['endpoint_key'])
@@ -288,6 +291,10 @@ def bulk_update_settings():
         conn.commit()
         cursor.close()
         conn.close()
+
+        # Signal TTL version change for immediate reload
+        if updated_count > 0:
+            increment_ttl_version()
 
         return jsonify({
             'success': True,
@@ -380,7 +387,7 @@ def reset_all_settings():
 
 @cache_settings_routes.route('/stats', methods=['GET'])
 def get_cache_stats():
-    """Get overall cache statistics"""
+    """Get overall cache statistics including live in-memory counts"""
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -421,9 +428,15 @@ def get_cache_stats():
         else:
             redis_stats = {'connected': False}
 
-        # Calculate hit rate
-        total_requests = (db_stats.get('total_hits') or 0) + (db_stats.get('total_misses') or 0)
-        hit_rate = round((db_stats.get('total_hits') or 0) / total_requests * 100, 1) if total_requests > 0 else 0.0
+        # Get live hit stats from memory (not yet flushed to DB)
+        cache = get_cache()
+        live_stats = cache.get_live_hit_stats()
+
+        # Combine DB stats with live in-memory stats
+        total_hits = (db_stats.get('total_hits') or 0) + live_stats.get('total_hits', 0)
+        total_misses = (db_stats.get('total_misses') or 0) + live_stats.get('total_misses', 0)
+        total_requests = total_hits + total_misses
+        hit_rate = round(total_hits / total_requests * 100, 1) if total_requests > 0 else 0.0
 
         return jsonify({
             'success': True,
@@ -434,11 +447,13 @@ def get_cache_stats():
                     'auto_refresh': db_stats['auto_refresh_endpoints']
                 },
                 'performance': {
-                    'total_hits': db_stats['total_hits'] or 0,
-                    'total_misses': db_stats['total_misses'] or 0,
+                    'total_hits': total_hits,
+                    'total_misses': total_misses,
                     'hit_rate': hit_rate,
                     'avg_load_time_ms': round(float(db_stats['avg_load_time'] or 0), 2),
-                    'avg_ttl_seconds': round(float(db_stats['avg_ttl'] or 0), 0)
+                    'avg_ttl_seconds': round(float(db_stats['avg_ttl'] or 0), 0),
+                    'live_hits': live_stats.get('hits', {}),
+                    'live_misses': live_stats.get('misses', {})
                 },
                 'redis': redis_stats,
                 'warmer_running': _cache_warmer_running
@@ -752,3 +767,79 @@ def force_reload():
     response.headers['Expires'] = '0'
 
     return response
+
+
+@cache_settings_routes.route('/ttl-map', methods=['GET'])
+def get_ttl_map():
+    """
+    Return current TTL settings for frontend cache indicator.
+    This replaces the hardcoded TTL map in cache_indicator.html.
+
+    Returns:
+        {
+            'success': True,
+            'ttl_map': {
+                'events': 120,
+                'threat_intel': 7200,
+                ...
+            },
+            'cacheable_endpoints': ['threat_intel_lookup', ...]
+        }
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT endpoint_key, ttl_seconds, is_enabled
+            FROM cache_settings
+            WHERE is_enabled = TRUE
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Build TTL map with simplified keys for frontend
+        # Map database endpoint_keys to frontend route categories
+        key_to_category = {
+            'events_list': 'events',
+            'events_count': 'events',
+            'events_analysis': 'events',
+            'dashboard_summary': 'dashboard',
+            'threat_intel_lookup': 'threat_intel',
+            'threat_intel_stats': 'threat_intel',
+            'geoip_lookup': 'geoip',
+            'geoip_stats': 'geoip',
+            'ip_stats_list': 'ip_stats',
+            'ip_stats_summary': 'ip_stats',
+            'blocking_list': 'blocking',
+            'blocking_stats': 'blocking',
+            'trends_overview': 'trends',
+            'trends_daily': 'trends',
+            'daily_reports': 'reports',
+            'ml_predictions': 'ml',
+            'ml_models': 'ml',
+            'audit_list': 'audit',
+            'notifications_list': 'notifications',
+            'settings_list': 'settings',
+        }
+
+        ttl_map = {}
+        for row in rows:
+            endpoint_key = row['endpoint_key']
+            category = key_to_category.get(endpoint_key, endpoint_key)
+            # Use minimum TTL if category already exists (for multiple endpoints per category)
+            if category not in ttl_map or row['ttl_seconds'] < ttl_map[category]:
+                ttl_map[category] = row['ttl_seconds']
+
+        return jsonify({
+            'success': True,
+            'ttl_map': ttl_map,
+            'cacheable_endpoints': list(CACHEABLE_ENDPOINTS)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

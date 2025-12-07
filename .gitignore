@@ -1,0 +1,20 @@
+# ML Model files (too large for GitHub)
+*.pkl
+ml_models/*.pkl
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

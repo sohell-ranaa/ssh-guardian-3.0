@@ -15,13 +15,52 @@
                     </div>
                 </div>
 
-                <div class="stats-grid" id="agent-stats">
-                    <!-- Stats loaded by JavaScript -->
+                <!-- Quick Stats -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                    <div class="card" style="padding: 14px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">🖥️</div>
+                            <div style="min-width: 0;">
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total Agents</div>
+                                <div id="stat-total-agents" style="font-size: 20px; font-weight: 700;">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 14px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">✅</div>
+                            <div style="min-width: 0;">
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Online</div>
+                                <div id="stat-online-agents" style="font-size: 20px; font-weight: 700; color: #10b981;">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 14px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">✓</div>
+                            <div style="min-width: 0;">
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Approved</div>
+                                <div id="stat-approved-agents" style="font-size: 20px; font-weight: 700;">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 14px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">📊</div>
+                            <div style="min-width: 0;">
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total Events</div>
+                                <div id="stat-total-events" style="font-size: 20px; font-weight: 700;">-</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="card">
-                    <div class="card-title">Registered Agents</div>
-                    <div id="agents-container">
+                    <div style="padding: 14px; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 600; color: var(--text-primary);">Registered Agents</div>
+                    <div id="agents-container" style="padding: 16px;">
                         <!-- Agents loaded by JavaScript -->
                     </div>
                 </div>

@@ -477,6 +477,13 @@ class UFWManager:
                 return True, 'Sync requested'
             elif command_type == 'raw':
                 return self._execute_raw(params)
+            # SSH Guardian auto-block command types
+            elif command_type == 'deny_from':
+                # Block IP: params = {"ip": "1.2.3.4", "block_id": 123}
+                return self._deny({'from_ip': params.get('ip')})
+            elif command_type == 'delete_deny_from':
+                # Unblock IP: params = {"ip": "1.2.3.4", "block_id": 123}
+                return self._delete_by_rule({'action': 'deny', 'from_ip': params.get('ip')})
             else:
                 return False, f"Unknown command type: {command_type}"
 

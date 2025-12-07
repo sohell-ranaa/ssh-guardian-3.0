@@ -53,28 +53,103 @@ CACHE_TTL = {
 
 # TTL settings loaded from database (refreshed periodically)
 _db_ttl_settings = {}
+_db_enabled_settings = {}  # Track which endpoints have caching enabled
 _ttl_last_loaded = None
 _ttl_reload_interval = 300  # Reload TTL settings every 5 minutes
+_ttl_settings_version = 0  # Local version tracker
+
+# Redis key for TTL settings version (used for immediate reload signaling)
+TTL_VERSION_KEY = "sshg:ttl_settings:version"
+
+# Cacheable endpoints - ONLY these get cached (slow/expensive queries)
+CACHEABLE_ENDPOINTS = {
+    # Threat Intelligence (external API calls, rate-limited)
+    'threat_intel_lookup', 'threat_intel_stats',
+    # GeoIP (external API calls)
+    'geoip_lookup', 'geoip_stats',
+    # Trends & Reports (historical data, expensive aggregations)
+    'trends_overview', 'trends_daily', 'daily_reports',
+    # Events (large dataset, paginated)
+    'events_list', 'events_count', 'events_analysis',
+    # IP Stats (aggregation queries)
+    'ip_stats_list', 'ip_stats_summary',
+}
+
+
+def increment_ttl_version():
+    """
+    Signal that TTL settings changed - forces immediate reload.
+    Call this after updating cache_settings in database.
+    """
+    try:
+        client = get_redis_client()
+        if client:
+            client.incr(TTL_VERSION_KEY)
+    except Exception as e:
+        print(f"[Cache] Failed to increment TTL version: {e}")
+
+
+def _check_ttl_version_changed() -> bool:
+    """Check if TTL settings version changed in Redis"""
+    global _ttl_settings_version
+    try:
+        client = get_redis_client()
+        if client:
+            redis_version = client.get(TTL_VERSION_KEY)
+            if redis_version:
+                redis_version = int(redis_version)
+                if redis_version != _ttl_settings_version:
+                    _ttl_settings_version = redis_version
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def should_cache(endpoint_key: str) -> bool:
+    """
+    Check if an endpoint should be cached.
+    Only cache if:
+    1. Endpoint is in CACHEABLE_ENDPOINTS (slow/expensive)
+    2. Caching is enabled for this endpoint in database
+    """
+    global _ttl_last_loaded
+
+    # Not a cacheable endpoint type
+    if endpoint_key not in CACHEABLE_ENDPOINTS:
+        return False
+
+    # Reload settings if needed
+    if _ttl_last_loaded is None or _check_ttl_version_changed():
+        _load_ttl_from_database()
+    elif (datetime.now() - _ttl_last_loaded).total_seconds() > _ttl_reload_interval:
+        _load_ttl_from_database()
+
+    # Check if enabled in database
+    return _db_enabled_settings.get(endpoint_key, False)
 
 
 def _load_ttl_from_database():
     """Load TTL settings from cache_settings table"""
-    global _db_ttl_settings, _ttl_last_loaded
+    global _db_ttl_settings, _db_enabled_settings, _ttl_last_loaded
 
     try:
         from connection import get_connection
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
+        # Load ALL settings, not just enabled ones (we need to know enabled status)
         cursor.execute("""
             SELECT endpoint_key, ttl_seconds, is_enabled
             FROM cache_settings
-            WHERE is_enabled = TRUE
         """)
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
 
-        _db_ttl_settings = {row['endpoint_key']: row['ttl_seconds'] for row in rows}
+        # Build TTL map for enabled endpoints
+        _db_ttl_settings = {row['endpoint_key']: row['ttl_seconds'] for row in rows if row['is_enabled']}
+        # Build enabled status map (for should_cache() checks)
+        _db_enabled_settings = {row['endpoint_key']: bool(row['is_enabled']) for row in rows}
         _ttl_last_loaded = datetime.now()
 
         # Map endpoint_key to CACHE_TTL keys
@@ -111,15 +186,34 @@ def _load_ttl_from_database():
         print(f"[Cache] Failed to load TTL from database: {e}")
 
 
-def get_ttl(cache_type: str) -> int:
-    """Get TTL for a cache type, loading from DB if needed"""
+def get_ttl(cache_type: str = None, endpoint_key: str = None) -> int:
+    """
+    Get TTL for a cache type or endpoint_key, loading from DB if needed.
+
+    Args:
+        cache_type: Legacy cache type key (e.g., 'events_list', 'threat_intel')
+        endpoint_key: Database endpoint_key (e.g., 'threat_intel_lookup')
+
+    Returns:
+        TTL in seconds
+    """
     global _ttl_last_loaded
 
-    # Reload TTL settings periodically
-    if _ttl_last_loaded is None or (datetime.now() - _ttl_last_loaded).total_seconds() > _ttl_reload_interval:
+    # Reload if version changed (immediate effect) or periodic reload
+    if _ttl_last_loaded is None or _check_ttl_version_changed():
+        _load_ttl_from_database()
+    elif (datetime.now() - _ttl_last_loaded).total_seconds() > _ttl_reload_interval:
         _load_ttl_from_database()
 
-    return CACHE_TTL.get(cache_type, 300)
+    # If endpoint_key provided, try database settings first
+    if endpoint_key and endpoint_key in _db_ttl_settings:
+        return _db_ttl_settings[endpoint_key]
+
+    # Fall back to legacy CACHE_TTL
+    if cache_type:
+        return CACHE_TTL.get(cache_type, 300)
+
+    return 300  # Default 5 minutes
 
 # Global Redis connection pool
 _redis_pool = None
@@ -177,22 +271,42 @@ def cache_key_hash(*args, **kwargs) -> str:
 class CacheManager:
     """Centralized cache management for SSH Guardian"""
 
+    # Buffered hit/miss tracking (flush to database periodically)
+    _hit_counts = {}
+    _miss_counts = {}
+    _last_stats_flush = None
+    _stats_flush_interval = 30  # Flush to database every 30 seconds
+
     def __init__(self):
         self.client = get_redis_client()
         self.enabled = self.client is not None
 
-    def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+    def get(self, key: str, endpoint_key: str = None) -> Optional[Any]:
+        """
+        Get value from cache with hit/miss tracking.
+
+        Args:
+            key: The cache key
+            endpoint_key: Optional endpoint_key for statistics tracking
+        """
         if not self.enabled:
+            if endpoint_key:
+                self._track_miss(endpoint_key)
             return None
 
         try:
             value = self.client.get(key)
             if value:
+                if endpoint_key:
+                    self._track_hit(endpoint_key)
                 return json.loads(value)
+            if endpoint_key:
+                self._track_miss(endpoint_key)
             return None
         except Exception as e:
             print(f"[Cache] Get error for {key}: {e}")
+            if endpoint_key:
+                self._track_miss(endpoint_key)
             return None
 
     def set(self, key: str, value: Any, ttl: int = 60) -> bool:
@@ -207,6 +321,63 @@ class CacheManager:
         except Exception as e:
             print(f"[Cache] Set error for {key}: {e}")
             return False
+
+    def _track_hit(self, endpoint_key: str):
+        """Track a cache hit for an endpoint"""
+        CacheManager._hit_counts[endpoint_key] = CacheManager._hit_counts.get(endpoint_key, 0) + 1
+        self._maybe_flush_stats()
+
+    def _track_miss(self, endpoint_key: str):
+        """Track a cache miss for an endpoint"""
+        CacheManager._miss_counts[endpoint_key] = CacheManager._miss_counts.get(endpoint_key, 0) + 1
+        self._maybe_flush_stats()
+
+    def _maybe_flush_stats(self):
+        """Flush stats to database if interval has passed"""
+        now = datetime.now()
+        if CacheManager._last_stats_flush is None:
+            CacheManager._last_stats_flush = now
+            return
+
+        if (now - CacheManager._last_stats_flush).total_seconds() >= CacheManager._stats_flush_interval:
+            self._flush_stats_to_db()
+            CacheManager._last_stats_flush = now
+
+    def _flush_stats_to_db(self):
+        """Flush accumulated hit/miss counts to database"""
+        if not CacheManager._hit_counts and not CacheManager._miss_counts:
+            return
+
+        try:
+            from connection import get_connection
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # Update hits
+            for endpoint_key, count in CacheManager._hit_counts.items():
+                cursor.execute("""
+                    UPDATE cache_settings
+                    SET hit_count = hit_count + %s, updated_at = NOW()
+                    WHERE endpoint_key = %s
+                """, (count, endpoint_key))
+
+            # Update misses
+            for endpoint_key, count in CacheManager._miss_counts.items():
+                cursor.execute("""
+                    UPDATE cache_settings
+                    SET miss_count = miss_count + %s, updated_at = NOW()
+                    WHERE endpoint_key = %s
+                """, (count, endpoint_key))
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            # Clear buffers
+            CacheManager._hit_counts = {}
+            CacheManager._miss_counts = {}
+        except Exception as e:
+            print(f"[Cache] Failed to flush stats: {e}")
 
     def delete(self, key: str) -> bool:
         """Delete a key from cache"""
@@ -280,6 +451,20 @@ class CacheManager:
             }
         except Exception as e:
             return {'enabled': True, 'connected': False, 'error': str(e)}
+
+    def get_live_hit_stats(self) -> dict:
+        """Get current hit/miss counts in memory (before DB flush)"""
+        return {
+            'hits': dict(CacheManager._hit_counts),
+            'misses': dict(CacheManager._miss_counts),
+            'total_hits': sum(CacheManager._hit_counts.values()),
+            'total_misses': sum(CacheManager._miss_counts.values()),
+        }
+
+    def force_flush_stats(self):
+        """Force flush stats to database immediately"""
+        self._flush_stats_to_db()
+        CacheManager._last_stats_flush = datetime.now()
 
 
 # Global cache manager instance

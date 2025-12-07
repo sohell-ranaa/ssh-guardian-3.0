@@ -1,535 +1,813 @@
-<!-- Cache Settings Page -->
+<!-- SSH Guardian v3.0 - Cache Settings Page -->
+<!-- Redesigned with clean card-based layout for cacheable endpoints -->
 <div id="page-cache-settings" class="page-content" style="display: none;">
     <div class="page-header">
         <div>
             <h1 class="page-title">Cache Settings</h1>
-            <p class="page-subtitle">Configure cache TTL, auto-refresh, and view cache performance</p>
+            <p class="page-subtitle">Configure caching for heavy/slow endpoints</p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button class="btn btn-secondary" onclick="CacheSettingsPage.clearAllCache()">Clear All Cache</button>
-            <button class="btn btn-primary" onclick="CacheSettingsPage.warmCache()">Warm Cache</button>
-            <button class="btn btn-secondary" onclick="CacheSettingsPage.resetAll()">Reset All</button>
-        </div>
-    </div>
-
-    <!-- Stats Cards -->
-    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px;">
-        <div class="stat-card">
-            <div class="stat-card-value" id="stat-cached-keys">-</div>
-            <div class="stat-card-label">Cached Keys</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-value" style="color: var(--azure-blue);" id="stat-hit-rate">-</div>
-            <div class="stat-card-label">Hit Rate</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-value" style="color: #28a745;" id="stat-total-hits">-</div>
-            <div class="stat-card-label">Total Hits</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-value" style="color: #ffc107;" id="stat-total-misses">-</div>
-            <div class="stat-card-label">Total Misses</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-value" id="stat-memory">-</div>
-            <div class="stat-card-label">Redis Memory</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-card-value" id="stat-warmer">-</div>
-            <div class="stat-card-label">Auto Warmer</div>
+        <div class="header-actions">
+            <button class="btn btn-outline" onclick="CacheSettingsPage.clearAllCache()">
+                Clear Cache
+            </button>
+            <button class="btn btn-primary" onclick="CacheSettingsPage.resetAll()">
+                Reset Defaults
+            </button>
         </div>
     </div>
 
-    <!-- Auto Warmer Control -->
-    <div class="content-card" style="margin-bottom: 24px;">
-        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Background Cache Warmer</h3>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-primary" id="btn-start-warmer" onclick="CacheSettingsPage.startAutoWarmer()">Start Auto Warmer</button>
-                <button class="btn btn-danger" id="btn-stop-warmer" style="display: none;" onclick="CacheSettingsPage.stopAutoWarmer()">Stop Auto Warmer</button>
-            </div>
+    <!-- Overview Stats -->
+    <div class="cs-stats-row">
+        <div class="cs-stat">
+            <span class="cs-stat-value" id="stat-cached-keys">0</span>
+            <span class="cs-stat-label">Cached Keys</span>
         </div>
-        <div class="card-body" style="padding: 16px;">
-            <p style="margin: 0 0 8px 0; color: var(--text-secondary); font-size: 14px;">
-                The background cache warmer automatically refreshes endpoints marked with "Auto Refresh" enabled.
-                This ensures data is always pre-cached for faster page loads.
-            </p>
-            <span style="font-size: 13px; color: var(--text-hint);">
-                Endpoints with auto-refresh enabled: <strong id="auto-refresh-count">-</strong>
-            </span>
+        <div class="cs-stat-divider"></div>
+        <div class="cs-stat">
+            <span class="cs-stat-value" id="stat-hit-rate">0%</span>
+            <span class="cs-stat-label">Hit Rate</span>
+        </div>
+        <div class="cs-stat-divider"></div>
+        <div class="cs-stat">
+            <span class="cs-stat-value" id="stat-total-hits">0</span>
+            <span class="cs-stat-label">Total Hits</span>
+        </div>
+        <div class="cs-stat-divider"></div>
+        <div class="cs-stat">
+            <span class="cs-stat-value" id="stat-memory">0 MB</span>
+            <span class="cs-stat-label">Memory</span>
+        </div>
+        <div class="cs-stat-divider"></div>
+        <div class="cs-stat">
+            <span class="cs-stat-value cs-stat-enabled" id="stat-enabled">0/0</span>
+            <span class="cs-stat-label">Enabled</span>
         </div>
     </div>
 
     <!-- Category Tabs -->
-    <div class="filter-bar" style="margin-bottom: 16px;">
-        <div id="categoryTabs" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="filter-tab active" data-category="" onclick="CacheSettingsPage.filterCategory('')">All</button>
-        </div>
+    <div class="cs-tabs">
+        <button class="cs-tab active" data-category="all" onclick="CacheSettingsPage.filterCategory('all')">
+            All
+        </button>
+        <button class="cs-tab" data-category="threat" onclick="CacheSettingsPage.filterCategory('threat')">
+            Threat Intel
+        </button>
+        <button class="cs-tab" data-category="geoip" onclick="CacheSettingsPage.filterCategory('geoip')">
+            GeoIP
+        </button>
+        <button class="cs-tab" data-category="events" onclick="CacheSettingsPage.filterCategory('events')">
+            Events
+        </button>
+        <button class="cs-tab" data-category="trends" onclick="CacheSettingsPage.filterCategory('trends')">
+            Trends
+        </button>
+        <button class="cs-tab" data-category="other" onclick="CacheSettingsPage.filterCategory('other')">
+            Other
+        </button>
     </div>
 
-    <!-- Settings Table -->
-    <div class="content-card">
-        <div class="table-container" style="overflow-x: auto;">
-            <table class="data-table" id="cache-settings-table">
-                <thead>
-                    <tr>
-                        <th>Endpoint</th>
-                        <th>Category</th>
-                        <th>TTL</th>
-                        <th style="width: 180px;">TTL Slider</th>
-                        <th>Auto Refresh</th>
-                        <th>Priority</th>
-                        <th>Hit Rate</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="settings-tbody">
-                    <tr>
-                        <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-hint);">Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+    <!-- Endpoints Grid -->
+    <div class="cs-endpoints-grid" id="cs-endpoints-grid">
+        <div class="cs-loading">Loading endpoints...</div>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div class="cs-bulk-actions">
+        <button class="cs-bulk-btn" onclick="CacheSettingsPage.enableAll()">
+            Enable All Visible
+        </button>
+        <button class="cs-bulk-btn" onclick="CacheSettingsPage.disableAll()">
+            Disable All Visible
+        </button>
     </div>
 </div>
 
 <style>
-    #page-cache-settings .stat-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 16px;
-        text-align: center;
-    }
-    #page-cache-settings .stat-card-value {
-        font-size: 24px;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 4px;
-    }
-    #page-cache-settings .stat-card-label {
-        font-size: 12px;
-        color: var(--text-hint);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    #page-cache-settings .content-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    #page-cache-settings .card-header {
-        padding: 16px;
-        border-bottom: 1px solid var(--border);
-        background: #fafafa;
-    }
-    #page-cache-settings .filter-tab {
-        padding: 8px 16px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        background: var(--surface);
-        color: var(--text-secondary);
-        font-size: 13px;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    #page-cache-settings .filter-tab:hover {
-        border-color: var(--azure-blue);
-        color: var(--azure-blue);
-    }
-    #page-cache-settings .filter-tab.active {
-        background: var(--azure-blue);
-        color: white;
-        border-color: var(--azure-blue);
-    }
-    #page-cache-settings .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    #page-cache-settings .data-table th {
-        padding: 12px 16px;
-        text-align: left;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        background: #fafafa;
-        border-bottom: 1px solid var(--border);
-    }
-    #page-cache-settings .data-table td {
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border);
-        font-size: 14px;
-        vertical-align: middle;
-    }
-    #page-cache-settings .data-table tbody tr:hover {
-        background: #f8f8f8;
-    }
-    #page-cache-settings .endpoint-name {
-        font-weight: 500;
-        color: var(--text-primary);
-    }
-    #page-cache-settings .endpoint-desc {
-        font-size: 12px;
-        color: var(--text-hint);
-        margin-top: 2px;
-    }
-    #page-cache-settings .ttl-slider {
-        width: 100%;
-        height: 6px;
-        -webkit-appearance: none;
-        appearance: none;
-        background: var(--border);
-        border-radius: 3px;
-        outline: none;
-        cursor: pointer;
-    }
-    #page-cache-settings .ttl-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 16px;
-        height: 16px;
-        background: var(--azure-blue);
-        border-radius: 50%;
-        cursor: pointer;
-    }
-    #page-cache-settings .ttl-slider::-moz-range-thumb {
-        width: 16px;
-        height: 16px;
-        background: var(--azure-blue);
-        border-radius: 50%;
-        cursor: pointer;
-        border: none;
-    }
-    #page-cache-settings .ttl-value {
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text-primary);
-        min-width: 50px;
-        display: inline-block;
-    }
-    #page-cache-settings .ttl-range {
-        font-size: 11px;
-        color: var(--text-hint);
-        margin-top: 4px;
-    }
-    #page-cache-settings .badge {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 500;
-        text-transform: uppercase;
-    }
-    #page-cache-settings .badge-category {
-        background: #e9ecef;
-        color: #495057;
-    }
-    #page-cache-settings .badge-priority-critical {
-        background: #dc3545;
-        color: white;
-    }
-    #page-cache-settings .badge-priority-high {
-        background: #fd7e14;
-        color: white;
-    }
-    #page-cache-settings .badge-priority-normal {
-        background: #6c757d;
-        color: white;
-    }
-    #page-cache-settings .badge-priority-low {
-        background: #adb5bd;
-        color: #333;
-    }
-    #page-cache-settings .badge-enabled {
-        background: #28a745;
-        color: white;
-    }
-    #page-cache-settings .badge-disabled {
-        background: #6c757d;
-        color: white;
-    }
-    #page-cache-settings .hit-rate-container {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    #page-cache-settings .hit-rate-bar {
-        width: 60px;
-        height: 6px;
-        background: var(--border);
-        border-radius: 3px;
-        overflow: hidden;
-    }
-    #page-cache-settings .hit-rate-fill {
-        height: 100%;
-        background: #28a745;
-        border-radius: 3px;
-        transition: width 0.3s;
-    }
-    #page-cache-settings .toggle-switch {
-        position: relative;
-        width: 44px;
-        height: 24px;
-        display: inline-block;
-    }
-    #page-cache-settings .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-    #page-cache-settings .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #ccc;
-        transition: 0.3s;
-        border-radius: 24px;
-    }
-    #page-cache-settings .toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        transition: 0.3s;
-        border-radius: 50%;
-    }
-    #page-cache-settings .toggle-switch input:checked + .toggle-slider {
-        background-color: var(--azure-blue);
-    }
-    #page-cache-settings .toggle-switch input:checked + .toggle-slider:before {
-        transform: translateX(20px);
-    }
-    #page-cache-settings .action-btn {
-        padding: 6px 12px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        background: var(--surface);
-        color: var(--text-secondary);
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.2s;
-        margin-right: 4px;
-    }
-    #page-cache-settings .action-btn:hover {
-        border-color: var(--azure-blue);
-        color: var(--azure-blue);
-    }
-    #page-cache-settings .btn-danger {
-        background: #dc3545;
-        border-color: #dc3545;
-        color: white;
-    }
-    #page-cache-settings .btn-danger:hover {
-        background: #c82333;
-        border-color: #c82333;
+#page-cache-settings {
+    max-width: 1400px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-outline:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+/* Stats Row */
+.cs-stats-row {
+    display: flex;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 32px;
+    margin-bottom: 20px;
+    gap: 32px;
+}
+
+.cs-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.cs-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.cs-stat-value.cs-stat-enabled {
+    color: #10b981;
+}
+
+.cs-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cs-stat-divider {
+    width: 1px;
+    height: 36px;
+    background: var(--border);
+}
+
+/* Category Tabs */
+.cs-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.cs-tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.cs-tab:hover {
+    border-color: var(--azure-blue);
+    color: var(--azure-blue);
+}
+
+.cs-tab.active {
+    background: var(--azure-blue);
+    border-color: var(--azure-blue);
+    color: white;
+}
+
+/* Endpoints Grid */
+.cs-endpoints-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.cs-loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px;
+    color: var(--text-secondary);
+}
+
+/* Endpoint Card */
+.cs-endpoint-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s;
+}
+
+.cs-endpoint-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.cs-endpoint-card.disabled {
+    opacity: 0.6;
+}
+
+.cs-endpoint-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.cs-endpoint-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cs-endpoint-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cs-endpoint-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.cs-endpoint-badge.api {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.cs-endpoint-badge.heavy {
+    background: rgba(139, 92, 246, 0.15);
+    color: #7c3aed;
+}
+
+.cs-endpoint-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Toggle Switch */
+.cs-toggle {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.cs-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.cs-toggle-track {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #e5e7eb;
+    transition: 0.2s;
+    border-radius: 26px;
+}
+
+.cs-toggle-track:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.2s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.cs-toggle input:checked + .cs-toggle-track {
+    background-color: #10b981;
+}
+
+.cs-toggle input:checked + .cs-toggle-track:before {
+    transform: translateX(22px);
+}
+
+/* TTL Control */
+.cs-ttl-control {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.cs-ttl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.cs-ttl-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.cs-ttl-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--azure-blue);
+    min-width: 70px;
+    text-align: right;
+}
+
+.cs-ttl-slider-container {
+    position: relative;
+    padding: 0 2px;
+}
+
+.cs-ttl-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right, #10b981 0%, #3b82f6 50%, #8b5cf6 100%);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.cs-ttl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: white;
+    border: 2px solid var(--azure-blue);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transition: transform 0.15s;
+}
+
+.cs-ttl-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.cs-ttl-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: white;
+    border: 2px solid var(--azure-blue);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.cs-ttl-range {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+}
+
+.cs-ttl-range span {
+    font-size: 10px;
+    color: var(--text-hint);
+}
+
+/* Stats Footer */
+.cs-endpoint-stats {
+    display: flex;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.cs-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cs-stat-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.cs-stat-icon.hits {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.cs-stat-icon.misses {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.cs-stat-icon.rate {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.cs-stat-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.cs-stat-text strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Clear button in card */
+.cs-clear-btn {
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: 11px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.cs-clear-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.05);
+}
+
+/* Bulk Actions */
+.cs-bulk-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.cs-bulk-btn {
+    padding: 10px 24px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--background);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.cs-bulk-btn:hover {
+    border-color: var(--azure-blue);
+    color: var(--azure-blue);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .cs-stats-row {
+        flex-wrap: wrap;
+        gap: 20px;
+        padding: 16px 20px;
     }
 
-    @media (max-width: 1200px) {
-        #page-cache-settings .stats-grid {
-            grid-template-columns: repeat(3, 1fr) !important;
-        }
+    .cs-stat-divider {
+        display: none;
     }
-    @media (max-width: 768px) {
-        #page-cache-settings .stats-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-        }
+
+    .cs-stat {
+        flex: 1;
+        min-width: 80px;
     }
+
+    .cs-endpoints-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cs-bulk-actions {
+        flex-direction: column;
+    }
+}
 </style>
 
 <script>
 const CacheSettingsPage = {
     settings: [],
-    categories: [],
-    currentCategory: '',
+    cacheableEndpoints: [],
+    currentCategory: 'all',
 
-    init() {
-        this.loadStats();
-        this.loadCategories();
-        this.loadSettings();
-        // Refresh stats every 30 seconds
-        setInterval(() => this.loadStats(), 30000);
+    // Define cacheable endpoints (match with backend CACHEABLE_ENDPOINTS)
+    endpointConfig: {
+        'threat_intel_lookup': {
+            name: 'Threat Intel Lookup',
+            desc: 'External API lookups (AbuseIPDB, VirusTotal)',
+            badge: 'api',
+            category: 'threat'
+        },
+        'threat_intel_stats': {
+            name: 'Threat Intel Stats',
+            desc: 'Aggregated threat statistics',
+            badge: 'heavy',
+            category: 'threat'
+        },
+        'threat_intel_recent': {
+            name: 'Recent Threats',
+            desc: 'Recently analyzed threat IPs',
+            badge: 'heavy',
+            category: 'threat'
+        },
+        'geoip_lookup': {
+            name: 'GeoIP Lookup',
+            desc: 'IP geolocation lookups',
+            badge: 'api',
+            category: 'geoip'
+        },
+        'geoip_stats': {
+            name: 'GeoIP Statistics',
+            desc: 'Geographic distribution data',
+            badge: 'heavy',
+            category: 'geoip'
+        },
+        'geoip_recent': {
+            name: 'Recent GeoIP',
+            desc: 'Recently geolocated IPs',
+            badge: 'heavy',
+            category: 'geoip'
+        },
+        'events_list': {
+            name: 'Events List',
+            desc: 'Paginated SSH event logs',
+            badge: 'heavy',
+            category: 'events'
+        },
+        'events_count': {
+            name: 'Events Count',
+            desc: 'Total event counters',
+            badge: 'heavy',
+            category: 'events'
+        },
+        'events_analysis': {
+            name: 'Events Analysis',
+            desc: 'Event pattern analysis',
+            badge: 'heavy',
+            category: 'events'
+        },
+        'events_timeline': {
+            name: 'Events Timeline',
+            desc: 'Timeline chart data',
+            badge: 'heavy',
+            category: 'events'
+        },
+        'trends_overview': {
+            name: 'Trends Overview',
+            desc: 'Historical trend summaries',
+            badge: 'heavy',
+            category: 'trends'
+        },
+        'trends_daily': {
+            name: 'Daily Trends',
+            desc: 'Daily attack patterns',
+            badge: 'heavy',
+            category: 'trends'
+        },
+        'trends_geographic': {
+            name: 'Geographic Trends',
+            desc: 'Attack origin trends',
+            badge: 'heavy',
+            category: 'trends'
+        },
+        'daily_reports': {
+            name: 'Daily Reports',
+            desc: 'Generated summary reports',
+            badge: 'heavy',
+            category: 'trends'
+        },
+        'ip_stats_list': {
+            name: 'IP Statistics List',
+            desc: 'Per-IP aggregated statistics',
+            badge: 'heavy',
+            category: 'other'
+        },
+        'ip_stats_summary': {
+            name: 'IP Stats Summary',
+            desc: 'Overall IP summary data',
+            badge: 'heavy',
+            category: 'other'
+        },
+        'ip_stats_detail': {
+            name: 'IP Details',
+            desc: 'Detailed IP information',
+            badge: 'heavy',
+            category: 'other'
+        },
+        'ml_predictions': {
+            name: 'ML Predictions',
+            desc: 'Machine learning results',
+            badge: 'heavy',
+            category: 'other'
+        }
+    },
+
+    async init() {
+        await Promise.all([
+            this.loadData(),
+            this.loadStats()
+        ]);
+        // Auto-refresh stats every 10 seconds
+        setInterval(() => this.loadStats(), 10000);
+    },
+
+    async loadData() {
+        try {
+            const [settingsRes, ttlMapRes] = await Promise.all([
+                fetch('/api/dashboard/cache-settings/list'),
+                fetch('/api/dashboard/cache-settings/ttl-map')
+            ]);
+
+            const settingsData = await settingsRes.json();
+            const ttlMapData = await ttlMapRes.json();
+
+            if (settingsData.success) {
+                this.settings = settingsData.data;
+            }
+
+            if (ttlMapData.success && ttlMapData.cacheable_endpoints) {
+                this.cacheableEndpoints = ttlMapData.cacheable_endpoints;
+            }
+
+            this.updateStats();
+            this.renderEndpoints();
+        } catch (e) {
+            console.error('Failed to load data:', e);
+            document.getElementById('cs-endpoints-grid').innerHTML =
+                '<div class="cs-loading">Failed to load settings</div>';
+        }
     },
 
     async loadStats() {
         try {
             const response = await fetch('/api/dashboard/cache-settings/stats');
             const data = await response.json();
-
             if (data.success) {
                 const stats = data.data;
-
-                document.getElementById('stat-cached-keys').textContent =
-                    stats.redis.cached_keys || 0;
-                document.getElementById('stat-hit-rate').textContent =
-                    stats.performance.hit_rate + '%';
-                document.getElementById('stat-total-hits').textContent =
-                    this.formatNumber(stats.performance.total_hits);
-                document.getElementById('stat-total-misses').textContent =
-                    this.formatNumber(stats.performance.total_misses);
-                document.getElementById('stat-memory').textContent =
-                    stats.redis.used_memory || 'N/A';
-
-                // Update warmer status
-                const warmerRunning = stats.warmer_running;
-                const warmerEl = document.getElementById('stat-warmer');
-                warmerEl.textContent = warmerRunning ? 'Running' : 'Stopped';
-                warmerEl.style.color = warmerRunning ? '#28a745' : 'var(--text-hint)';
-
-                // Toggle buttons
-                document.getElementById('btn-start-warmer').style.display = warmerRunning ? 'none' : 'inline-block';
-                document.getElementById('btn-stop-warmer').style.display = warmerRunning ? 'inline-block' : 'none';
-
-                document.getElementById('auto-refresh-count').textContent = stats.endpoints.auto_refresh;
+                document.getElementById('stat-cached-keys').textContent = stats.redis?.cached_keys || 0;
+                document.getElementById('stat-hit-rate').textContent = (stats.performance?.hit_rate || 0) + '%';
+                document.getElementById('stat-total-hits').textContent = this.formatNumber(stats.performance?.total_hits || 0);
+                document.getElementById('stat-memory').textContent = stats.redis?.used_memory || '0 MB';
             }
         } catch (e) {
             console.error('Failed to load stats:', e);
         }
     },
 
-    async loadCategories() {
-        try {
-            const response = await fetch('/api/dashboard/cache-settings/categories');
-            const data = await response.json();
+    updateStats() {
+        // Only update the enabled count - other stats come from loadStats() API
+        const cacheableSettings = this.getCacheableSettings();
+        const enabledCount = cacheableSettings.filter(s => s.is_enabled).length;
+        const totalCount = cacheableSettings.length;
 
-            if (data.success) {
-                this.categories = data.data;
-                this.renderCategoryTabs();
-            }
-        } catch (e) {
-            console.error('Failed to load categories:', e);
-        }
+        document.getElementById('stat-enabled').textContent = `${enabledCount}/${totalCount}`;
     },
 
-    renderCategoryTabs() {
-        const tabs = document.getElementById('categoryTabs');
-        let html = '<button class="filter-tab active" data-category="" onclick="CacheSettingsPage.filterCategory(\'\')">All</button>';
-
-        for (const cat of this.categories) {
-            html += `
-                <button class="filter-tab" data-category="${cat.category}"
-                   onclick="CacheSettingsPage.filterCategory('${cat.category}')">
-                    ${this.formatCategoryName(cat.category)} (${cat.count})
-                </button>
-            `;
-        }
-
-        tabs.innerHTML = html;
-    },
-
-    formatCategoryName(cat) {
-        return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    getCacheableSettings() {
+        const knownKeys = Object.keys(this.endpointConfig);
+        return this.settings.filter(s =>
+            knownKeys.includes(s.endpoint_key) ||
+            this.cacheableEndpoints.includes(s.endpoint_key)
+        );
     },
 
     filterCategory(category) {
         this.currentCategory = category;
 
-        // Update active tab
-        document.querySelectorAll('#categoryTabs .filter-tab').forEach(tab => {
-            const tabCategory = tab.dataset.category;
-            tab.classList.toggle('active', tabCategory === category);
+        // Update tab active state
+        document.querySelectorAll('.cs-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.category === category);
         });
 
-        this.loadSettings();
+        this.renderEndpoints();
     },
 
-    async loadSettings() {
-        try {
-            let url = '/api/dashboard/cache-settings/list';
-            if (this.currentCategory) {
-                url += `?category=${this.currentCategory}`;
-            }
+    renderEndpoints() {
+        const container = document.getElementById('cs-endpoints-grid');
+        const cacheableSettings = this.getCacheableSettings();
 
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.success) {
-                this.settings = data.data;
-                this.renderSettings();
-            }
-        } catch (e) {
-            console.error('Failed to load settings:', e);
+        // Filter by category
+        let filtered = cacheableSettings;
+        if (this.currentCategory !== 'all') {
+            filtered = cacheableSettings.filter(s => {
+                const config = this.endpointConfig[s.endpoint_key];
+                return config && config.category === this.currentCategory;
+            });
         }
-    },
 
-    renderSettings() {
-        const tbody = document.getElementById('settings-tbody');
-
-        if (!this.settings.length) {
-            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-hint);">No settings found</td></tr>';
+        if (!filtered.length) {
+            container.innerHTML = '<div class="cs-loading">No endpoints in this category</div>';
             return;
         }
 
         let html = '';
-        for (const s of this.settings) {
+        for (const s of filtered) {
+            const config = this.endpointConfig[s.endpoint_key] || {
+                name: s.endpoint_name || s.endpoint_key.replace(/_/g, ' '),
+                desc: s.endpoint_description || '',
+                badge: 'heavy',
+                category: 'other'
+            };
+
+            const hitRate = s.hit_count + s.miss_count > 0
+                ? Math.round((s.hit_count / (s.hit_count + s.miss_count)) * 100)
+                : 0;
+
             html += `
-                <tr data-id="${s.id}">
-                    <td>
-                        <div class="endpoint-name">${s.endpoint_name}</div>
-                        <div class="endpoint-desc">${s.endpoint_description || ''}</div>
-                    </td>
-                    <td><span class="badge badge-category">${this.formatCategoryName(s.category)}</span></td>
-                    <td>
-                        <span class="ttl-value" id="ttl-display-${s.id}">${this.formatTTL(s.ttl_seconds)}</span>
-                    </td>
-                    <td>
-                        <input type="range" class="ttl-slider" id="ttl-slider-${s.id}"
-                               min="${s.min_ttl_seconds}" max="${s.max_ttl_seconds}"
-                               value="${s.ttl_seconds}"
-                               onchange="CacheSettingsPage.updateTTL(${s.id}, this.value)"
-                               oninput="CacheSettingsPage.previewTTL(${s.id}, this.value)">
-                        <div class="ttl-range">
-                            ${this.formatTTL(s.min_ttl_seconds)} - ${this.formatTTL(s.max_ttl_seconds)}
-                        </div>
-                    </td>
-                    <td>
-                        <label class="toggle-switch">
-                            <input type="checkbox" ${s.auto_refresh_enabled ? 'checked' : ''}
-                                   onchange="CacheSettingsPage.toggleAutoRefresh(${s.id}, this.checked)">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </td>
-                    <td>
-                        <span class="badge badge-priority-${s.priority}">${s.priority}</span>
-                    </td>
-                    <td>
-                        <div class="hit-rate-container">
-                            <span>${s.hit_rate}%</span>
-                            <div class="hit-rate-bar">
-                                <div class="hit-rate-fill" style="width: ${s.hit_rate}%"></div>
+                <div class="cs-endpoint-card ${s.is_enabled ? '' : 'disabled'}" data-id="${s.id}" data-category="${config.category}">
+                    <div class="cs-endpoint-header">
+                        <div class="cs-endpoint-title">
+                            <div class="cs-endpoint-name">
+                                ${config.name}
+                                <span class="cs-endpoint-badge ${config.badge}">${config.badge}</span>
                             </div>
+                            <div class="cs-endpoint-desc">${config.desc}</div>
                         </div>
-                    </td>
-                    <td>
-                        <span class="badge ${s.is_enabled ? 'badge-enabled' : 'badge-disabled'}">
-                            ${s.is_enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="action-btn" onclick="CacheSettingsPage.clearEndpointCache('${s.endpoint_key}')"
-                                title="Clear cache for this endpoint">Clear</button>
-                        <button class="action-btn" onclick="CacheSettingsPage.resetSetting(${s.id})"
-                                title="Reset to default">Reset</button>
-                    </td>
-                </tr>
+                        <label class="cs-toggle">
+                            <input type="checkbox" ${s.is_enabled ? 'checked' : ''}
+                                   onchange="CacheSettingsPage.toggleEnabled(${s.id}, this.checked)">
+                            <span class="cs-toggle-track"></span>
+                        </label>
+                    </div>
+
+                    <div class="cs-ttl-control">
+                        <div class="cs-ttl-header">
+                            <span class="cs-ttl-label">Cache Duration (TTL)</span>
+                            <span class="cs-ttl-value" id="ttl-val-${s.id}">${this.formatTTL(s.ttl_seconds)}</span>
+                        </div>
+                        <div class="cs-ttl-slider-container">
+                            <input type="range" class="cs-ttl-slider"
+                                   min="${s.min_ttl_seconds}"
+                                   max="${s.max_ttl_seconds}"
+                                   value="${s.ttl_seconds}"
+                                   oninput="CacheSettingsPage.previewTTL(${s.id}, this.value)"
+                                   onchange="CacheSettingsPage.updateTTL(${s.id}, this.value)">
+                        </div>
+                        <div class="cs-ttl-range">
+                            <span>${this.formatTTL(s.min_ttl_seconds)}</span>
+                            <span>${this.formatTTL(s.max_ttl_seconds)}</span>
+                        </div>
+                    </div>
+
+                    <div class="cs-endpoint-stats">
+                        <div class="cs-stat-item">
+                            <div class="cs-stat-icon hits">✓</div>
+                            <span class="cs-stat-text"><strong>${this.formatNumber(s.hit_count || 0)}</strong> hits</span>
+                        </div>
+                        <div class="cs-stat-item">
+                            <div class="cs-stat-icon misses">✗</div>
+                            <span class="cs-stat-text"><strong>${this.formatNumber(s.miss_count || 0)}</strong> misses</span>
+                        </div>
+                        <div class="cs-stat-item">
+                            <div class="cs-stat-icon rate">%</div>
+                            <span class="cs-stat-text"><strong>${hitRate}%</strong> rate</span>
+                        </div>
+                        <button class="cs-clear-btn" onclick="CacheSettingsPage.clearEndpointCache('${s.endpoint_key}')">
+                            Clear
+                        </button>
+                    </div>
+                </div>
             `;
         }
 
-        tbody.innerHTML = html;
+        container.innerHTML = html;
     },
 
     formatTTL(seconds) {
+        if (!seconds) return '0s';
         if (seconds >= 3600) {
-            return (seconds / 3600).toFixed(1) + 'h';
+            const hours = Math.round(seconds / 3600 * 10) / 10;
+            return hours === 1 ? '1 hour' : hours + 'h';
         } else if (seconds >= 60) {
-            return Math.round(seconds / 60) + 'm';
+            const mins = Math.round(seconds / 60);
+            return mins + ' min';
         }
         return seconds + 's';
     },
@@ -541,7 +819,7 @@ const CacheSettingsPage = {
     },
 
     previewTTL(id, value) {
-        document.getElementById(`ttl-display-${id}`).textContent = this.formatTTL(parseInt(value));
+        document.getElementById(`ttl-val-${id}`).textContent = this.formatTTL(parseInt(value));
     },
 
     async updateTTL(id, value) {
@@ -551,160 +829,149 @@ const CacheSettingsPage = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ttl_seconds: parseInt(value) })
             });
-
             const data = await response.json();
-            if (!data.success) {
-                alert('Failed to update TTL: ' + data.error);
-                this.loadSettings();
+            if (data.success) {
+                showNotification('TTL updated', 'success');
+                // Update local data
+                const setting = this.settings.find(s => s.id === id);
+                if (setting) setting.ttl_seconds = parseInt(value);
+            } else {
+                showNotification('Failed to update: ' + (data.error || 'Unknown error'), 'error');
+                this.loadData();
             }
         } catch (e) {
             console.error('Failed to update TTL:', e);
+            showNotification('Failed to update TTL', 'error');
         }
     },
 
-    async toggleAutoRefresh(id, enabled) {
+    async toggleEnabled(id, enabled) {
         try {
             const response = await fetch(`/api/dashboard/cache-settings/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ auto_refresh_enabled: enabled })
+                body: JSON.stringify({ is_enabled: enabled })
             });
-
             const data = await response.json();
-            if (!data.success) {
-                alert('Failed to update: ' + data.error);
-                this.loadSettings();
+            if (data.success) {
+                showNotification(enabled ? 'Cache enabled' : 'Cache disabled', 'success');
+                // Update local data and re-render
+                const setting = this.settings.find(s => s.id === id);
+                if (setting) setting.is_enabled = enabled;
+                this.updateStats();
+
+                // Update card visual state
+                const card = document.querySelector(`.cs-endpoint-card[data-id="${id}"]`);
+                if (card) card.classList.toggle('disabled', !enabled);
             } else {
-                this.loadStats();
+                showNotification('Failed to update', 'error');
+                this.loadData();
             }
         } catch (e) {
-            console.error('Failed to toggle auto-refresh:', e);
+            console.error('Failed to toggle:', e);
+        }
+    },
+
+    async enableAll() {
+        const visible = this.getVisibleSettings();
+        if (!visible.length) return;
+
+        await this.bulkToggle(visible, true);
+    },
+
+    async disableAll() {
+        const visible = this.getVisibleSettings();
+        if (!visible.length) return;
+
+        await this.bulkToggle(visible, false);
+    },
+
+    getVisibleSettings() {
+        const cacheableSettings = this.getCacheableSettings();
+        if (this.currentCategory === 'all') return cacheableSettings;
+
+        return cacheableSettings.filter(s => {
+            const config = this.endpointConfig[s.endpoint_key];
+            return config && config.category === this.currentCategory;
+        });
+    },
+
+    async bulkToggle(settings, enabled) {
+        try {
+            const updates = settings.map(s => ({ id: s.id, is_enabled: enabled }));
+            const response = await fetch('/api/dashboard/cache-settings/bulk-update', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: updates })
+            });
+            const data = await response.json();
+            if (data.success) {
+                showNotification(`${enabled ? 'Enabled' : 'Disabled'} ${settings.length} endpoints`, 'success');
+                await this.loadData();
+            }
+        } catch (e) {
+            console.error('Bulk toggle failed:', e);
+            showNotification('Bulk update failed', 'error');
         }
     },
 
     async clearEndpointCache(endpointKey) {
         try {
-            const response = await fetch(`/api/dashboard/cache-settings/clear/${endpointKey}`, {
-                method: 'POST'
+            const response = await fetch('/api/dashboard/cache-settings/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint_key: endpointKey })
             });
-
             const data = await response.json();
             if (data.success) {
+                showNotification('Cache cleared for ' + endpointKey, 'success');
                 this.loadStats();
-            } else {
-                alert('Failed to clear cache: ' + data.error);
             }
         } catch (e) {
-            console.error('Failed to clear cache:', e);
+            console.error('Clear failed:', e);
         }
     },
 
     async clearAllCache() {
-        if (!confirm('Are you sure you want to clear all cache data?')) return;
+        if (!confirm('Clear all cached data? Pages may load slower temporarily.')) return;
 
         try {
             const response = await fetch('/api/dashboard/cache-settings/clear', {
                 method: 'POST'
             });
-
             const data = await response.json();
             if (data.success) {
-                alert(data.message);
-                this.loadStats();
-                this.loadSettings();
-            } else {
-                alert('Failed to clear cache: ' + data.error);
+                showNotification('All cache cleared', 'success');
+                await this.loadData();
             }
         } catch (e) {
-            console.error('Failed to clear cache:', e);
-        }
-    },
-
-    async warmCache() {
-        try {
-            const response = await fetch('/api/dashboard/cache-settings/warm', {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-            alert(data.message);
-            this.loadStats();
-        } catch (e) {
-            console.error('Failed to warm cache:', e);
-        }
-    },
-
-    async resetSetting(id) {
-        try {
-            const response = await fetch(`/api/dashboard/cache-settings/reset/${id}`, {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                this.loadSettings();
-            } else {
-                alert('Failed to reset: ' + data.error);
-            }
-        } catch (e) {
-            console.error('Failed to reset:', e);
+            console.error('Clear failed:', e);
         }
     },
 
     async resetAll() {
-        if (!confirm('Are you sure you want to reset all settings to defaults?')) return;
+        if (!confirm('Reset all settings to defaults?')) return;
 
         try {
             const response = await fetch('/api/dashboard/cache-settings/reset-all', {
                 method: 'POST'
             });
-
             const data = await response.json();
             if (data.success) {
-                alert(data.message);
-                this.loadSettings();
-                this.loadStats();
-            } else {
-                alert('Failed to reset: ' + data.error);
+                showNotification('Settings reset to defaults', 'success');
+                await this.loadData();
             }
         } catch (e) {
-            console.error('Failed to reset all:', e);
-        }
-    },
-
-    async startAutoWarmer() {
-        try {
-            const response = await fetch('/api/dashboard/cache-settings/warmer/start-auto', {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-            alert(data.message);
-            this.loadStats();
-        } catch (e) {
-            console.error('Failed to start warmer:', e);
-        }
-    },
-
-    async stopAutoWarmer() {
-        try {
-            const response = await fetch('/api/dashboard/cache-settings/warmer/stop', {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-            alert(data.message);
-            this.loadStats();
-        } catch (e) {
-            console.error('Failed to stop warmer:', e);
+            console.error('Reset failed:', e);
         }
     }
 };
 
-// Initialize when page loads
-if (typeof pageInitCallbacks !== 'undefined') {
-    pageInitCallbacks['cache-settings'] = () => CacheSettingsPage.init();
-} else {
-    document.addEventListener('DOMContentLoaded', () => CacheSettingsPage.init());
-}
+// Auto-init if page is already visible (direct navigation)
+document.addEventListener('DOMContentLoaded', function() {
+    const page = document.getElementById('page-cache-settings');
+    if (page && page.style.display !== 'none') {
+        CacheSettingsPage.init();
+    }
+});
 </script>

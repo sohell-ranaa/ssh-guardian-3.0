@@ -374,34 +374,57 @@ const CacheManager = {
     // Track cache status for each endpoint
     cacheStatus: {},
 
-    // TTL values (in seconds) for different cache types - OPTIMIZED
+    // TTL values (in seconds) - LOADED FROM API
+    // Default fallbacks until API loads
     ttlMap: {
-        'events': 120,           // 2 minutes
-        'events_analysis': 300,  // 5 minutes
-        'ip_stats': 300,         // 5 minutes
-        'blocking': 300,         // 5 minutes
-        'geoip': 1800,           // 30 minutes
-        'threat_intel': 1800,    // 30 minutes
-        'ml': 600,               // 10 minutes
-        'ml_training': 300,      // 5 minutes
-        'ml_performance': 600,   // 10 minutes
-        'ml_comparison': 600,    // 10 minutes
-        'ml_benefits': 600,      // 10 minutes
-        'daily_reports': 1800,   // 30 minutes
-        'trends': 1800,          // 30 minutes
-        'audit': 300,            // 5 minutes
-        'notifications': 300,    // 5 minutes
-        'simulation': 300,       // 5 minutes
-        'agents': 60             // 1 minute (agents need fresh data)
+        'events': 120,
+        'threat_intel': 7200,
+        'geoip': 7200,
+        'trends': 1800,
+        'reports': 1800,
+        'ip_stats': 600
     },
 
+    // Whether TTL map has been loaded from API
+    ttlMapLoaded: false,
+
+    // Cacheable endpoints (loaded from API)
+    cacheableEndpoints: [],
+
     // Initialize cache manager
-    init() {
+    async init() {
+        // Load TTL map from API
+        await this.loadTtlMap();
+
         // Add cache toggle button to header if not exists
         this.addCacheToggleButton();
 
         // Start periodic status check
         setInterval(() => this.updateAllCacheTimers(), 1000);
+
+        // Reload TTL map periodically (every 60 seconds) to pick up settings changes
+        setInterval(() => this.loadTtlMap(), 60000);
+    },
+
+    // Load TTL map from API (database-driven)
+    async loadTtlMap() {
+        try {
+            const response = await fetch('/api/dashboard/cache-settings/ttl-map', {
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+            const data = await response.json();
+
+            if (data.success && data.ttl_map) {
+                this.ttlMap = { ...this.ttlMap, ...data.ttl_map };
+                this.ttlMapLoaded = true;
+                if (data.cacheable_endpoints) {
+                    this.cacheableEndpoints = data.cacheable_endpoints;
+                }
+                console.log('[CacheManager] TTL map loaded from database');
+            }
+        } catch (error) {
+            console.warn('[CacheManager] Failed to load TTL map from API, using defaults');
+        }
     },
 
     // Add cache toggle button to header

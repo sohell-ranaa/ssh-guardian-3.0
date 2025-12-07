@@ -26,23 +26,37 @@ async function loadThreatStats() {
 
         if (data.success && data.stats) {
             const stats = data.stats;
-            document.getElementById('stat-total-threats').textContent = stats.total_ips.toLocaleString();
+            document.getElementById('stat-total-threats').textContent = (stats.total_ips || 0).toLocaleString();
 
-            // Calculate critical and high separately
-            const criticalCount = stats.threat_levels?.critical || 0;
-            const highCount = stats.high_threat_count || stats.threat_levels?.high || 0;
+            // Parse threat_levels array to get counts
+            let criticalCount = 0;
+            let highCount = 0;
+            if (Array.isArray(stats.threat_levels)) {
+                stats.threat_levels.forEach(level => {
+                    if (level.overall_threat_level === 'critical') {
+                        criticalCount = level.count || 0;
+                    } else if (level.overall_threat_level === 'high') {
+                        highCount = level.count || 0;
+                    }
+                });
+            }
 
             const criticalEl = document.getElementById('stat-critical-threat');
             if (criticalEl) {
                 criticalEl.textContent = criticalCount.toLocaleString();
             }
-            document.getElementById('stat-high-threat').textContent = highCount.toLocaleString();
+
+            const highEl = document.getElementById('stat-high-threat');
+            if (highEl) {
+                // Use high_threat_count if available (includes both high + critical)
+                highEl.textContent = (stats.high_threat_count || highCount).toLocaleString();
+            }
 
             const abuseipdb = stats.abuseipdb || {};
             const avgScore = abuseipdb.avg_score ? parseFloat(abuseipdb.avg_score).toFixed(1) : '0.0';
             document.getElementById('stat-avg-score').textContent = avgScore;
             document.getElementById('stat-total-reports').textContent =
-                (abuseipdb.total_reports || 0).toLocaleString();
+                Math.round(abuseipdb.total_reports || 0).toLocaleString();
         }
     } catch (error) {
         console.error('Error loading threat stats:', error);
@@ -52,6 +66,7 @@ async function loadThreatStats() {
 // Load threat level distribution
 async function loadThreatDistribution() {
     const container = document.getElementById('threat-distribution');
+    if (!container) return;
 
     try {
         const response = await fetch('/api/threat-intel/stats');
@@ -62,8 +77,15 @@ async function loadThreatDistribution() {
             return;
         }
 
-        const levels = data.stats.threat_levels;
-        const total = Object.values(levels).reduce((a, b) => a + b, 0);
+        // Convert array to object for easier access
+        const levelCounts = {};
+        let total = 0;
+        if (Array.isArray(data.stats.threat_levels)) {
+            data.stats.threat_levels.forEach(level => {
+                levelCounts[level.overall_threat_level] = level.count || 0;
+                total += level.count || 0;
+            });
+        }
 
         if (total === 0) {
             container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">No threats tracked yet</div>';
@@ -71,11 +93,11 @@ async function loadThreatDistribution() {
         }
 
         const distribution = [
-            { level: 'Clean', count: levels.clean || 0, color: '#10b981' },
-            { level: 'Low', count: levels.low || 0, color: '#3b82f6' },
-            { level: 'Medium', count: levels.medium || 0, color: '#f59e0b' },
-            { level: 'High', count: levels.high || 0, color: '#fb923c' },
-            { level: 'Critical', count: levels.critical || 0, color: '#ef4444' }
+            { level: 'Clean', count: levelCounts.clean || 0, color: '#10b981' },
+            { level: 'Low', count: levelCounts.low || 0, color: '#3b82f6' },
+            { level: 'Medium', count: levelCounts.medium || 0, color: '#f59e0b' },
+            { level: 'High', count: levelCounts.high || 0, color: '#fb923c' },
+            { level: 'Critical', count: levelCounts.critical || 0, color: '#ef4444' }
         ].filter(item => item.count > 0);
 
         container.innerHTML = `

@@ -100,7 +100,8 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                     agent_id: Optional[int] = None,
                     agent_batch_id: Optional[int] = None,
                     simulation_run_id: Optional[int] = None,
-                    target_server_override: Optional[str] = None) -> Dict:
+                    target_server_override: Optional[str] = None,
+                    skip_blocking: bool = False) -> Dict:
     """
     Process a single log line and create auth_event
 
@@ -111,6 +112,7 @@ def process_log_line(log_line: str, source_type: str = 'agent',
         agent_batch_id: Batch ID if from agent batch
         simulation_run_id: Simulation run ID if from simulation
         target_server_override: Override target server name (for simulations)
+        skip_blocking: Skip auto-blocking (analysis-only mode for simulations without agent)
 
     Returns:
         dict with success status and event_id or error
@@ -193,7 +195,10 @@ def process_log_line(log_line: str, source_type: str = 'agent',
             try:
                 enrich_event = _get_enrichment_module()
                 if enrich_event:
-                    enrichment_result = enrich_event(event_id, source_ip, verbose=False)
+                    enrichment_result = enrich_event(
+                        event_id, source_ip, verbose=False,
+                        skip_blocking=skip_blocking
+                    )
             except Exception as e:
                 # Don't fail the event if enrichment fails
                 enrichment_result = {'error': str(e)}

@@ -41,6 +41,7 @@ from routes.simulation_routes import simulation_routes
 from routes.ml_routes import ml_routes
 from routes.ml_training_routes import ml_training_routes
 from routes.demo_routes import demo_routes
+from routes.pipeline_simulation_routes import pipeline_simulation_routes
 from routes.system_routes import system_routes
 from routes.cache_settings_routes import cache_settings_routes
 from routes.export_routes import export_routes
@@ -87,6 +88,7 @@ app.register_blueprint(simulation_routes, url_prefix='/api/simulation')  # Simul
 app.register_blueprint(ml_routes)  # ML Intelligence API
 app.register_blueprint(ml_training_routes)  # ML Training API
 app.register_blueprint(demo_routes, url_prefix='/api/demo')  # Demo scenarios API
+app.register_blueprint(pipeline_simulation_routes, url_prefix='/api/pipeline-sim')  # Full pipeline simulation API
 app.register_blueprint(system_routes, url_prefix='/api/dashboard/system')  # System status & cache API
 app.register_blueprint(cache_settings_routes, url_prefix='/api/dashboard/cache-settings')  # Cache settings API
 app.register_blueprint(export_routes)  # Data export API

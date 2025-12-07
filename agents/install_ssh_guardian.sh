@@ -3,9 +3,15 @@
 # ============================================================================
 # SSH Guardian v3.0 - Complete Agent Installer
 # ============================================================================
-# Single-file installer that deploys the full agent with UFW support.
+# Single-file installer that deploys the full agent with bidirectional UFW sync.
 # Default server: https://ssh-guardian.rpu.solutions
 # API keys are auto-generated on registration - approve in dashboard.
+#
+# Bidirectional UFW Features:
+#   • Agent → Dashboard: Syncs UFW rules, status, and listening ports
+#   • Dashboard → Agent: Auto-blocks malicious IPs detected by ML
+#   • Supports: deny_from, delete_deny_from for IP blocking/unblocking
+#   • Real-time rule execution with status reporting
 #
 # Quick Install (uses defaults):
 #   curl -sSL https://ssh-guardian.rpu.solutions/install.sh | sudo bash
@@ -60,7 +66,9 @@ print_banner() {
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}  ${BOLD}SSH Guardian v${VERSION} - Agent Installer${NC}                          ${CYAN}║${NC}"
-    echo -e "${CYAN}║${NC}  Secure SSH monitoring with UFW firewall management            ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  Secure SSH monitoring with bidirectional UFW sync             ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  • Auto-blocks malicious IPs detected by ML                    ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  • Syncs UFW rules to/from central dashboard                   ${CYAN}║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -436,6 +444,9 @@ class UFWManager:
                 'reload': self._reload, 'default': self._set_default, 'logging': self._set_logging,
                 'sync_now': lambda p: (True, 'Sync requested'), 'raw': self._execute_raw,
                 'reorder': self._reorder,
+                # SSH Guardian auto-block command types (bidirectional UFW sync)
+                'deny_from': lambda p: self._deny({'from_ip': p.get('ip')}),
+                'delete_deny_from': lambda p: self._delete_by_rule({'action': 'deny', 'from_ip': p.get('ip')}),
             }
             handler = handlers.get(command_type)
             if handler:
@@ -982,12 +993,22 @@ class SSHGuardianAgent:
                 action = cmd.get('action') or cmd.get('command_type')
                 params = cmd.get('params', {})
 
-                logging.info(f"Processing UFW command: {action} (ID: {command_id})")
+                # Enhanced logging for auto-block commands
+                if action == 'deny_from':
+                    logging.info(f"🚫 Auto-blocking IP: {params.get('ip')} (block_id: {params.get('block_id')})")
+                elif action == 'delete_deny_from':
+                    logging.info(f"✅ Unblocking IP: {params.get('ip')} (block_id: {params.get('block_id')})")
+                else:
+                    logging.info(f"Processing UFW command: {action} (ID: {command_id})")
+
                 success, message = self.ufw_manager.execute_command(action, params)
                 self.api_client.report_command_result(command_id, success, message)
 
                 if success:
-                    logging.info(f"Command {command_id} executed: {message}")
+                    if action in ('deny_from', 'delete_deny_from'):
+                        logging.info(f"{'🚫 Blocked' if action == 'deny_from' else '✅ Unblocked'}: {params.get('ip')} - {message}")
+                    else:
+                        logging.info(f"Command {command_id} executed: {message}")
                     self._sync_firewall()
                 else:
                     logging.error(f"Command {command_id} failed: {message}")

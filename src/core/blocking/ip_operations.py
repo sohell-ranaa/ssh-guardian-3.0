@@ -14,6 +14,9 @@ sys.path.append(str(PROJECT_ROOT / "dbs"))
 
 from connection import get_connection, ip_to_binary
 
+# Import UFW sync module for auto-firewall updates
+from .ufw_sync import create_ufw_block_commands, create_ufw_unblock_commands
+
 
 def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_id=None,
              trigger_event_id=None, failed_attempts=0, threat_level=None,
@@ -159,12 +162,22 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
 
             conn.commit()
 
+            # Create UFW block commands for agent(s)
+            ufw_result = create_ufw_block_commands(
+                ip_address=ip_address,
+                block_id=block_id,
+                agent_id=None,  # Will determine from trigger_event
+                trigger_event_id=trigger_event_id
+            )
+
             # Build message with mutual exclusivity info
             msg = f'IP {ip_address} blocked successfully'
             if removed_from_whitelist:
                 msg += ' (removed from whitelist)'
             if removed_from_watchlist:
                 msg += ' (removed from watchlist)'
+            if ufw_result.get('commands_created', 0) > 0:
+                msg += f' (UFW commands: {ufw_result["commands_created"]})'
 
             print(f"🚫 Blocked IP: {ip_address} - {block_reason}")
 
@@ -174,7 +187,8 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 'message': msg,
                 'unblock_at': unblock_at.isoformat() if unblock_at else None,
                 'removed_from_whitelist': removed_from_whitelist,
-                'removed_from_watchlist': removed_from_watchlist
+                'removed_from_watchlist': removed_from_watchlist,
+                'ufw_commands_created': ufw_result.get('commands_created', 0)
             }
 
         except Exception as e:
@@ -252,11 +266,22 @@ def unblock_ip(ip_address, unblock_reason='Manual unblock', unblocked_by_user_id
 
             conn.commit()
 
+            # Create UFW unblock commands for agent(s)
+            ufw_result = create_ufw_unblock_commands(
+                ip_address=ip_address,
+                block_id=block_id
+            )
+
             print(f"✅ Unblocked IP: {ip_address} - {unblock_reason}")
+
+            msg = f'IP {ip_address} unblocked successfully'
+            if ufw_result.get('commands_created', 0) > 0:
+                msg += f' (UFW commands: {ufw_result["commands_created"]})'
 
             return {
                 'success': True,
-                'message': f'IP {ip_address} unblocked successfully'
+                'message': msg,
+                'ufw_commands_created': ufw_result.get('commands_created', 0)
             }
 
         except Exception as e:

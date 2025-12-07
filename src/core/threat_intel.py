@@ -22,6 +22,23 @@ from connection import get_connection
 load_dotenv(PROJECT_ROOT / ".env")
 
 
+def _get_api_key_from_db(integration_id: str) -> str:
+    """Load API key from database integration_config table."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT config_value FROM integration_config
+            WHERE integration_id = %s AND config_key = 'api_key'
+        """, (integration_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row.get('config_value') if row else None
+    except Exception:
+        return None
+
+
 class ThreatIntelligence:
     """
     Threat Intelligence API integrations
@@ -32,10 +49,10 @@ class ThreatIntelligence:
     - Shodan: Open ports and vulnerabilities
     """
 
-    # API Configuration
-    ABUSEIPDB_API_KEY = os.getenv('ABUSEIPDB_API_KEY')
-    VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY')
-    SHODAN_API_KEY = os.getenv('SHODAN_API_KEY')
+    # API Configuration - Try env vars first, then database
+    ABUSEIPDB_API_KEY = os.getenv('ABUSEIPDB_API_KEY') or _get_api_key_from_db('abuseipdb')
+    VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY') or _get_api_key_from_db('virustotal')
+    SHODAN_API_KEY = os.getenv('SHODAN_API_KEY') or _get_api_key_from_db('shodan')
 
     # Rate limits (per day)
     ABUSEIPDB_RATE_LIMIT = int(os.getenv('ABUSEIPDB_RATE_LIMIT_PER_DAY', 1000))

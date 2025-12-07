@@ -353,6 +353,10 @@
                     if (typeof initFirewallPage === 'function') {
                         initFirewallPage();
                     }
+                } else if (pageName === 'cache-settings') {
+                    if (typeof CacheSettingsPage !== 'undefined' && typeof CacheSettingsPage.init === 'function') {
+                        CacheSettingsPage.init();
+                    }
                 }
             }
         }

@@ -1000,6 +1000,342 @@ def list_whitelist():
         }), 500
 
 
+@blocking_routes.route('/blocks/pending', methods=['GET'])
+def list_pending_blocks():
+    """
+    Get list of blocks pending approval
+
+    Returns blocks where approval_status = 'pending' and is_active = TRUE
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    ib.id,
+                    ib.ip_address_text,
+                    ib.block_reason,
+                    ib.block_source,
+                    ib.threat_level,
+                    ib.blocked_at,
+                    ib.approval_status,
+                    br.rule_name,
+                    ae.ml_risk_score,
+                    ae.ml_threat_type,
+                    geo.country_name,
+                    geo.city
+                FROM ip_blocks ib
+                LEFT JOIN blocking_rules br ON ib.blocking_rule_id = br.id
+                LEFT JOIN auth_events ae ON ib.trigger_event_id = ae.id
+                LEFT JOIN ip_geolocation geo ON ib.ip_address_text = geo.ip_address_text
+                WHERE ib.approval_status = 'pending'
+                AND ib.is_active = TRUE
+                ORDER BY ib.blocked_at DESC
+            """)
+
+            pending_blocks = cursor.fetchall()
+
+            # Format response
+            formatted = []
+            for block in pending_blocks:
+                formatted.append({
+                    'id': block['id'],
+                    'ip_address': block['ip_address_text'],
+                    'reason': block['block_reason'],
+                    'source': block['block_source'],
+                    'threat_level': block['threat_level'],
+                    'blocked_at': block['blocked_at'].isoformat() if block['blocked_at'] else None,
+                    'rule_name': block['rule_name'],
+                    'ml_risk_score': block['ml_risk_score'],
+                    'ml_threat_type': block['ml_threat_type'],
+                    'location': {
+                        'country': block['country_name'],
+                        'city': block['city']
+                    } if block['country_name'] else None
+                })
+
+            return jsonify({
+                'success': True,
+                'pending_blocks': formatted,
+                'count': len(formatted)
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error fetching pending blocks: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch pending blocks'
+        }), 500
+
+
+@blocking_routes.route('/blocks/<int:block_id>/approve', methods=['POST'])
+def approve_block(block_id):
+    """
+    Approve a pending block
+
+    This sets approval_status to 'approved' and creates UFW commands
+    """
+    try:
+        user_id = get_current_user_id()
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Get block info
+            cursor.execute("""
+                SELECT id, ip_address_text, approval_status, is_active
+                FROM ip_blocks
+                WHERE id = %s
+            """, (block_id,))
+
+            block = cursor.fetchone()
+
+            if not block:
+                return jsonify({
+                    'success': False,
+                    'error': 'Block not found'
+                }), 404
+
+            if block['approval_status'] != 'pending':
+                return jsonify({
+                    'success': False,
+                    'error': f"Block is already {block['approval_status']}"
+                }), 400
+
+            # Update approval status
+            cursor.execute("""
+                UPDATE ip_blocks
+                SET approval_status = 'approved',
+                    approved_by = %s,
+                    approved_at = NOW()
+                WHERE id = %s
+            """, (user_id, block_id))
+
+            conn.commit()
+
+            # Create UFW block commands now that it's approved
+            try:
+                from core.blocking.ufw_sync import create_ufw_block_commands
+                ufw_result = create_ufw_block_commands(
+                    ip_address=block['ip_address_text'],
+                    block_id=block_id
+                )
+            except Exception as e:
+                print(f"UFW sync error: {e}")
+                ufw_result = {'commands_created': 0}
+
+            # Invalidate cache
+            invalidate_blocking_cache()
+
+            # Audit log
+            AuditLogger.log_action(
+                user_id=user_id,
+                action='block_approved',
+                resource_type='ip_block',
+                resource_id=block['ip_address_text'],
+                details={'block_id': block_id, 'ip_address': block['ip_address_text']},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
+            return jsonify({
+                'success': True,
+                'message': f'Block for {block["ip_address_text"]} approved',
+                'ufw_commands_created': ufw_result.get('commands_created', 0)
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error approving block: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to approve block'
+        }), 500
+
+
+@blocking_routes.route('/blocks/<int:block_id>/reject', methods=['POST'])
+def reject_block(block_id):
+    """
+    Reject a pending block
+
+    This sets approval_status to 'rejected' and is_active to FALSE
+    """
+    try:
+        user_id = get_current_user_id()
+        data = request.get_json() or {}
+        reason = data.get('reason', 'Rejected by administrator')
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Get block info
+            cursor.execute("""
+                SELECT id, ip_address_text, approval_status
+                FROM ip_blocks
+                WHERE id = %s
+            """, (block_id,))
+
+            block = cursor.fetchone()
+
+            if not block:
+                return jsonify({
+                    'success': False,
+                    'error': 'Block not found'
+                }), 404
+
+            if block['approval_status'] != 'pending':
+                return jsonify({
+                    'success': False,
+                    'error': f"Block is already {block['approval_status']}"
+                }), 400
+
+            # Update to rejected and deactivate
+            cursor.execute("""
+                UPDATE ip_blocks
+                SET approval_status = 'rejected',
+                    is_active = FALSE,
+                    approved_by = %s,
+                    approved_at = NOW(),
+                    unblock_reason = %s
+                WHERE id = %s
+            """, (user_id, reason, block_id))
+
+            conn.commit()
+
+            # Invalidate cache
+            invalidate_blocking_cache()
+
+            # Audit log
+            AuditLogger.log_action(
+                user_id=user_id,
+                action='block_rejected',
+                resource_type='ip_block',
+                resource_id=block['ip_address_text'],
+                details={'block_id': block_id, 'ip_address': block['ip_address_text'], 'reason': reason},
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+
+            return jsonify({
+                'success': True,
+                'message': f'Block for {block["ip_address_text"]} rejected'
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error rejecting block: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to reject block'
+        }), 500
+
+
+@blocking_routes.route('/auto-actions/recent', methods=['GET'])
+def get_recent_auto_actions():
+    """
+    Get recent auto-blocked IPs with ML prediction details and UFW status
+    """
+    try:
+        limit = min(int(request.args.get('limit', 20)), 100)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    ib.id,
+                    ib.ip_address_text,
+                    ib.block_reason,
+                    ib.block_source,
+                    ib.threat_level,
+                    ib.blocked_at,
+                    ib.approval_status,
+                    br.rule_name,
+                    br.rule_type,
+                    ae.ml_risk_score,
+                    ae.ml_threat_type,
+                    ae.ml_confidence,
+                    ae.is_anomaly,
+                    geo.country_name,
+                    geo.city,
+                    (SELECT COUNT(*) FROM agent_ufw_commands WHERE params_json LIKE CONCAT('%%', ib.ip_address_text, '%%') AND status = 'pending') as ufw_pending,
+                    (SELECT COUNT(*) FROM agent_ufw_commands WHERE params_json LIKE CONCAT('%%', ib.ip_address_text, '%%') AND status = 'completed') as ufw_completed
+                FROM ip_blocks ib
+                LEFT JOIN blocking_rules br ON ib.blocking_rule_id = br.id
+                LEFT JOIN auth_events ae ON ib.trigger_event_id = ae.id
+                LEFT JOIN ip_geolocation geo ON ib.ip_address_text = geo.ip_address_text
+                WHERE ib.block_source IN ('ml_threshold', 'rule_based', 'anomaly_detection')
+                ORDER BY ib.blocked_at DESC
+                LIMIT %s
+            """, (limit,))
+
+            auto_actions = cursor.fetchall()
+
+            formatted = []
+            for action in auto_actions:
+                formatted.append({
+                    'id': action['id'],
+                    'ip_address': action['ip_address_text'],
+                    'reason': action['block_reason'],
+                    'source': action['block_source'],
+                    'threat_level': action['threat_level'],
+                    'blocked_at': action['blocked_at'].isoformat() if action['blocked_at'] else None,
+                    'approval_status': action['approval_status'],
+                    'rule': {
+                        'name': action['rule_name'],
+                        'type': action['rule_type']
+                    } if action['rule_name'] else None,
+                    'ml': {
+                        'risk_score': action['ml_risk_score'],
+                        'threat_type': action['ml_threat_type'],
+                        'confidence': float(action['ml_confidence']) if action['ml_confidence'] else None,
+                        'is_anomaly': bool(action['is_anomaly']) if action['is_anomaly'] is not None else None
+                    },
+                    'location': {
+                        'country': action['country_name'],
+                        'city': action['city']
+                    } if action['country_name'] else None,
+                    'ufw_status': {
+                        'pending': action['ufw_pending'] or 0,
+                        'completed': action['ufw_completed'] or 0
+                    }
+                })
+
+            return jsonify({
+                'success': True,
+                'auto_actions': formatted,
+                'count': len(formatted)
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error fetching auto actions: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch auto actions'
+        }), 500
+
+
 @blocking_routes.route('/stats', methods=['GET'])
 def get_stats():
     """Get blocking statistics with caching"""

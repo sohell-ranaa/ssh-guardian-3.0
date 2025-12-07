@@ -14,15 +14,16 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 from threat_intel import ThreatIntelligence
-from cache import get_cache, cache_key
+from cache import get_cache, cache_key, get_ttl, should_cache
 
 threat_intel_routes = Blueprint('threat_intel_routes', __name__)
 
-# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
-THREAT_LOOKUP_TTL = 7200   # 2 hours - threat intel from external APIs
-THREAT_STATS_TTL = 3600    # 1 hour for stats
-THREAT_RECENT_TTL = 1800   # 30 minutes for recent list
-THREAT_HIGH_RISK_TTL = 1800 # 30 minutes for high-risk list
+# Cache TTLs - NOW LOADED FROM DATABASE via get_ttl()
+# Fallback defaults only used if database unavailable
+THREAT_LOOKUP_TTL = 7200
+THREAT_STATS_TTL = 3600
+THREAT_RECENT_TTL = 1800
+THREAT_HIGH_RISK_TTL = 1800
 
 
 def invalidate_threat_cache():
@@ -40,14 +41,16 @@ def lookup_threat(ip_address):
         cache = get_cache()
         cache_k = cache_key('threat', 'lookup', ip_address)
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
+        # Try cache first (if caching enabled for this endpoint)
+        endpoint_key = 'threat_intel_lookup'
+        if should_cache(endpoint_key):
+            cached = cache.get(cache_k, endpoint_key)
+            if cached is not None:
+                return jsonify({
+                    'success': True,
+                    'data': cached,
+                    'from_cache': True
+                })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -76,8 +79,10 @@ def lookup_threat(ip_address):
             if result.get('threat_confidence') is not None:
                 result['threat_confidence'] = float(result['threat_confidence'])
 
-            # Cache the result
-            cache.set(cache_k, result, THREAT_LOOKUP_TTL)
+            # Cache the result (if caching enabled)
+            if should_cache(endpoint_key):
+                ttl = get_ttl(endpoint_key=endpoint_key) or THREAT_LOOKUP_TTL
+                cache.set(cache_k, result, ttl)
 
             return jsonify({
                 'success': True,
@@ -110,15 +115,17 @@ def get_threat_stats():
     try:
         cache = get_cache()
         cache_k = cache_key('threat', 'stats')
+        endpoint_key = 'threat_intel_stats'
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'stats': cached,
-                'from_cache': True
-            })
+        # Try cache first (with hit tracking)
+        if should_cache(endpoint_key):
+            cached = cache.get(cache_k, endpoint_key)
+            if cached is not None:
+                return jsonify({
+                    'success': True,
+                    'stats': cached,
+                    'from_cache': True
+                })
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -168,8 +175,10 @@ def get_threat_stats():
             'abuseipdb': abuseipdb_stats
         }
 
-        # Cache the result
-        cache.set(cache_k, stats, THREAT_STATS_TTL)
+        # Cache the result (if caching enabled)
+        if should_cache(endpoint_key):
+            ttl = get_ttl(endpoint_key=endpoint_key) or THREAT_STATS_TTL
+            cache.set(cache_k, stats, ttl)
 
         return jsonify({
             'success': True,
