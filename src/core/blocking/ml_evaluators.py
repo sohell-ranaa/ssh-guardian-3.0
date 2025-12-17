@@ -315,6 +315,402 @@ def evaluate_proxy_detection_rule(rule, ip_address):
                 'is_proxy': False, 'is_vpn': False, 'is_datacenter': False, 'abuseipdb_score': 0}
 
 
+def evaluate_distributed_brute_force_rule(rule, ip_address, agent_id=None):
+    """Evaluate distributed brute force (same server, many IPs, many usernames, slow frequency).
+
+    This detects coordinated attacks where many different IPs try different usernames
+    against the same server with slow frequency to avoid traditional rate limiting.
+
+    Rule conditions:
+        - unique_ips_threshold: Minimum unique IPs (default 5)
+        - unique_usernames_threshold: Minimum unique usernames (default 10)
+        - time_window_minutes: Time window to analyze (default 60)
+        - max_attempts_per_ip: Max attempts per IP (slow = low number, default 3)
+        - requires_approval: Whether to require manual approval
+
+    Returns: triggered, reason, unique_ips, unique_usernames, pattern_score
+    """
+    try:
+        conditions = rule['conditions']
+        unique_ips_threshold = conditions.get('unique_ips_threshold', 5)
+        unique_usernames_threshold = conditions.get('unique_usernames_threshold', 10)
+        time_window = conditions.get('time_window_minutes', 60)
+        max_attempts_per_ip = conditions.get('max_attempts_per_ip', 3)
+        requires_approval = conditions.get('requires_approval', False)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Build agent filter
+            agent_filter = ""
+            params = [time_window]
+            if agent_id:
+                agent_filter = "AND agent_id = %s"
+                params.append(agent_id)
+
+            # Get attack pattern metrics for the server
+            cursor.execute(f"""
+                SELECT
+                    COUNT(DISTINCT source_ip_text) as unique_ips,
+                    COUNT(DISTINCT target_username) as unique_usernames,
+                    COUNT(*) as total_attempts,
+                    COUNT(*) / NULLIF(COUNT(DISTINCT source_ip_text), 0) as avg_attempts_per_ip
+                FROM auth_events
+                WHERE event_type = 'failed'
+                AND timestamp >= NOW() - INTERVAL %s MINUTE
+                {agent_filter}
+            """, params)
+
+            result = cursor.fetchone()
+            unique_ips = result['unique_ips'] or 0
+            unique_usernames = result['unique_usernames'] or 0
+            total_attempts = result['total_attempts'] or 0
+            avg_attempts_per_ip = float(result['avg_attempts_per_ip'] or 0)
+
+            # Calculate pattern score (higher = more likely distributed attack)
+            pattern_score = 0
+            if unique_ips >= unique_ips_threshold:
+                pattern_score += 30
+            if unique_usernames >= unique_usernames_threshold:
+                pattern_score += 30
+            if avg_attempts_per_ip <= max_attempts_per_ip and total_attempts > 10:
+                pattern_score += 40  # Slow and steady attack pattern
+
+            # Check with threat intelligence for coordinated attack indicators
+            cursor.execute(f"""
+                SELECT COUNT(DISTINCT ae.source_ip_text) as threat_ips
+                FROM auth_events ae
+                JOIN ip_threat_intelligence ti ON ae.source_ip_text = ti.ip_address_text
+                WHERE ae.event_type = 'failed'
+                AND ae.timestamp >= NOW() - INTERVAL %s MINUTE
+                AND ti.abuseipdb_score >= 25
+                {agent_filter}
+            """, params)
+
+            threat_result = cursor.fetchone()
+            threat_ips = threat_result['threat_ips'] or 0
+            if threat_ips >= 3:
+                pattern_score += 20  # Multiple known threat IPs involved
+
+            triggered = (unique_ips >= unique_ips_threshold and
+                        unique_usernames >= unique_usernames_threshold and
+                        avg_attempts_per_ip <= max_attempts_per_ip)
+
+            if triggered:
+                return {
+                    'triggered': True,
+                    'reason': f"Distributed brute force detected: {unique_ips} IPs, {unique_usernames} usernames, "
+                              f"avg {avg_attempts_per_ip:.1f} attempts/IP (pattern score: {pattern_score})",
+                    'requires_approval': requires_approval,
+                    'unique_ips': unique_ips,
+                    'unique_usernames': unique_usernames,
+                    'pattern_score': pattern_score,
+                    'threat_level': 'high' if pattern_score >= 80 else 'medium'
+                }
+
+            return {
+                'triggered': False,
+                'reason': f"Pattern not matched: {unique_ips} IPs, {unique_usernames} usernames",
+                'requires_approval': False,
+                'unique_ips': unique_ips,
+                'unique_usernames': unique_usernames,
+                'pattern_score': pattern_score
+            }
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error evaluating distributed brute force rule: {e}")
+        return {'triggered': False, 'reason': f"Error: {str(e)}",
+                'requires_approval': False, 'unique_ips': 0, 'unique_usernames': 0, 'pattern_score': 0}
+
+
+def evaluate_account_takeover_rule(rule, ip_address, username=None):
+    """Evaluate account takeover attempt (same username from multiple IPs/locations quickly).
+
+    This detects when a username is being targeted from multiple different IPs
+    or geographic locations in a short time - indicating credential testing or
+    compromised credentials being sold/shared.
+
+    Rule conditions:
+        - unique_ips_threshold: Minimum unique IPs trying same username (default 3)
+        - unique_countries_threshold: Minimum unique countries (default 2)
+        - time_window_minutes: Time window to analyze (default 30)
+        - check_threat_intel: Use AbuseIPDB to weight scoring (default true)
+        - requires_approval: Whether to require manual approval
+
+    Returns: triggered, reason, unique_ips, unique_countries, targeted_usernames
+    """
+    try:
+        conditions = rule['conditions']
+        unique_ips_threshold = conditions.get('unique_ips_threshold', 3)
+        unique_countries_threshold = conditions.get('unique_countries_threshold', 2)
+        time_window = conditions.get('time_window_minutes', 30)
+        check_threat_intel = conditions.get('check_threat_intel', True)
+        requires_approval = conditions.get('requires_approval', False)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Find usernames being targeted from multiple IPs
+            cursor.execute("""
+                SELECT
+                    ae.target_username,
+                    COUNT(DISTINCT ae.source_ip_text) as unique_ips,
+                    COUNT(DISTINCT g.country_code) as unique_countries,
+                    COUNT(*) as attempt_count,
+                    GROUP_CONCAT(DISTINCT g.country_code) as countries
+                FROM auth_events ae
+                LEFT JOIN ip_geolocation g ON ae.source_ip_text = g.ip_address_text
+                WHERE ae.event_type = 'failed'
+                AND ae.timestamp >= NOW() - INTERVAL %s MINUTE
+                AND ae.target_username IS NOT NULL
+                AND ae.target_username != ''
+                GROUP BY ae.target_username
+                HAVING unique_ips >= %s OR unique_countries >= %s
+                ORDER BY unique_ips DESC
+                LIMIT 10
+            """, (time_window, unique_ips_threshold, unique_countries_threshold))
+
+            targeted_users = cursor.fetchall()
+
+            if not targeted_users:
+                return {
+                    'triggered': False,
+                    'reason': 'No account takeover patterns detected',
+                    'requires_approval': False,
+                    'unique_ips': 0,
+                    'unique_countries': 0,
+                    'targeted_usernames': []
+                }
+
+            # Calculate threat score using threat intelligence
+            threat_score = 0
+            high_risk_usernames = []
+
+            for user in targeted_users:
+                user_threat_score = 0
+
+                # Base score from IP diversity
+                user_threat_score += min(user['unique_ips'] * 10, 40)
+
+                # Geographic diversity bonus
+                user_threat_score += min(user['unique_countries'] * 15, 30)
+
+                if check_threat_intel:
+                    # Check if attacking IPs have bad reputation
+                    cursor.execute("""
+                        SELECT AVG(ti.abuseipdb_score) as avg_score
+                        FROM auth_events ae
+                        JOIN ip_threat_intelligence ti ON ae.source_ip_text = ti.ip_address_text
+                        WHERE ae.target_username = %s
+                        AND ae.event_type = 'failed'
+                        AND ae.timestamp >= NOW() - INTERVAL %s MINUTE
+                    """, (user['target_username'], time_window))
+
+                    ti_result = cursor.fetchone()
+                    avg_abuse_score = float(ti_result['avg_score'] or 0)
+                    if avg_abuse_score >= 30:
+                        user_threat_score += 30
+
+                if user_threat_score >= 50:
+                    high_risk_usernames.append({
+                        'username': user['target_username'],
+                        'unique_ips': user['unique_ips'],
+                        'countries': user['countries'],
+                        'score': user_threat_score
+                    })
+
+                threat_score = max(threat_score, user_threat_score)
+
+            if high_risk_usernames:
+                top_target = high_risk_usernames[0]
+                return {
+                    'triggered': True,
+                    'reason': f"Account takeover attempt: '{top_target['username']}' targeted from "
+                              f"{top_target['unique_ips']} IPs across {top_target['countries']} "
+                              f"(threat score: {top_target['score']})",
+                    'requires_approval': requires_approval,
+                    'unique_ips': top_target['unique_ips'],
+                    'unique_countries': len(top_target['countries'].split(',')) if top_target['countries'] else 0,
+                    'targeted_usernames': [u['username'] for u in high_risk_usernames],
+                    'threat_level': 'critical' if threat_score >= 80 else 'high'
+                }
+
+            return {
+                'triggered': False,
+                'reason': f"Patterns found but below threat threshold",
+                'requires_approval': False,
+                'unique_ips': targeted_users[0]['unique_ips'] if targeted_users else 0,
+                'unique_countries': targeted_users[0]['unique_countries'] if targeted_users else 0,
+                'targeted_usernames': []
+            }
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error evaluating account takeover rule: {e}")
+        return {'triggered': False, 'reason': f"Error: {str(e)}",
+                'requires_approval': False, 'unique_ips': 0, 'unique_countries': 0, 'targeted_usernames': []}
+
+
+def evaluate_off_hours_anomaly_rule(rule, ip_address, username=None, event_timestamp=None):
+    """Evaluate out-of-work-time anomaly (login attempts outside business hours).
+
+    This detects authentication attempts that occur outside normal business hours,
+    which could indicate compromised credentials being used by attackers in different timezones.
+
+    Rule conditions:
+        - work_start_hour: Business start hour (default 8)
+        - work_end_hour: Business end hour (default 18)
+        - work_days: List of work days 0=Mon, 6=Sun (default [0,1,2,3,4])
+        - timezone: Timezone for evaluation (default 'Asia/Kuala_Lumpur')
+        - min_off_hours_attempts: Minimum attempts outside hours to trigger (default 3)
+        - check_user_baseline: Compare against user's normal login times (default true)
+        - requires_approval: Whether to require manual approval
+
+    Returns: triggered, reason, off_hours_attempts, is_weekend, hour_of_day
+    """
+    from datetime import datetime
+    import pytz
+
+    try:
+        conditions = rule['conditions']
+        work_start = conditions.get('work_start_hour', 8)
+        work_end = conditions.get('work_end_hour', 18)
+        work_days = conditions.get('work_days', [0, 1, 2, 3, 4])  # Mon-Fri
+        timezone_str = conditions.get('timezone', 'Asia/Kuala_Lumpur')
+        min_attempts = conditions.get('min_off_hours_attempts', 3)
+        check_baseline = conditions.get('check_user_baseline', True)
+        requires_approval = conditions.get('requires_approval', False)
+
+        # Get current time in specified timezone
+        try:
+            tz = pytz.timezone(timezone_str)
+        except:
+            tz = pytz.timezone('Asia/Kuala_Lumpur')
+
+        now = datetime.now(tz)
+        current_hour = now.hour
+        current_weekday = now.weekday()
+
+        is_work_day = current_weekday in work_days
+        is_work_hours = work_start <= current_hour < work_end
+        is_off_hours = not (is_work_day and is_work_hours)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Count recent off-hours attempts from this IP
+            cursor.execute("""
+                SELECT COUNT(*) as off_hours_count
+                FROM auth_events
+                WHERE source_ip_text = %s
+                AND event_type = 'failed'
+                AND timestamp >= NOW() - INTERVAL 24 HOUR
+                AND (
+                    HOUR(timestamp) < %s OR HOUR(timestamp) >= %s
+                    OR DAYOFWEEK(timestamp) IN (1, 7)
+                )
+            """, (ip_address, work_start, work_end))
+
+            result = cursor.fetchone()
+            off_hours_attempts = result['off_hours_count'] or 0
+
+            # Check user baseline if username provided
+            baseline_anomaly = False
+            if check_baseline and username:
+                cursor.execute("""
+                    SELECT
+                        AVG(HOUR(timestamp)) as avg_login_hour,
+                        COUNT(*) as total_logins
+                    FROM auth_events
+                    WHERE target_username = %s
+                    AND event_type = 'successful'
+                    AND timestamp >= NOW() - INTERVAL 30 DAY
+                """, (username,))
+
+                baseline = cursor.fetchone()
+                if baseline and baseline['total_logins'] and baseline['total_logins'] >= 5:
+                    avg_hour = float(baseline['avg_login_hour'] or 12)
+                    # If current hour is more than 6 hours from average, it's anomalous
+                    hour_diff = abs(current_hour - avg_hour)
+                    if hour_diff > 12:
+                        hour_diff = 24 - hour_diff
+                    baseline_anomaly = hour_diff >= 6
+
+            # Check threat intelligence for the IP
+            threat_multiplier = 1.0
+            cursor.execute("""
+                SELECT abuseipdb_score, virustotal_malicious
+                FROM ip_threat_intelligence
+                WHERE ip_address_text = %s
+            """, (ip_address,))
+
+            ti_data = cursor.fetchone()
+            if ti_data:
+                if (ti_data['abuseipdb_score'] or 0) >= 30:
+                    threat_multiplier = 1.5
+                if (ti_data['virustotal_malicious'] or 0) >= 2:
+                    threat_multiplier = 2.0
+
+            # Calculate final score
+            anomaly_score = off_hours_attempts * threat_multiplier
+            if baseline_anomaly:
+                anomaly_score *= 1.5
+            if not is_work_day:
+                anomaly_score *= 1.3  # Weekend bonus
+
+            triggered = (is_off_hours and off_hours_attempts >= min_attempts) or anomaly_score >= min_attempts * 2
+
+            if triggered:
+                time_desc = []
+                if not is_work_day:
+                    time_desc.append("weekend")
+                if not is_work_hours:
+                    time_desc.append(f"off-hours ({current_hour}:00)")
+                if baseline_anomaly:
+                    time_desc.append("unusual for user")
+
+                return {
+                    'triggered': True,
+                    'reason': f"Off-hours anomaly: {off_hours_attempts} attempts during {', '.join(time_desc)} "
+                              f"(anomaly score: {anomaly_score:.1f})",
+                    'requires_approval': requires_approval,
+                    'off_hours_attempts': off_hours_attempts,
+                    'is_weekend': not is_work_day,
+                    'hour_of_day': current_hour,
+                    'anomaly_score': anomaly_score,
+                    'threat_level': 'high' if anomaly_score >= min_attempts * 3 else 'medium'
+                }
+
+            return {
+                'triggered': False,
+                'reason': f"Within acceptable hours or below threshold ({off_hours_attempts} attempts)",
+                'requires_approval': False,
+                'off_hours_attempts': off_hours_attempts,
+                'is_weekend': not is_work_day,
+                'hour_of_day': current_hour,
+                'anomaly_score': anomaly_score
+            }
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error evaluating off-hours anomaly rule: {e}")
+        return {'triggered': False, 'reason': f"Error: {str(e)}",
+                'requires_approval': False, 'off_hours_attempts': 0, 'is_weekend': False, 'hour_of_day': 0}
+
+
 def evaluate_impossible_travel_rule(rule, ip_address, username=None):
     """Evaluate impossible travel detection rule.
 

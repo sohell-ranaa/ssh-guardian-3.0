@@ -31,7 +31,7 @@
         </div>
         <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); font-size: 12px; color: var(--text-secondary); text-align: center;">
             💡 <strong>Note:</strong> Manual blocks from Simulation page show here, but don't increment individual rule statistics below.
-            <a href="#ip-blocks" onclick="navigateToPage('ip-blocks'); return false;" style="color: var(--azure-blue); text-decoration: underline; cursor: pointer;">View all blocked IPs →</a>
+            <a href="#firewall" onclick="navigateToPage('firewall'); setTimeout(() => { if(typeof switchFirewallTab === 'function') switchFirewallTab('blocked'); }, 300); return false;" style="color: var(--azure-blue); text-decoration: underline; cursor: pointer;">View all blocked IPs →</a>
         </div>
     </div>
 

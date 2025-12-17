@@ -118,9 +118,53 @@
         return Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
 
+    // Server timezone - timestamps from database are in this timezone
+    const SERVER_TIMEZONE = 'Europe/Berlin';
+
+    /**
+     * Convert a timestamp from server timezone to UTC
+     * @param {string} dateStr - Date string without timezone info (assumed server timezone)
+     * @returns {Date} Date object in UTC
+     */
+    function serverTimeToUTC(dateStr) {
+        // Parse the naive datetime as if it's in server timezone
+        // Then convert to UTC by finding the offset
+        const normalized = dateStr.replace(' ', 'T');
+
+        // Create a temporary date to get the server timezone offset for this specific datetime
+        // We'll use a reference point approach
+        const tempDate = new Date(normalized + 'Z'); // Treat as UTC temporarily
+
+        // Format this UTC time in server timezone to see what time it shows
+        const serverFormatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: SERVER_TIMEZONE,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        });
+
+        const parts = serverFormatter.formatToParts(tempDate);
+        const serverHour = parseInt(parts.find(p => p.type === 'hour').value);
+
+        // Extract hour from input
+        const inputParts = normalized.split('T')[1].split(':');
+        const inputHour = parseInt(inputParts[0]);
+
+        // The difference tells us the offset
+        // If input is 10:00 (server time) and serverHour shows 11:00, offset is +1
+        let hourDiff = serverHour - inputHour;
+
+        // Handle day boundary wrap-around
+        if (hourDiff > 12) hourDiff -= 24;
+        if (hourDiff < -12) hourDiff += 24;
+
+        // Subtract the offset to get true UTC
+        return new Date(tempDate.getTime() - (hourDiff * 60 * 60 * 1000));
+    }
+
     /**
      * Format a date/time according to user's settings
-     * @param {string|Date} dateInput - Date string or Date object (assumed UTC if no timezone)
+     * @param {string|Date} dateInput - Date string or Date object (assumed server timezone if no timezone info)
      * @param {string} format - 'time', 'date', 'datetime', or custom format
      * @returns {string} Formatted date/time string
      */
@@ -131,12 +175,14 @@
         if (dateInput instanceof Date) {
             date = dateInput;
         } else {
-            // If the string doesn't have timezone info, treat it as UTC
             let dateStr = String(dateInput);
+
+            // If no timezone info, timestamp is in server timezone (Europe/Berlin)
             if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                dateStr += 'Z';  // Append Z to indicate UTC
+                date = serverTimeToUTC(dateStr);
+            } else {
+                date = new Date(dateStr);
             }
-            date = new Date(dateStr);
         }
 
         if (isNaN(date.getTime())) return 'Invalid Date';
@@ -264,12 +310,13 @@
         if (dateInput instanceof Date) {
             date = dateInput;
         } else {
-            // If the string doesn't have timezone info, treat it as UTC
             let dateStr = String(dateInput);
+            // If no timezone info, timestamp is in server timezone (Europe/Berlin)
             if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                dateStr += 'Z';  // Append Z to indicate UTC
+                date = serverTimeToUTC(dateStr);
+            } else {
+                date = new Date(dateStr);
             }
-            date = new Date(dateStr);
         }
         if (isNaN(date.getTime())) return 'Invalid Date';
 

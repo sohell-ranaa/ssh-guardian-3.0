@@ -1,67 +1,47 @@
 <!-- SSH Guardian v3.0 - General Settings Page -->
 <div id="page-settings-general" class="page-content" style="display: none;">
-    <div class="page-header">
+    <div class="page-header" style="margin-bottom: 16px;">
         <div>
             <h1 class="page-title">General Settings</h1>
             <p class="page-subtitle">Configure system-wide settings and preferences</p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button id="settings-save-all-btn" class="btn btn-primary">
+        <div style="display: flex; gap: 8px;">
+            <button id="settings-save-all-btn" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">
                 💾 Save All
             </button>
-            <button id="settings-refresh-btn" class="btn btn-secondary">
+            <button id="settings-refresh-btn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px;">
                 🔄 Refresh
             </button>
         </div>
     </div>
 
-    <!-- Navigation Settings Section -->
-    <div class="card" style="margin-bottom: 24px;">
-        <div class="card-header">
-            <h2 class="card-title">Navigation Settings</h2>
-            <span class="card-subtitle">Configure default landing page and navigation preferences</span>
-        </div>
-        <div class="card-body">
-            <div class="form-group" style="max-width: 400px;">
-                <label for="default-landing-page" style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">
-                    Default Landing Page
-                </label>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                    Choose which page to show when you first access the dashboard
-                </p>
-                <select id="default-landing-page" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-primary); font-size: 14px;">
-                    <option value="overview">Overview (User Guide & Research)</option>
-                    <option value="dashboard">Dashboard (Analytics)</option>
+    <!-- Two Column Layout -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <!-- Navigation Settings Section -->
+        <div class="card" style="padding: 16px;">
+            <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px 0;">🧭 Navigation</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <select id="default-landing-page" style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-primary); font-size: 13px;">
+                    <option value="overview">Overview</option>
+                    <option value="dashboard">Dashboard</option>
                     <option value="events-live">Live Events</option>
                 </select>
-                <button id="save-navigation-settings" style="margin-top: 12px; padding: 10px 20px; background: var(--azure-blue); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                    Save Navigation Settings
+                <button id="save-navigation-settings" style="padding: 8px 14px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer;">
+                    Save
                 </button>
-                <span id="navigation-save-status" style="margin-left: 12px; font-size: 13px; color: var(--text-success);"></span>
+                <span id="navigation-save-status" style="font-size: 12px; color: var(--text-success);"></span>
             </div>
+            <p style="font-size: 11px; color: var(--text-secondary); margin: 8px 0 0 0;">Default landing page when opening dashboard</p>
         </div>
-    </div>
 
-    <!-- Time & Date Settings Section -->
-    <div id="time-settings-container" style="margin-bottom: 24px;">
-        <!-- Time settings will be loaded dynamically by settings_general_page.js -->
-    </div>
-
-    <!-- Filter Controls -->
-    <div class="filter-bar">
-        <div style="display: flex; gap: 16px; align-items: center;">
-            <label style="font-size: 14px; color: var(--text-secondary);">Category:</label>
-            <select id="settings-category-filter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-primary); font-size: 14px;">
-                <option value="all">All Categories</option>
-                <option value="general">General</option>
-                <option value="security">Security</option>
-                <option value="notifications">Notifications</option>
-            </select>
+        <!-- Time & Date Settings Section -->
+        <div id="time-settings-container">
+            <!-- Time settings will be loaded dynamically -->
         </div>
     </div>
 
     <!-- Settings Container -->
-    <div id="settings-categories-container" style="margin-top: 24px;">
+    <div id="settings-categories-container">
         <!-- Settings will be loaded here -->
     </div>
 </div>

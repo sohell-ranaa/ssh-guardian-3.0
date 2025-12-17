@@ -29,6 +29,8 @@ def require_api_key(f):
             }), 401
 
         # Verify API key and agent_id match in database
+        conn = None
+        cursor = None
         try:
             conn = get_connection()
             cursor = conn.cursor(dictionary=True)
@@ -40,8 +42,6 @@ def require_api_key(f):
             """, (api_key, agent_id))
 
             agent = cursor.fetchone()
-            cursor.close()
-            conn.close()
 
             if not agent:
                 return jsonify({
@@ -69,6 +69,11 @@ def require_api_key(f):
                 'success': False,
                 'error': f'Authentication error: {str(e)}'
             }), 500
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
         return f(*args, **kwargs)
 

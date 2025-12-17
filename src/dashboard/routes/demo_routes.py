@@ -395,235 +395,153 @@ def calculate_composite_risk(threat_intel: dict, ml_analysis: dict, behavioral: 
 
 
 def generate_recommendations(ml: dict, threat: dict, geo: dict, history: dict, ip_address: str = None) -> list:
-    """Generate security recommendations based on analysis
+    """
+    Generate simple, clear security recommendations.
 
-    Each recommendation includes:
+    Each recommendation has:
     - priority: critical, high, medium, low
-    - action: Short action title
-    - reason: Data-driven explanation with specific metrics
-    - icon: Visual indicator
-    - action_type: Type of action (block_ip, add_blocklist, view_events, create_rule, navigate, info)
-    - action_data: Data needed to perform the action (e.g., IP address, page URL, rule config)
-    - evidence: Supporting data points that led to this recommendation
+    - action: What to do (plain English)
+    - reason: Why (simple explanation)
+    - details: Key facts that support this recommendation
     """
     recommendations = []
 
-    # Convert all numeric values to Python types immediately to avoid Decimal type issues
-    threat_level = threat.get('overall_threat_level', 'unknown') if threat else 'unknown'
+    # Extract key metrics
     abuseipdb_score = int(threat.get('abuseipdb_score') or 0) if threat else 0
     vt_positives = int(threat.get('virustotal_positives') or 0) if threat else 0
-
-    is_anomaly = ml.get('is_anomaly', False) if ml else False
-    ml_confidence = float(ml.get('confidence') or 0) if ml else 0.0
     risk_score = float(ml.get('risk_score') or 0) if ml else 0.0
+    is_anomaly = ml.get('is_anomaly', False) if ml else False
 
     is_tor = geo.get('is_tor', False) if geo else False
     is_proxy = geo.get('is_proxy', False) if geo else False
+    is_vpn = geo.get('is_vpn', False) if geo else False
+    country = geo.get('country', 'Unknown') if geo else 'Unknown'
 
-    total_events = int(history.get('total_events') or 0)
     failed_attempts = int(history.get('failed_attempts') or 0)
     unique_usernames = int(history.get('unique_usernames') or 0)
-    anomaly_count = int(history.get('anomaly_count') or 0)
 
-    # Critical threat - immediate action
-    if threat_level in ['high', 'critical'] or abuseipdb_score >= 80:
+    # HIGH PRIORITY: Bad reputation IP
+    if abuseipdb_score >= 70:
         recommendations.append({
-            'priority': 'critical',
-            'action': 'Block IP Immediately',
-            'reason': f'Known malicious IP with AbuseIPDB score {abuseipdb_score}/100',
-            'icon': '🚫',
+            'priority': 'critical' if abuseipdb_score >= 90 else 'high',
+            'action': 'Block this IP',
+            'reason': f'Bad reputation score: {abuseipdb_score}/100',
+            'details': [
+                f'AbuseIPDB: {abuseipdb_score}/100 (reported by security community)',
+                f'This IP is known for malicious activity'
+            ],
             'action_type': 'block_ip',
-            'ai_confidence': min(0.98, max(0.85, abuseipdb_score / 100)),  # Use threat intel score
-            'action_data': {
-                'ip': ip_address,
-                'reason': f'Auto-block: AbuseIPDB {abuseipdb_score}/100, Threat Level: {threat_level}',
-                'duration': 'permanent'
-            },
-            'evidence': [
-                f'AbuseIPDB Score: {abuseipdb_score}/100',
-                f'Threat Level: {threat_level.upper()}',
-                f'Total Events from IP: {total_events}'
-            ]
+            'action_data': {'ip': ip_address, 'reason': f'AbuseIPDB {abuseipdb_score}/100'}
         })
 
-    # VirusTotal detections
-    if vt_positives and vt_positives > 5:
+    # HIGH PRIORITY: Malware source
+    if vt_positives >= 5:
+        recommendations.append({
+            'priority': 'critical',
+            'action': 'Block - Known malware source',
+            'reason': f'{vt_positives} antivirus vendors flagged this IP',
+            'details': [
+                f'VirusTotal: {vt_positives} security vendors detected threats',
+                'Associated with malware distribution'
+            ],
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address, 'reason': f'VirusTotal {vt_positives} detections'}
+        })
+
+    # HIGH PRIORITY: Brute force attack
+    if failed_attempts >= 5:
         recommendations.append({
             'priority': 'high',
-            'action': 'Add to Permanent Blocklist',
-            'reason': f'Flagged by {vt_positives} security vendors on VirusTotal',
-            'icon': '🔬',
-            'action_type': 'add_blocklist',
-            'ai_confidence': min(0.92, 0.70 + (vt_positives / 70 * 0.25)),  # Scale with VT positives
-            'action_data': {
-                'ip': ip_address,
-                'reason': f'VirusTotal: {vt_positives} vendors flagged this IP',
-                'source': 'virustotal'
-            },
-            'evidence': [
-                f'VirusTotal Detections: {vt_positives} vendors',
-                f'AbuseIPDB Score: {abuseipdb_score}/100' if abuseipdb_score else None,
-                f'Known for malicious activity'
-            ]
+            'action': 'Block - Too many failed logins',
+            'reason': f'{failed_attempts} failed login attempts',
+            'details': [
+                f'{failed_attempts} password guessing attempts detected',
+                'This is a brute force attack pattern'
+            ],
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address, 'reason': f'{failed_attempts} failed attempts'}
+        })
+
+    # MEDIUM PRIORITY: Credential stuffing
+    if unique_usernames >= 5:
+        recommendations.append({
+            'priority': 'high',
+            'action': 'Block - Credential stuffing attack',
+            'reason': f'Trying {unique_usernames} different usernames',
+            'details': [
+                f'{unique_usernames} different usernames attempted',
+                'Testing stolen credentials from data breaches'
+            ],
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address, 'reason': f'{unique_usernames} usernames tried'}
+        })
+
+    # MEDIUM PRIORITY: Tor/VPN
+    if is_tor:
+        recommendations.append({
+            'priority': 'medium',
+            'action': 'Review - Tor exit node',
+            'reason': 'Connection from Tor anonymity network',
+            'details': [
+                'Attacker is hiding their real IP',
+                'Legitimate users rarely use Tor for SSH'
+            ],
+            'action_type': 'review',
+            'action_data': {'ip': ip_address, 'network': 'tor'}
+        })
+    elif is_proxy or is_vpn:
+        recommendations.append({
+            'priority': 'low',
+            'action': 'Monitor - VPN/Proxy connection',
+            'reason': 'Connection via VPN or proxy',
+            'details': [
+                f'Country: {country}',
+                'Could be hiding location, but many legitimate users use VPNs'
+            ],
+            'action_type': 'monitor',
+            'action_data': {'ip': ip_address, 'network': 'vpn'}
         })
 
     # ML anomaly detection
-    if is_anomaly:
-        recommendations.append({
-            'priority': 'high',
-            'action': 'Investigate Anomaly',
-            'reason': f'ML detected anomalous activity (confidence: {ml_confidence*100:.0f}%)',
-            'icon': '🤖',
-            'action_type': 'view_events',
-            'ai_confidence': ml_confidence if ml_confidence > 0 else 0.78,  # Use ML confidence directly
-            'action_data': {
-                'ip': ip_address,
-                'filter': 'anomaly',
-                'page': 'events'
-            },
-            'evidence': [
-                f'ML Confidence: {ml_confidence*100:.1f}%',
-                f'Risk Score: {risk_score}/100',
-                f'Anomalies from this IP: {anomaly_count}' if anomaly_count else 'First anomaly detected',
-                f'Threat Type: {ml.get("threat_type", "Unknown")}' if ml.get('threat_type') else None
-            ]
-        })
-
-    # High risk score
-    if risk_score >= 70:
-        recommendations.append({
-            'priority': 'high',
-            'action': 'Create Alert Rule',
-            'reason': f'High ML risk score: {risk_score}/100',
-            'icon': '📊',
-            'action_type': 'create_rule',
-            'ai_confidence': risk_score / 100,  # Use risk score directly
-            'action_data': {
-                'ip': ip_address,
-                'rule_type': 'threshold',
-                'threshold': 3,
-                'window': '5m',
-                'severity': 'high'
-            },
-            'evidence': [
-                f'Risk Score: {risk_score}/100 (High)',
-                f'ML Confidence: {ml_confidence*100:.1f}%',
-                f'Failed Attempts: {failed_attempts}' if failed_attempts else None,
-                f'Targeting {unique_usernames} usernames' if unique_usernames > 1 else None
-            ]
-        })
-
-    # Anonymization network
-    if is_tor or is_proxy:
-        network_type = 'Tor exit node' if is_tor else 'Proxy/VPN'
+    if is_anomaly and risk_score >= 60:
         recommendations.append({
             'priority': 'medium',
-            'action': f'Review {network_type} Policy',
-            'reason': 'Traffic from anonymization network detected',
-            'icon': '🧅' if is_tor else '🔒',
-            'action_type': 'review_policy',
-            'ai_confidence': 0.95 if is_tor else 0.72,  # TOR is more certain
-            'action_data': {
-                'network_type': network_type,
-                'is_tor': is_tor,
-                'is_proxy': is_proxy,
-                'country': geo.get('country', 'Unknown') if geo else 'Unknown',
-                'isp': geo.get('isp', 'Unknown') if geo else 'Unknown'
-            },
-            'evidence': [
-                f'Network Type: {network_type}',
-                f'ISP: {geo.get("isp", "Unknown")}' if geo else None,
-                f'Country: {geo.get("country", "Unknown")}' if geo else None,
-                'Consider blocking anonymization networks for sensitive systems'
-            ]
+            'action': 'Investigate - Unusual behavior detected',
+            'reason': f'ML flagged as anomaly (risk: {risk_score:.0f}/100)',
+            'details': [
+                f'Risk score: {risk_score:.0f}/100',
+                f'Behavior pattern: {ml.get("threat_type", "suspicious")}'
+            ],
+            'action_type': 'investigate',
+            'action_data': {'ip': ip_address}
         })
 
-    # Brute force pattern
-    if failed_attempts >= 10:
-        rate = failed_attempts / max(1, (history.get('unique_servers', 1)))
-        recommendations.append({
-            'priority': 'high',
-            'action': 'Enable Rate Limiting',
-            'reason': f'{failed_attempts} failed login attempts from this IP',
-            'icon': '⚡',
-            'action_type': 'rate_limit',
-            'ai_confidence': min(0.94, 0.70 + (min(failed_attempts, 50) / 50 * 0.24)),  # Scale with attempts
-            'action_data': {
-                'ip': ip_address,
-                'failed_attempts': failed_attempts,
-                'max_attempts': 5,
-                'time_window': 60,
-                'block_duration': 3600
-            },
-            'evidence': [
-                f'Failed Attempts: {failed_attempts}',
-                f'Attempts per server: ~{rate:.1f}',
-                f'Unique Servers Targeted: {history.get("unique_servers", 1)}',
-                f'Pattern: Brute force attack'
-            ]
-        })
-
-    # Multiple usernames targeted
-    if unique_usernames >= 5:
-        recommendations.append({
-            'priority': 'medium',
-            'action': 'Review Targeted Accounts',
-            'reason': f'{unique_usernames} different usernames attempted',
-            'icon': '👥',
-            'ai_confidence': min(0.82, 0.62 + (min(unique_usernames, 20) / 20 * 0.20)),  # Scale with diversity
-            'action_type': 'view_events',
-            'action_data': {
-                'ip': ip_address,
-                'filter': 'usernames',
-                'page': 'ip-stats'
-            },
-            'evidence': [
-                f'Unique Usernames: {unique_usernames}',
-                f'Top targets: {", ".join([u["target_username"] for u in history.get("top_usernames", [])[:3]])}' if history.get('top_usernames') else None,
-                f'Pattern: Username enumeration or credential stuffing'
-            ]
-        })
-
-    # If no critical issues, provide positive feedback
+    # NO ISSUES: Clean IP
     if not recommendations:
-        if risk_score < 30:
+        if abuseipdb_score < 20 and risk_score < 30:
             recommendations.append({
                 'priority': 'low',
-                'action': 'Continue Monitoring',
-                'reason': 'Low risk profile - appears to be normal activity',
-                'icon': '✅',
-                'action_type': 'info',
-                'ai_confidence': 0.65,  # Low confidence for benign activity
-                'action_data': None,
-                'evidence': [
-                    f'Risk Score: {risk_score}/100 (Low)',
-                    f'No threat intelligence flags',
-                    f'Normal activity pattern'
-                ]
+                'action': 'No action needed',
+                'reason': 'This IP appears safe',
+                'details': [
+                    f'Clean reputation (AbuseIPDB: {abuseipdb_score}/100)',
+                    'No suspicious patterns detected'
+                ],
+                'action_type': 'none',
+                'action_data': None
             })
         else:
             recommendations.append({
-                'priority': 'medium',
-                'action': 'Monitor for Changes',
-                'reason': 'Moderate risk - no immediate threat indicators',
-                'icon': '👀',
-                'action_type': 'view_events',
-                'ai_confidence': risk_score / 100 if risk_score > 0 else 0.50,  # Use risk score
-                'action_data': {
-                    'ip': ip_address,
-                    'page': 'events'
-                },
-                'evidence': [
-                    f'Risk Score: {risk_score}/100 (Moderate)',
-                    f'Total Events: {total_events}',
-                    'Watch for pattern changes'
-                ]
+                'priority': 'low',
+                'action': 'Continue monitoring',
+                'reason': 'Low risk - watching for changes',
+                'details': [
+                    f'Risk score: {risk_score:.0f}/100',
+                    'No immediate threat, keep monitoring'
+                ],
+                'action_type': 'monitor',
+                'action_data': {'ip': ip_address}
             })
-
-    # Filter out None values from evidence lists
-    for rec in recommendations:
-        if rec.get('evidence'):
-            rec['evidence'] = [e for e in rec['evidence'] if e]
 
     return recommendations
 
@@ -638,299 +556,199 @@ def generate_smart_recommendations(
     ip_address: str
 ) -> list:
     """
-    Generate context-aware recommendations with reasoning, urgency grouping, and clear impact
+    Generate simple, actionable recommendations based on threat analysis.
 
-    Returns recommendations with:
-    - urgency: immediate (5min), short_term (1hr), long_term (week)
+    Returns list of recommendations, each with:
     - priority: critical, high, medium, low
-    - action: Clear action title
-    - reason: Why this recommendation
-    - why: List of specific reasons
-    - impact: What happens if action is taken
-    - risk_if_ignored: What happens if ignored
-    - alternatives: Other approaches with trade-offs
-    - confidence: AI confidence 0-1
+    - action: What to do (plain English)
+    - reason: Why (simple explanation)
+    - details: Supporting facts
     """
     recommendations = []
-    overall_score = composite_risk.get('overall_score', 0)
-    threat_level = composite_risk.get('threat_level', 'UNKNOWN')
 
-    # Extract scores
+    # Get key metrics
+    overall_score = composite_risk.get('overall_score', 0)
     abuseipdb_score = int(threat_intel.get('abuseipdb_score', 0))
     vt_positives = int(threat_intel.get('virustotal_positives', 0))
     ml_risk = float(ml_analysis.get('risk_score', 0))
     is_anomaly = ml_analysis.get('is_anomaly', False)
-    ml_confidence = float(ml_analysis.get('confidence', 0))
 
-    # Behavioral metrics
     velocity = behavioral_analysis.get('velocity', 0)
-    failure_rate = behavioral_analysis.get('failure_rate', 0)
     pattern = behavioral_analysis.get('pattern', 'Unknown')
     unique_usernames = behavioral_analysis.get('unique_usernames', 0)
 
-    # Geographic
     is_tor = geo_data.get('is_tor', False)
     is_proxy = geo_data.get('is_proxy', False) or geo_data.get('is_vpn', False)
     country = geo_data.get('country', 'Unknown')
 
-    # Historical
     failed_attempts = history.get('failed_attempts', 0)
-    total_events = history.get('total_events', 0)
 
-    # Helper to get subnet
-    def get_subnet(ip):
-        parts = ip.split('.')
-        if len(parts) == 4:
-            return f"{parts[0]}.{parts[1]}.0.0/16"
-        return ip
-
-    # IMMEDIATE ACTIONS (Next 5 minutes) - CRITICAL threats
-    if overall_score >= 85 or (abuseipdb_score >= 80 and velocity > 10):
-        # Active attack in progress - Block immediately
+    # =================================================================
+    # CRITICAL: Active attack or very bad IP
+    # =================================================================
+    if overall_score >= 80 or abuseipdb_score >= 80:
         recommendations.append({
-            'urgency': 'immediate',
             'priority': 'critical',
-            'action': 'Block IP Immediately',
-            'reason': f'Active {pattern} attack in progress',
-            'why': [
-                f'{velocity} attempts per minute - attack ongoing',
-                f'{failure_rate}% failure rate indicates malicious activity',
-                f'Composite risk score: {overall_score}/100 (CRITICAL)',
-                f'AbuseIPDB reputation: {abuseipdb_score}/100'
+            'action': 'Block IP immediately',
+            'reason': 'Active threat detected' if overall_score >= 80 else f'Very bad reputation ({abuseipdb_score}/100)',
+            'details': [
+                f'Risk score: {overall_score:.0f}/100',
+                f'AbuseIPDB: {abuseipdb_score}/100',
+                f'Pattern: {pattern}' if pattern != 'Unknown' else None
             ],
-            'impact': 'Stops current attack immediately, prevents account compromise',
-            'confidence': min(0.98, composite_risk.get('confidence', 90) / 100),
-            'risk_if_ignored': 'HIGH - Account compromise likely within minutes',
             'action_type': 'block_ip',
-            'action_data': {
-                'ip': ip_address,
-                'reason': f'Critical threat: {pattern} attack, AbuseIPDB {abuseipdb_score}/100',
-                'duration': 'permanent'
-            },
-            'alternatives': [
-                {
-                    'action': 'Rate Limit Instead',
-                    'impact': 'Slower mitigation, attack continues at reduced rate',
-                    'when_to_use': 'If IP has some legitimate traffic mixed in'
-                }
-            ]
+            'action_data': {'ip': ip_address}
         })
 
-    # High velocity brute force - Enable rate limiting
-    if velocity > 10 or failed_attempts >= 20:
-        subnet = get_subnet(ip_address)
-        recommendations.append({
-            'urgency': 'short_term' if overall_score < 85 else 'immediate',
-            'priority': 'high',
-            'action': 'Enable Rate Limiting',
-            'reason': f'Prevent future attacks from subnet {subnet}',
-            'why': [
-                f'Current attack velocity: {velocity}/min',
-                f'{failed_attempts} failed attempts detected',
-                'Same subnet likely contains other compromised hosts',
-                'Rate limiting prevents brute force escalation'
-            ],
-            'impact': f'Limits future attempts to 5 per minute from {subnet}',
-            'confidence': min(0.94, 0.75 + (min(velocity, 30) / 30 * 0.19)),
-            'risk_if_ignored': 'MEDIUM - Attack may resume or escalate',
-            'recommended_config': {
-                'max_attempts': 5,
-                'time_window': '1 minute',
-                'block_duration': '1 hour'
-            },
-            'action_type': 'rate_limit',
-            'action_data': {
-                'ip': ip_address,
-                'subnet': subnet,
-                'max_attempts': 5,
-                'time_window': 60,
-                'block_duration': 3600
-            },
-            'alternatives': [
-                {
-                    'action': 'Block Entire Subnet',
-                    'impact': 'More aggressive, may block legitimate users in subnet',
-                    'when_to_use': f'If entire {subnet} is known malicious'
-                }
-            ]
-        })
-
-    # Targeted accounts protection
-    if unique_usernames >= 5:
-        top_usernames = history.get('top_usernames', [])
-        high_value_targets = [u['target_username'] for u in top_usernames if u['target_username'] in ['root', 'admin', 'administrator', 'postgres', 'mysql', 'oracle']][:3]
-
-        if high_value_targets:
-            recommendations.append({
-                'urgency': 'short_term',
-                'priority': 'high',
-                'action': 'Protect Targeted Accounts',
-                'reason': f'{len(high_value_targets)} high-value accounts under attack',
-                'why': [
-                    f'Accounts: {", ".join(high_value_targets)}',
-                    'These accounts have elevated system privileges',
-                    'Compromise would grant full system access',
-                    f'{unique_usernames} total usernames targeted'
-                ],
-                'impact': 'Enables MFA and key-only auth for critical accounts',
-                'confidence': 0.92,
-                'risk_if_ignored': 'HIGH - Privileged account compromise',
-                'affected_accounts': high_value_targets,
-                'action_type': 'account_protection',
-                'action_data': {
-                    'accounts': high_value_targets,
-                    'recommended_actions': ['Enable MFA', 'Require SSH keys', 'Disable password auth']
-                },
-                'alternatives': []
-            })
-
-    # ML anomaly detection
-    if is_anomaly and ml_risk >= 60:
-        recommendations.append({
-            'urgency': 'short_term',
-            'priority': 'high',
-            'action': 'Create Alert Rule for Anomaly Pattern',
-            'reason': f'ML detected {pattern} pattern with {ml_confidence*100:.0f}% confidence',
-            'why': [
-                f'ML risk score: {ml_risk}/100',
-                f'Detection confidence: {ml_confidence*100:.0f}%',
-                f'Pattern: {pattern}',
-                'Early warning for similar future attacks'
-            ],
-            'impact': 'Auto-alerts on similar attack patterns before they escalate',
-            'confidence': ml_confidence,
-            'risk_if_ignored': 'MEDIUM - Future attacks may go undetected',
-            'action_type': 'create_rule',
-            'action_data': {
-                'rule_type': 'ml_anomaly',
-                'pattern': pattern,
-                'threshold': 3,
-                'window': '5m',
-                'severity': 'high'
-            },
-            'alternatives': []
-        })
-
-    # TOR/Anonymization network policy
-    if is_tor or is_proxy:
-        network_type = 'Tor Exit Node' if is_tor else 'VPN/Proxy'
-        recommendations.append({
-            'urgency': 'long_term',
-            'priority': 'medium',
-            'action': f'Review {network_type} Access Policy',
-            'reason': 'Traffic from anonymization network detected',
-            'why': [
-                f'Connection via {network_type}',
-                '87% of SSH attacks originate from anonymization networks',
-                'Legitimate users rarely access servers via Tor/VPN',
-                'Creates attribution challenges for security teams'
-            ],
-            'impact': 'Blocks or requires additional auth for anonymized connections',
-            'confidence': 0.95 if is_tor else 0.72,
-            'risk_if_ignored': 'LOW - But creates ongoing blind spot',
-            'action_type': 'geo_block',
-            'action_data': {
-                'network_type': network_type,
-                'is_tor': is_tor,
-                'country': country
-            },
-            'alternatives': [
-                {
-                    'action': 'Block All Tor/VPN',
-                    'impact': 'Strongest security, may block legitimate privacy users',
-                    'when_to_use': 'High-security production systems'
-                },
-                {
-                    'action': 'Require Additional Auth',
-                    'impact': 'MFA/2FA required for Tor/VPN connections',
-                    'when_to_use': 'Balance security with user privacy'
-                }
-            ]
-        })
-
-    # VirusTotal detections
+    # =================================================================
+    # HIGH: Known malware source
+    # =================================================================
     if vt_positives >= 5:
         recommendations.append({
-            'urgency': 'immediate' if vt_positives >= 10 else 'short_term',
             'priority': 'critical' if vt_positives >= 10 else 'high',
-            'action': 'Add to Permanent Blocklist',
-            'reason': f'Flagged by {vt_positives} security vendors',
-            'why': [
-                f'VirusTotal: {vt_positives}/{threat_intel.get("virustotal_total", 70)} vendors flagged',
-                'IP associated with malware distribution',
-                'Known malicious infrastructure',
-                f'Also flagged by AbuseIPDB: {abuseipdb_score}/100'
+            'action': 'Block - Malware infrastructure',
+            'reason': f'{vt_positives} security vendors flagged this IP',
+            'details': [
+                f'VirusTotal: {vt_positives} detections',
+                'Known for distributing malware'
             ],
-            'impact': 'Permanent block, prevents all future access',
-            'confidence': min(0.96, 0.70 + (vt_positives / 70 * 0.26)),
-            'risk_if_ignored': 'HIGH - Known malicious IP remains accessible',
-            'action_type': 'add_blocklist',
-            'action_data': {
-                'ip': ip_address,
-                'reason': f'VirusTotal: {vt_positives} vendors flagged',
-                'source': 'virustotal'
-            },
-            'alternatives': []
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address}
         })
 
-    # Long-term hardening (if any attacks detected)
-    if total_events >= 5 and overall_score >= 40:
+    # =================================================================
+    # HIGH: Rapid attack (DDoS-like)
+    # =================================================================
+    if velocity > 10:
         recommendations.append({
-            'urgency': 'long_term',
+            'priority': 'high',
+            'action': 'Block - Attack too fast',
+            'reason': f'{velocity:.0f} attempts per minute',
+            'details': [
+                f'Velocity: {velocity:.0f}/min',
+                'Automated attack tool or botnet'
+            ],
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address}
+        })
+
+    # =================================================================
+    # HIGH: Brute force attack
+    # =================================================================
+    if failed_attempts >= 5 and 'block_ip' not in [r.get('action_type') for r in recommendations]:
+        recommendations.append({
+            'priority': 'high',
+            'action': 'Block - Brute force attack',
+            'reason': f'{failed_attempts} failed login attempts',
+            'details': [
+                f'{failed_attempts} password guessing attempts',
+                'Classic brute force pattern'
+            ],
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address}
+        })
+
+    # =================================================================
+    # HIGH: Credential stuffing
+    # =================================================================
+    if unique_usernames >= 5 and 'block_ip' not in [r.get('action_type') for r in recommendations]:
+        recommendations.append({
+            'priority': 'high',
+            'action': 'Block - Credential stuffing',
+            'reason': f'Trying {unique_usernames} different usernames',
+            'details': [
+                f'{unique_usernames} usernames attempted',
+                'Testing stolen credentials'
+            ],
+            'action_type': 'block_ip',
+            'action_data': {'ip': ip_address}
+        })
+
+    # =================================================================
+    # MEDIUM: Tor exit node
+    # =================================================================
+    if is_tor:
+        recommendations.append({
             'priority': 'medium',
-            'action': 'Strengthen SSH Authentication',
-            'reason': 'Prevent future brute force and credential attacks',
-            'why': [
-                'Current configuration allows password-based authentication',
-                'Brute force attacks can eventually succeed given enough time',
-                'SSH keys provide cryptographic security',
-                f'{failed_attempts} attacks already observed'
+            'action': 'Review - Tor connection',
+            'reason': 'Attacker hiding behind Tor network',
+            'details': [
+                'Tor exit node detected',
+                'Real IP address is hidden'
             ],
-            'impact': 'Reduces brute force risk by 95%+',
-            'confidence': 0.85,
-            'risk_if_ignored': 'MEDIUM - Ongoing vulnerability to brute force',
-            'recommended_changes': [
-                'Disable password authentication (PasswordAuthentication no)',
-                'Require SSH keys only (PubkeyAuthentication yes)',
-                'Implement fail2ban or similar IDS',
-                'Enable two-factor authentication where possible'
-            ],
-            'action_type': 'auth_hardening',
-            'action_data': {
-                'recommendations': ['disable_password_auth', 'require_ssh_keys', 'enable_fail2ban', 'enable_2fa']
-            },
-            'alternatives': []
+            'action_type': 'review',
+            'action_data': {'ip': ip_address, 'network': 'tor'}
         })
 
-    # Low-risk baseline recommendation
-    if overall_score < 30 and not recommendations:
+    # =================================================================
+    # LOW: VPN/Proxy (not necessarily malicious)
+    # =================================================================
+    elif is_proxy:
         recommendations.append({
-            'urgency': 'long_term',
             'priority': 'low',
-            'action': 'Continue Monitoring',
-            'reason': 'Low-risk activity detected - appears benign',
-            'why': [
-                f'Composite risk: {overall_score}/100 (Low)',
-                f'Threat intel: {abuseipdb_score}/100 (Clean)',
-                'No attack patterns detected',
-                'Normal baseline activity'
+            'action': 'Monitor - VPN/Proxy',
+            'reason': 'Connection via VPN or proxy',
+            'details': [
+                f'Country: {country}',
+                'Many legitimate users use VPNs'
             ],
-            'impact': 'Maintain awareness without blocking legitimate activity',
-            'confidence': 0.70,
-            'risk_if_ignored': 'NONE - Low risk',
             'action_type': 'monitor',
-            'action_data': None,
-            'alternatives': []
+            'action_data': {'ip': ip_address}
         })
 
-    # Sort by urgency first, then priority
-    urgency_order = {'immediate': 0, 'short_term': 1, 'long_term': 2}
-    priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    # =================================================================
+    # MEDIUM: ML anomaly
+    # =================================================================
+    if is_anomaly and ml_risk >= 50 and 'block_ip' not in [r.get('action_type') for r in recommendations]:
+        recommendations.append({
+            'priority': 'medium',
+            'action': 'Investigate - Unusual behavior',
+            'reason': f'ML detected anomaly (risk: {ml_risk:.0f}/100)',
+            'details': [
+                f'Risk score: {ml_risk:.0f}/100',
+                f'Pattern: {pattern}'
+            ],
+            'action_type': 'investigate',
+            'action_data': {'ip': ip_address}
+        })
 
-    recommendations.sort(key=lambda x: (
-        urgency_order.get(x.get('urgency', 'long_term'), 3),
-        priority_order.get(x.get('priority', 'low'), 4)
-    ))
+    # =================================================================
+    # LOW: Clean IP
+    # =================================================================
+    if not recommendations:
+        if overall_score < 30:
+            recommendations.append({
+                'priority': 'low',
+                'action': 'No action needed',
+                'reason': 'This IP appears safe',
+                'details': [
+                    f'Risk: {overall_score:.0f}/100 (Low)',
+                    'No threats detected'
+                ],
+                'action_type': 'none',
+                'action_data': None
+            })
+        else:
+            recommendations.append({
+                'priority': 'low',
+                'action': 'Continue monitoring',
+                'reason': 'Moderate risk - watching',
+                'details': [
+                    f'Risk: {overall_score:.0f}/100',
+                    'Keep an eye on this IP'
+                ],
+                'action_type': 'monitor',
+                'action_data': {'ip': ip_address}
+            })
+
+    # Clean up None values from details
+    for rec in recommendations:
+        if rec.get('details'):
+            rec['details'] = [d for d in rec['details'] if d]
+
+    # Sort by priority
+    priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    recommendations.sort(key=lambda x: priority_order.get(x.get('priority', 'low'), 4))
 
     return recommendations
 
@@ -987,6 +805,40 @@ def list_scenarios():
         })
     except Exception as e:
         print(f"[Demo] Error listing scenarios: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@demo_routes.route('/scenarios/categorized', methods=['GET'])
+@login_required
+def list_scenarios_by_category():
+    """
+    Get scenarios organized by blocking mechanism.
+
+    Categories:
+    - ufw_blocking: Triggers SSH Guardian rules → UFW deny commands
+    - fail2ban: Generates auth.log entries → fail2ban bans
+    - baseline: Clean IPs for comparison
+    """
+    try:
+        from src.simulation.demo_scenarios import get_scenarios_by_category
+        categories = get_scenarios_by_category()
+
+        return jsonify({
+            'success': True,
+            'categories': categories,
+            'summary': {
+                'ufw_blocking': len(categories.get('ufw_blocking', [])),
+                'fail2ban': len(categories.get('fail2ban', [])),
+                'baseline': len(categories.get('baseline', []))
+            },
+            'description': {
+                'ufw_blocking': 'These scenarios trigger SSH Guardian blocking rules. When triggered, a UFW deny command is sent to the agent to block the IP.',
+                'fail2ban': 'These scenarios generate auth.log entries that fail2ban detects. Fail2ban handles the blocking directly.',
+                'baseline': 'Clean IPs for comparison - should NOT be blocked.'
+            }
+        })
+    except Exception as e:
+        print(f"[Demo] Error listing categorized scenarios: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

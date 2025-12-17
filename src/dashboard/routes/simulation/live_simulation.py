@@ -1,0 +1,634 @@
+"""
+SSH Guardian v3.0 - Live Attack Simulation
+API endpoints for running live attack simulations against target servers
+Supports both local (same machine) and remote (via HTTP) simulation
+"""
+
+import json
+import os
+import random
+import socket
+import requests
+from datetime import datetime
+from flask import request, jsonify
+import sys
+from pathlib import Path
+
+# Add project paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
+sys.path.append(str(PROJECT_ROOT / "dbs"))
+sys.path.append(str(PROJECT_ROOT / "src"))
+
+from connection import get_connection
+from . import live_sim_routes
+from src.core.auth import login_required
+from src.simulation.demo_scenarios import DEMO_SCENARIOS, get_demo_scenarios
+
+# Usernames for credential stuffing scenarios
+USERNAMES = ['admin', 'root', 'user', 'oracle', 'postgres', 'mysql', 'test', 'ubuntu', 'deploy', 'guest', 'ftp', 'www-data']
+
+
+def is_local_target(ip_address: str) -> bool:
+    """Check if target IP is local (same machine as dashboard)"""
+    local_ips = ['127.0.0.1', 'localhost', '::1']
+
+    # Add machine's own IPs
+    try:
+        hostname = socket.gethostname()
+        local_ips.append(socket.gethostbyname(hostname))
+        # Get all IPs for this host
+        for info in socket.getaddrinfo(hostname, None):
+            local_ips.append(info[4][0])
+    except:
+        pass
+
+    return ip_address in local_ips
+
+
+def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log_file: str = '/var/log/auth.log') -> dict:
+    """
+    Inject attack simulation directly to local auth.log file.
+    Used when dashboard and agent are on the same machine.
+    """
+    scenario = DEMO_SCENARIOS.get(scenario_id)
+    if not scenario:
+        return {'success': False, 'error': f'Unknown scenario: {scenario_id}'}
+
+    # Select IP
+    if use_alternate_ip and scenario.get('alternate_ips'):
+        ip = random.choice(scenario['alternate_ips'])
+    else:
+        ip = scenario['ip']
+
+    template = scenario.get('log_template', 'sshd[{pid}]: Failed password for root from {ip} port {port} ssh2')
+    hostname = socket.gethostname()
+    entries = []
+
+    now = datetime.now()
+    month = now.strftime('%b')
+    day = now.day
+
+    for i in range(event_count):
+        # Generate timestamp with small offsets
+        time_offset = i * random.randint(1, 3)
+        event_time = datetime.fromtimestamp(now.timestamp() + time_offset)
+        time_str = event_time.strftime('%H:%M:%S')
+
+        # For credential stuffing, rotate usernames
+        username = USERNAMES[i % len(USERNAMES)] if scenario.get('rotate_usernames') else 'root'
+
+        # Format the log entry
+        entry = f"{month} {day:2d} {time_str} {hostname} " + template.format(
+            pid=random.randint(10000, 99999),
+            ip=ip,
+            port=random.randint(40000, 65000),
+            username=username,
+            day=day,
+            time=time_str,
+            hostname=hostname
+        )
+        entries.append(entry)
+
+    # Write to auth.log
+    try:
+        with open(log_file, 'a') as f:
+            for entry in entries:
+                f.write(entry + '\n')
+
+        return {
+            'success': True,
+            'ip_used': ip,
+            'lines_written': len(entries),
+            'log_file': log_file,
+            'injected_at': datetime.now().isoformat(),
+            'local': True
+        }
+    except PermissionError:
+        return {'success': False, 'error': f'Permission denied writing to {log_file}. Run dashboard with sudo or check permissions.'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@live_sim_routes.route('/live/scenarios', methods=['GET'])
+@login_required
+def list_live_scenarios():
+    """Get list of scenarios available for live simulation"""
+    try:
+        scenarios = get_demo_scenarios(use_fresh_ips=False)
+        return jsonify({
+            'success': True,
+            'scenarios': scenarios,
+            'count': len(scenarios)
+        })
+    except Exception as e:
+        print(f"[LiveSim] Error listing scenarios: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@live_sim_routes.route('/live/run', methods=['POST'])
+@login_required
+def run_live_simulation():
+    """
+    Run a live attack simulation against a target server.
+
+    Request Body:
+        target_id: int - ID of the target server
+        scenario_id: str - ID of the scenario (from DEMO_SCENARIOS)
+        event_count: int - Number of events to inject (default: 15)
+        use_alternate_ip: bool - Use alternate IP (default: False)
+
+    Flow:
+        1. Validate target and scenario
+        2. Check if target is local or remote
+        3. Local: Write directly to auth.log
+        4. Remote: Send HTTP request to simulation receiver
+        5. Create simulation_run record
+        6. Return run_id for status tracking
+    """
+    try:
+        data = request.get_json() or {}
+        target_id = data.get('target_id')
+        scenario_id = data.get('scenario_id')
+        event_count = data.get('event_count', 15)
+        use_alternate_ip = data.get('use_alternate_ip', False)
+
+        if not target_id:
+            return jsonify({'success': False, 'error': 'target_id is required'}), 400
+        if not scenario_id:
+            return jsonify({'success': False, 'error': 'scenario_id is required'}), 400
+
+        # Get scenario details
+        scenario = DEMO_SCENARIOS.get(scenario_id)
+        if not scenario:
+            return jsonify({'success': False, 'error': f'Unknown scenario: {scenario_id}'}), 400
+
+        # Get target server details
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT id, name, ip_address, port, api_key, is_active
+            FROM simulation_targets
+            WHERE id = %s
+        """, (target_id,))
+
+        target = cursor.fetchone()
+
+        if not target:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Target not found'}), 404
+
+        if not target['is_active']:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Target is not active'}), 400
+
+        # Create simulation run record
+        source_ip = scenario['ip']  # Will be updated with actual IP from injection
+        cursor.execute("""
+            INSERT INTO live_simulation_runs
+            (target_id, scenario_id, scenario_name, source_ip, event_count, status)
+            VALUES (%s, %s, %s, %s, %s, 'pending')
+        """, (target_id, scenario_id, scenario['name'], source_ip, event_count))
+
+        run_id = cursor.lastrowid
+        conn.commit()
+
+        # Check if target is local (same machine) or remote
+        is_local = is_local_target(target['ip_address'])
+
+        if is_local:
+            # LOCAL: Write directly to auth.log
+            print(f"[LiveSim] Local target detected ({target['ip_address']}), writing directly to auth.log")
+            result = inject_local(scenario_id, event_count, use_alternate_ip)
+
+            if result.get('success'):
+                cursor.execute("""
+                    UPDATE live_simulation_runs
+                    SET status = 'injected',
+                        source_ip = %s,
+                        injected_at = NOW()
+                    WHERE id = %s
+                """, (result.get('ip_used', source_ip), run_id))
+                conn.commit()
+                cursor.close()
+                conn.close()
+
+                return jsonify({
+                    'success': True,
+                    'run_id': run_id,
+                    'target_name': target['name'],
+                    'scenario_id': scenario_id,
+                    'scenario_name': scenario['name'],
+                    'ip_used': result.get('ip_used'),
+                    'lines_written': result.get('lines_written'),
+                    'status': 'injected',
+                    'local': True,
+                    'message': f"Local injection: {result.get('lines_written', event_count)} events written to {result.get('log_file')}"
+                })
+            else:
+                cursor.execute("""
+                    UPDATE live_simulation_runs
+                    SET status = 'failed', error_message = %s, completed_at = NOW()
+                    WHERE id = %s
+                """, (result.get('error', 'Local injection failed'), run_id))
+                conn.commit()
+                cursor.close()
+                conn.close()
+                return jsonify({'success': False, 'run_id': run_id, 'error': result.get('error')}), 500
+
+        # REMOTE: Send HTTP request to simulation receiver
+        receiver_url = f"http://{target['ip_address']}:{target['port']}/api/simulation/inject"
+
+        try:
+            response = requests.post(
+                receiver_url,
+                headers={
+                    'X-API-Key': target['api_key'],
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    'scenario_id': scenario_id,
+                    'event_count': event_count,
+                    'use_alternate_ip': use_alternate_ip
+                },
+                timeout=30
+            )
+
+            result = response.json()
+
+            if result.get('success'):
+                # Update run with injection details
+                cursor.execute("""
+                    UPDATE live_simulation_runs
+                    SET status = 'injected',
+                        source_ip = %s,
+                        injected_at = NOW()
+                    WHERE id = %s
+                """, (result.get('ip_used', source_ip), run_id))
+                conn.commit()
+
+                cursor.close()
+                conn.close()
+
+                return jsonify({
+                    'success': True,
+                    'run_id': run_id,
+                    'target_name': target['name'],
+                    'scenario_id': scenario_id,
+                    'scenario_name': scenario['name'],
+                    'ip_used': result.get('ip_used'),
+                    'lines_written': result.get('lines_written'),
+                    'status': 'injected',
+                    'message': f"Injected {result.get('lines_written', event_count)} events to {target['name']}"
+                })
+            else:
+                # Update run as failed
+                cursor.execute("""
+                    UPDATE live_simulation_runs
+                    SET status = 'failed',
+                        error_message = %s,
+                        completed_at = NOW()
+                    WHERE id = %s
+                """, (result.get('error', 'Unknown error'), run_id))
+                conn.commit()
+                cursor.close()
+                conn.close()
+
+                return jsonify({
+                    'success': False,
+                    'run_id': run_id,
+                    'error': result.get('error', 'Injection failed')
+                }), 500
+
+        except requests.exceptions.ConnectionError:
+            error_msg = f"Cannot connect to {target['ip_address']}:{target['port']} - is receiver running?"
+            cursor.execute("""
+                UPDATE live_simulation_runs
+                SET status = 'failed', error_message = %s, completed_at = NOW()
+                WHERE id = %s
+            """, (error_msg, run_id))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'run_id': run_id, 'error': error_msg}), 500
+
+        except requests.exceptions.Timeout:
+            error_msg = 'Connection timeout'
+            cursor.execute("""
+                UPDATE live_simulation_runs
+                SET status = 'failed', error_message = %s, completed_at = NOW()
+                WHERE id = %s
+            """, (error_msg, run_id))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'run_id': run_id, 'error': error_msg}), 500
+
+    except Exception as e:
+        print(f"[LiveSim] Error running simulation: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@live_sim_routes.route('/live/<int:run_id>/status', methods=['GET'])
+@login_required
+def get_simulation_status(run_id):
+    """
+    Get current status of a simulation run.
+
+    Checks:
+    - Run record status
+    - fail2ban events for the source IP
+    - auth_events from the target agent
+    - ip_blocks for the source IP
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get run details
+        cursor.execute("""
+            SELECT
+                sr.*,
+                st.name as target_name,
+                st.agent_id
+            FROM live_simulation_runs sr
+            JOIN simulation_targets st ON sr.target_id = st.id
+            WHERE sr.id = %s
+        """, (run_id,))
+
+        run = cursor.fetchone()
+
+        if not run:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Run not found'}), 404
+
+        source_ip = run['source_ip']
+        agent_id = run.get('agent_id')
+
+        # Check for auth_events from this IP since injection
+        events_detected = 0
+        if run.get('injected_at'):
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM auth_events
+                WHERE source_ip_text = %s
+                AND timestamp >= %s
+            """, (source_ip, run['injected_at']))
+
+            result = cursor.fetchone()
+            events_detected = result['count'] if result else 0
+
+            # Update events_detected count
+            if events_detected > run.get('events_detected', 0):
+                cursor.execute("""
+                    UPDATE live_simulation_runs
+                    SET events_detected = %s,
+                        detected_at = COALESCE(detected_at, NOW()),
+                        status = CASE WHEN status = 'injected' THEN 'detected' ELSE status END
+                    WHERE id = %s
+                """, (events_detected, run_id))
+                conn.commit()
+
+        # Check for fail2ban blocks
+        fail2ban_block = None
+        cursor.execute("""
+            SELECT id, created_at
+            FROM fail2ban_events
+            WHERE ip_address = %s
+            AND action = 'ban'
+            AND created_at >= %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (source_ip, run.get('injected_at') or run['created_at']))
+
+        fb_result = cursor.fetchone()
+        if fb_result:
+            fail2ban_block = {
+                'id': fb_result['id'],
+                'blocked_at': fb_result['created_at'].isoformat() if fb_result['created_at'] else None
+            }
+
+        # Check for ML/manual blocks
+        ip_block = None
+        cursor.execute("""
+            SELECT id, block_source, blocked_at, block_reason
+            FROM ip_blocks
+            WHERE ip_address_text = %s
+            AND is_active = TRUE
+            AND blocked_at >= %s
+            ORDER BY blocked_at DESC
+            LIMIT 1
+        """, (source_ip, run.get('injected_at') or run['created_at']))
+
+        block_result = cursor.fetchone()
+        if block_result:
+            ip_block = {
+                'id': block_result['id'],
+                'source': block_result['block_source'],
+                'reason': block_result['block_reason'],
+                'blocked_at': block_result['blocked_at'].isoformat() if block_result['blocked_at'] else None
+            }
+
+        # Update status if blocked
+        if (fail2ban_block or ip_block) and run['status'] not in ('blocked', 'completed', 'failed'):
+            cursor.execute("""
+                UPDATE live_simulation_runs
+                SET status = 'blocked',
+                    blocked_at = NOW(),
+                    fail2ban_block_id = %s,
+                    ml_block_id = %s
+                WHERE id = %s
+            """, (
+                fail2ban_block['id'] if fail2ban_block else None,
+                ip_block['id'] if ip_block else None,
+                run_id
+            ))
+            conn.commit()
+
+            # Refresh run data
+            cursor.execute("SELECT * FROM live_simulation_runs WHERE id = %s", (run_id,))
+            run = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        # Build timeline
+        timeline = []
+
+        timeline.append({
+            'step': 'created',
+            'status': 'completed',
+            'time': run['created_at'].isoformat() if run.get('created_at') else None,
+            'message': 'Simulation created'
+        })
+
+        if run.get('injected_at'):
+            timeline.append({
+                'step': 'injected',
+                'status': 'completed',
+                'time': run['injected_at'].isoformat(),
+                'message': f"Injected {run['event_count']} events to auth.log"
+            })
+
+        if run.get('detected_at') or events_detected > 0:
+            timeline.append({
+                'step': 'detected',
+                'status': 'completed',
+                'time': run['detected_at'].isoformat() if run.get('detected_at') else None,
+                'message': f"Detected {events_detected} events in dashboard"
+            })
+        elif run['status'] == 'injected':
+            timeline.append({
+                'step': 'detected',
+                'status': 'pending',
+                'time': None,
+                'message': 'Waiting for agent to report events...'
+            })
+
+        if fail2ban_block:
+            timeline.append({
+                'step': 'fail2ban_block',
+                'status': 'completed',
+                'time': fail2ban_block['blocked_at'],
+                'message': 'fail2ban blocked the IP'
+            })
+
+        if ip_block:
+            timeline.append({
+                'step': 'ip_block',
+                'status': 'completed',
+                'time': ip_block['blocked_at'],
+                'message': f"IP blocked ({ip_block['source']})"
+            })
+
+        if run['status'] == 'blocked' or (fail2ban_block or ip_block):
+            timeline.append({
+                'step': 'completed',
+                'status': 'completed',
+                'time': run.get('blocked_at', run.get('completed_at')),
+                'message': 'Simulation complete - attack detected and blocked!'
+            })
+        elif run['status'] == 'failed':
+            timeline.append({
+                'step': 'failed',
+                'status': 'failed',
+                'time': run.get('completed_at'),
+                'message': run.get('error_message', 'Simulation failed')
+            })
+
+        # Format dates in run
+        for key in ['created_at', 'injected_at', 'detected_at', 'blocked_at', 'completed_at']:
+            if run.get(key):
+                run[key] = run[key].isoformat()
+
+        return jsonify({
+            'success': True,
+            'run_id': run_id,
+            'status': run['status'],
+            'target_name': run.get('target_name'),
+            'scenario_id': run['scenario_id'],
+            'scenario_name': run['scenario_name'],
+            'source_ip': source_ip,
+            'events_detected': events_detected,
+            'fail2ban_block': fail2ban_block,
+            'ip_block': ip_block,
+            'is_complete': run['status'] in ('blocked', 'completed', 'failed'),
+            'timeline': timeline,
+            'run': run
+        })
+
+    except Exception as e:
+        print(f"[LiveSim] Error getting status for run {run_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@live_sim_routes.route('/live/history', methods=['GET'])
+@login_required
+def get_simulation_history():
+    """Get history of simulation runs"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                sr.*,
+                st.name as target_name
+            FROM live_simulation_runs sr
+            JOIN simulation_targets st ON sr.target_id = st.id
+            ORDER BY sr.created_at DESC
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
+
+        runs = cursor.fetchall()
+
+        # Format dates
+        for run in runs:
+            for key in ['created_at', 'injected_at', 'detected_at', 'blocked_at', 'completed_at']:
+                if run.get(key):
+                    run[key] = run[key].isoformat()
+
+        # Get total count
+        cursor.execute("SELECT COUNT(*) as count FROM live_simulation_runs")
+        total = cursor.fetchone()['count']
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'runs': runs,
+            'count': len(runs),
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+
+    except Exception as e:
+        print(f"[LiveSim] Error getting history: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@live_sim_routes.route('/live/<int:run_id>/complete', methods=['POST'])
+@login_required
+def mark_simulation_complete(run_id):
+    """Manually mark a simulation as complete"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE live_simulation_runs
+            SET status = 'completed',
+                completed_at = NOW()
+            WHERE id = %s
+            AND status NOT IN ('completed', 'failed')
+        """, (run_id,))
+
+        if cursor.rowcount == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Run not found or already completed'}), 404
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'Simulation marked as complete'
+        })
+
+    except Exception as e:
+        print(f"[LiveSim] Error completing run {run_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

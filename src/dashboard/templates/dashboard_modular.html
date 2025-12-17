@@ -45,6 +45,7 @@
             {% include 'pages/reports_export.html' %}
             {% include 'pages/simulation.html' %}
             {% include 'pages/firewall_simple.html' %}
+            {% include 'pages/fail2ban.html' %}
 
             <!-- ML Intelligence Pages -->
             {% include 'pages/ml_overview.html' %}
@@ -209,7 +210,8 @@
                 'ml-training': 'page-ml-training',
                 'ml-comparison': 'page-ml-comparison',
                 'ml-benefits': 'page-ml-benefits',
-                'system-status': 'page-system-status'
+                'system-status': 'page-system-status',
+                'fail2ban': 'page-fail2ban'
             };
 
             const pageId = pageMap[pageName] || `page-${pageName}`;
@@ -357,6 +359,10 @@
                     if (typeof CacheSettingsPage !== 'undefined' && typeof CacheSettingsPage.init === 'function') {
                         CacheSettingsPage.init();
                     }
+                } else if (pageName === 'fail2ban') {
+                    if (typeof loadFail2banPage === 'function') {
+                        loadFail2banPage();
+                    }
                 }
             }
         }
@@ -448,13 +454,19 @@
                         if (typeof loadBlockedIPsPage === 'function') {
                             loadBlockedIPsPage();
                         }
+                    } else if (currentHash === 'firewall') {
+                        // Refresh blocked IPs if on firewall page with blocked tab
+                        if (typeof loadBlockedIPs === 'function') {
+                            loadBlockedIPs();
+                        }
                     }
                 } else {
                     if (data.message && data.message.includes('already blocked')) {
                         const viewBlock = confirm(`IP ${ipAddress} is already blocked!\n\nBlock ID: ${data.block_id}\n\nWould you like to view blocked IPs?`);
                         if (viewBlock) {
-                            window.location.hash = 'ip-blocks';
-                            showPage('ip-blocks');
+                            window.location.hash = 'firewall';
+                            showPage('firewall');
+                            setTimeout(() => { if(typeof switchFirewallTab === 'function') switchFirewallTab('blocked'); }, 300);
                         }
                     } else {
                         alert(`Failed to block IP: ${data.message || data.error || 'Unknown error'}`);

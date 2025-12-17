@@ -25,14 +25,29 @@ def invalidate_notification_rules_cache():
     cache = get_cache()
     cache.delete_pattern('notification_rules')
 
-# Valid trigger types
+# Valid trigger types - aligned with blocking rules
 VALID_TRIGGERS = [
+    # Core triggers
     'ip_blocked',
+    'agent_offline',
+    'system_error',
+    'successful_login',
+    # Blocking rule triggers
+    'brute_force_detected',
+    'distributed_brute_force_detected',
+    'account_takeover_detected',
+    'credential_stuffing_detected',
+    'off_hours_anomaly_detected',
+    'velocity_attack_detected',
+    # ML/API triggers
+    'ml_threat_detected',
     'high_risk_detected',
     'anomaly_detected',
-    'brute_force_detected',
-    'agent_offline',
-    'system_error'
+    # Geo/Network triggers
+    'geo_anomaly_detected',
+    'tor_detected',
+    'proxy_detected',
+    'geo_blocked'
 ]
 
 # Valid channels
@@ -109,14 +124,32 @@ def list_notification_rules():
 
 @notification_rules_routes.route('/triggers', methods=['GET'])
 def list_trigger_types():
-    """Get available trigger types"""
+    """Get available trigger types - aligned with blocking rules"""
     triggers = [
-        {'value': 'ip_blocked', 'label': 'IP Blocked', 'description': 'When an IP is blocked by the system'},
-        {'value': 'high_risk_detected', 'label': 'High Risk Detected', 'description': 'When a high risk IP is detected'},
-        {'value': 'anomaly_detected', 'label': 'Anomaly Detected', 'description': 'When unusual behavior is detected'},
-        {'value': 'brute_force_detected', 'label': 'Brute Force Detected', 'description': 'When brute force attack is detected'},
-        {'value': 'agent_offline', 'label': 'Agent Offline', 'description': 'When an agent goes offline'},
-        {'value': 'system_error', 'label': 'System Error', 'description': 'When a system error occurs'}
+        # Core system triggers
+        {'value': 'ip_blocked', 'label': 'IP Blocked', 'description': 'When any IP is blocked by the system', 'category': 'core', 'icon': '🛡️'},
+        {'value': 'agent_offline', 'label': 'Agent Offline', 'description': 'When a monitoring agent goes offline', 'category': 'core', 'icon': '📴'},
+        {'value': 'system_error', 'label': 'System Error', 'description': 'When a system error occurs', 'category': 'core', 'icon': '❌'},
+        {'value': 'successful_login', 'label': 'Successful Login', 'description': 'When a successful SSH login occurs (for monitoring)', 'category': 'core', 'icon': '✅'},
+
+        # Blocking rule triggers
+        {'value': 'brute_force_detected', 'label': 'Brute Force Attack', 'description': 'Same IP, multiple failed attempts in short time', 'category': 'attack', 'icon': '🔨'},
+        {'value': 'distributed_brute_force_detected', 'label': 'Distributed Brute Force', 'description': 'Many IPs targeting many usernames with slow frequency (botnet)', 'category': 'attack', 'icon': '🤖'},
+        {'value': 'account_takeover_detected', 'label': 'Account Takeover Attempt', 'description': 'Same username from multiple IPs/countries quickly', 'category': 'attack', 'icon': '🎭'},
+        {'value': 'credential_stuffing_detected', 'label': 'Credential Stuffing', 'description': 'Leaked credentials being tested from multiple locations', 'category': 'attack', 'icon': '🔑'},
+        {'value': 'off_hours_anomaly_detected', 'label': 'Off-Hours Anomaly', 'description': 'Login attempt outside normal business hours', 'category': 'attack', 'icon': '🌙'},
+        {'value': 'velocity_attack_detected', 'label': 'Velocity/DDoS Attack', 'description': 'Rapid-fire login attempts detected', 'category': 'attack', 'icon': '⚡'},
+
+        # ML/API triggers
+        {'value': 'ml_threat_detected', 'label': 'ML Threat Detected', 'description': 'Machine learning model detected suspicious behavior', 'category': 'ml', 'icon': '🧠'},
+        {'value': 'high_risk_detected', 'label': 'High Risk IP (API)', 'description': 'IP flagged by AbuseIPDB/VirusTotal reputation', 'category': 'ml', 'icon': '⚠️'},
+        {'value': 'anomaly_detected', 'label': 'Behavioral Anomaly', 'description': 'Unusual pattern detected by anomaly detection', 'category': 'ml', 'icon': '🔍'},
+
+        # Geo/Network triggers
+        {'value': 'geo_anomaly_detected', 'label': 'Impossible Travel', 'description': 'Login from distant location too quickly', 'category': 'geo', 'icon': '🌍'},
+        {'value': 'tor_detected', 'label': 'Tor Exit Node', 'description': 'Login attempt from Tor network', 'category': 'geo', 'icon': '🧅'},
+        {'value': 'proxy_detected', 'label': 'Proxy/VPN Detected', 'description': 'Login attempt through proxy or VPN', 'category': 'geo', 'icon': '🔒'},
+        {'value': 'geo_blocked', 'label': 'Geo-Restricted Country', 'description': 'Login from blocked/high-risk country', 'category': 'geo', 'icon': '🚫'}
     ]
 
     return jsonify({
@@ -486,6 +519,7 @@ def delete_notification_rule(rule_id):
 @notification_rules_routes.route('/<int:rule_id>/test', methods=['POST'])
 def test_notification_rule(rule_id):
     """Test a notification rule by sending a test notification"""
+    import uuid
     conn = None
     cursor = None
     try:
@@ -506,20 +540,43 @@ def test_notification_rule(rule_id):
             channels = json.loads(channels)
 
         results = []
+        delivery_status = {}
 
         # Test each channel
         for channel in channels:
             if channel == 'telegram':
                 result = test_telegram_channel(rule)
                 results.append({'channel': 'telegram', **result})
+                delivery_status['telegram'] = 'sent' if result.get('success') else 'failed'
 
             elif channel == 'email':
                 result = test_email_channel(rule)
                 results.append({'channel': 'email', **result})
+                delivery_status['email'] = 'sent' if result.get('success') else 'failed'
 
             elif channel == 'webhook':
                 result = test_webhook_channel(rule)
                 results.append({'channel': 'webhook', **result})
+                delivery_status['webhook'] = 'sent' if result.get('success') else 'failed'
+
+        # Record test notification in database
+        success_count = sum(1 for r in results if r.get('success'))
+        overall_status = 'sent' if success_count == len(results) else ('failed' if success_count == 0 else 'partial')
+
+        cursor.execute("""
+            INSERT INTO notifications (
+                notification_uuid, notification_rule_id, trigger_type,
+                channels, message_title, message_body, message_format,
+                priority, status, delivery_status, sent_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """, (
+            str(uuid.uuid4()), rule_id, rule['trigger_on'],
+            json.dumps(channels),
+            f"🧪 Test: {rule['rule_name']}",
+            f"Test notification for rule: {rule['rule_name']}",
+            'text', 'normal', overall_status, json.dumps(delivery_status)
+        ))
+        conn.commit()
 
         return jsonify({
             'success': True,
@@ -716,41 +773,7 @@ def test_webhook_channel(rule):
 
 # Default notification rules templates (using HTML format for Telegram compatibility)
 DEFAULT_RULES = [
-    {
-        'rule_name': 'Critical: Brute Force Attack Detected',
-        'trigger_on': 'brute_force_detected',
-        'channels': ['telegram'],
-        'message_template': '''🚨 <b>BRUTE FORCE ATTACK DETECTED</b>
-
-🖥️ <b>Server:</b> {{agent_name}}
-🌐 <b>Attacker IP:</b> {{ip_address}}
-📍 <b>Location:</b> {{country}} ({{city}})
-🔢 <b>Failed Attempts:</b> {{attempt_count}}
-⏰ <b>Time:</b> {{timestamp}}
-
-✅ The IP has been automatically blocked.''',
-        'message_format': 'html',
-        'rate_limit_minutes': 1,
-        'is_enabled': True
-    },
-    {
-        'rule_name': 'High Risk IP Detected',
-        'trigger_on': 'high_risk_detected',
-        'channels': ['telegram'],
-        'message_template': '''⚠️ <b>HIGH RISK IP DETECTED</b>
-
-🖥️ <b>Server:</b> {{agent_name}}
-🌐 <b>IP Address:</b> {{ip_address}}
-📍 <b>Location:</b> {{country}} ({{city}})
-🎯 <b>Risk Score:</b> {{risk_score}}/100
-🏷️ <b>Risk Factors:</b> {{risk_factors}}
-⏰ <b>Time:</b> {{timestamp}}
-
-⚠️ Manual review recommended.''',
-        'message_format': 'html',
-        'rate_limit_minutes': 5,
-        'is_enabled': True
-    },
+    # ============ CORE TRIGGERS ============
     {
         'rule_name': 'IP Blocked Notification',
         'trigger_on': 'ip_blocked',
@@ -759,7 +782,7 @@ DEFAULT_RULES = [
 
 🖥️ <b>Server:</b> {{agent_name}}
 🌐 <b>Blocked IP:</b> {{ip_address}}
-📍 <b>Location:</b> {{country}}
+📍 <b>Location:</b> {{country}} ({{city}})
 📝 <b>Reason:</b> {{block_reason}}
 ⏱️ <b>Duration:</b> {{block_duration}}
 ⏰ <b>Time:</b> {{timestamp}}''',
@@ -784,22 +807,6 @@ DEFAULT_RULES = [
         'is_enabled': True
     },
     {
-        'rule_name': 'Anomaly Detected',
-        'trigger_on': 'anomaly_detected',
-        'channels': ['telegram'],
-        'message_template': '''🔍 <b>ANOMALY DETECTED</b>
-
-🖥️ <b>Server:</b> {{agent_name}}
-📊 <b>Type:</b> {{anomaly_type}}
-📝 <b>Details:</b> {{anomaly_details}}
-⏰ <b>Time:</b> {{timestamp}}
-
-⚠️ Unusual activity pattern detected.''',
-        'message_format': 'html',
-        'rate_limit_minutes': 10,
-        'is_enabled': True
-    },
-    {
         'rule_name': 'System Error Alert',
         'trigger_on': 'system_error',
         'channels': ['telegram'],
@@ -814,6 +821,288 @@ DEFAULT_RULES = [
         'message_format': 'html',
         'rate_limit_minutes': 5,
         'is_enabled': False
+    },
+    {
+        'rule_name': 'Successful Login Monitor',
+        'trigger_on': 'successful_login',
+        'channels': ['telegram'],
+        'message_template': '''✅ <b>SSH LOGIN</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+👤 <b>User:</b> {{username}}
+🌐 <b>From IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}} ({{city}})
+⏰ <b>Time:</b> {{timestamp}}''',
+        'message_format': 'html',
+        'rate_limit_minutes': 0,
+        'is_enabled': False
+    },
+
+    # ============ ATTACK TRIGGERS ============
+    {
+        'rule_name': 'Brute Force Attack',
+        'trigger_on': 'brute_force_detected',
+        'channels': ['telegram'],
+        'message_template': '''🔨 <b>BRUTE FORCE ATTACK</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>Attacker IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}} ({{city}})
+🔢 <b>Failed Attempts:</b> {{attempt_count}}
+👤 <b>Target User:</b> {{username}}
+⏰ <b>Time:</b> {{timestamp}}
+
+✅ IP automatically blocked.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 1,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Distributed Brute Force (Botnet)',
+        'trigger_on': 'distributed_brute_force_detected',
+        'channels': ['telegram'],
+        'message_template': '''🤖 <b>DISTRIBUTED BRUTE FORCE DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>Attacking IPs:</b> {{unique_ips}} unique IPs
+👥 <b>Targeted Users:</b> {{unique_usernames}} usernames
+📊 <b>Pattern Score:</b> {{pattern_score}}/100
+🎯 <b>Threat Level:</b> {{threat_level}}
+⏰ <b>Time Window:</b> {{time_window}}
+
+⚠️ <b>Botnet-style attack pattern detected!</b>
+Multiple IPs coordinating slow attacks to evade rate limits.
+
+✅ All participating IPs blocked.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Account Takeover Attempt',
+        'trigger_on': 'account_takeover_detected',
+        'channels': ['telegram'],
+        'message_template': '''🎭 <b>ACCOUNT TAKEOVER ATTEMPT</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+👤 <b>Target User:</b> {{username}}
+🌐 <b>Attacking IPs:</b> {{unique_ips}} different IPs
+🌍 <b>Countries:</b> {{countries}}
+⏱️ <b>Time Window:</b> {{time_window}}
+🎯 <b>Threat Level:</b> {{threat_level}}
+
+⚠️ <b>Possible credential leak!</b>
+Same username being tried from multiple locations.
+
+✅ All attacking IPs blocked.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Credential Stuffing Attack',
+        'trigger_on': 'credential_stuffing_detected',
+        'channels': ['telegram'],
+        'message_template': '''🔑 <b>CREDENTIAL STUFFING DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}} ({{city}})
+👥 <b>Usernames Tried:</b> {{username_count}}
+⏱️ <b>Time Window:</b> {{time_window}}
+
+⚠️ <b>Bulk credential testing detected!</b>
+Attacker using list of leaked credentials.
+
+✅ IP blocked.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Off-Hours Login Anomaly',
+        'trigger_on': 'off_hours_anomaly_detected',
+        'channels': ['telegram'],
+        'message_template': '''🌙 <b>OFF-HOURS ANOMALY</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+👤 <b>User:</b> {{username}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}} ({{city}})
+⏰ <b>Login Time:</b> {{timestamp}}
+📊 <b>Anomaly Score:</b> {{anomaly_score}}/100
+🕐 <b>Work Hours:</b> {{work_hours}}
+
+⚠️ <b>Login attempt outside business hours!</b>
+User typically logs in during {{normal_hours}}.
+
+🔍 Manual verification recommended.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 10,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Velocity/DDoS Attack',
+        'trigger_on': 'velocity_attack_detected',
+        'channels': ['telegram'],
+        'message_template': '''⚡ <b>VELOCITY ATTACK DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}}
+🔢 <b>Requests:</b> {{request_count}} in {{time_window}}s
+📊 <b>Rate:</b> {{rate_per_second}}/sec
+
+⚠️ <b>Rapid-fire attack detected!</b>
+Automated tool or DDoS attempt.
+
+✅ IP blocked.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 1,
+        'is_enabled': True
+    },
+
+    # ============ ML/API TRIGGERS ============
+    {
+        'rule_name': 'ML Threat Detection',
+        'trigger_on': 'ml_threat_detected',
+        'channels': ['telegram'],
+        'message_template': '''🧠 <b>ML THREAT DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}} ({{city}})
+📊 <b>Risk Score:</b> {{risk_score}}/100
+🎯 <b>Confidence:</b> {{confidence}}%
+🏷️ <b>Indicators:</b> {{risk_factors}}
+⏰ <b>Time:</b> {{timestamp}}
+
+⚠️ <b>Machine Learning model flagged suspicious behavior.</b>
+
+✅ IP blocked based on ML prediction.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'High Risk IP (API Reputation)',
+        'trigger_on': 'high_risk_detected',
+        'channels': ['telegram'],
+        'message_template': '''⚠️ <b>HIGH RISK IP DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Location:</b> {{country}} ({{city}})
+📊 <b>AbuseIPDB Score:</b> {{abuse_score}}/100
+🦠 <b>VirusTotal:</b> {{vt_malicious}}/{{vt_total}} engines
+🏷️ <b>Categories:</b> {{threat_categories}}
+⏰ <b>Time:</b> {{timestamp}}
+
+⚠️ <b>IP has poor reputation in threat intelligence databases.</b>
+
+✅ IP blocked based on API reputation.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Behavioral Anomaly',
+        'trigger_on': 'anomaly_detected',
+        'channels': ['telegram'],
+        'message_template': '''🔍 <b>BEHAVIORAL ANOMALY</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📊 <b>Anomaly Type:</b> {{anomaly_type}}
+📝 <b>Details:</b> {{anomaly_details}}
+⏰ <b>Time:</b> {{timestamp}}
+
+⚠️ Unusual activity pattern detected.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 10,
+        'is_enabled': True
+    },
+
+    # ============ GEO/NETWORK TRIGGERS ============
+    {
+        'rule_name': 'Impossible Travel Alert',
+        'trigger_on': 'geo_anomaly_detected',
+        'channels': ['telegram'],
+        'message_template': '''🌍 <b>IMPOSSIBLE TRAVEL DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+👤 <b>User:</b> {{username}}
+📍 <b>Previous:</b> {{prev_location}} at {{prev_time}}
+📍 <b>Current:</b> {{curr_location}} at {{curr_time}}
+📏 <b>Distance:</b> {{distance_km}} km
+⏱️ <b>Time Diff:</b> {{time_diff}}
+
+⚠️ <b>Physically impossible travel detected!</b>
+User cannot be in both locations this quickly.
+
+🔍 Account may be compromised.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Tor Exit Node Detected',
+        'trigger_on': 'tor_detected',
+        'channels': ['telegram'],
+        'message_template': '''🧅 <b>TOR EXIT NODE DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+👤 <b>User Attempt:</b> {{username}}
+📊 <b>Event:</b> {{event_type}}
+⏰ <b>Time:</b> {{timestamp}}
+
+⚠️ <b>Login attempt from Tor anonymization network.</b>
+Often used to hide malicious activity.
+
+✅ IP blocked per policy.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
+    },
+    {
+        'rule_name': 'Proxy/VPN Detected',
+        'trigger_on': 'proxy_detected',
+        'channels': ['telegram'],
+        'message_template': '''🔒 <b>PROXY/VPN DETECTED</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Apparent Location:</b> {{country}}
+🏢 <b>Provider:</b> {{provider}}
+📊 <b>Proxy Type:</b> {{proxy_type}}
+⏰ <b>Time:</b> {{timestamp}}
+
+⚠️ <b>Connection through anonymizing proxy.</b>
+
+🔍 Manual review may be needed.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 10,
+        'is_enabled': False
+    },
+    {
+        'rule_name': 'Geo-Restricted Country',
+        'trigger_on': 'geo_blocked',
+        'channels': ['telegram'],
+        'message_template': '''🚫 <b>GEO-RESTRICTED ACCESS</b>
+
+🖥️ <b>Server:</b> {{agent_name}}
+🌐 <b>IP:</b> {{ip_address}}
+📍 <b>Country:</b> {{country}} ({{country_code}})
+👤 <b>User Attempt:</b> {{username}}
+⏰ <b>Time:</b> {{timestamp}}
+
+⚠️ <b>Login from restricted country blocked.</b>
+
+✅ IP blocked per geo-restriction policy.''',
+        'message_format': 'html',
+        'rate_limit_minutes': 5,
+        'is_enabled': True
     }
 ]
 

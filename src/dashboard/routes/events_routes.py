@@ -28,24 +28,12 @@ events_routes = Blueprint('events_routes', __name__, url_prefix='/api/dashboard/
 
 def _get_approximate_count(conn, where_sql: str, params: list, needs_threat_join: bool = False) -> int:
     """
-    Get an approximate count for pagination.
-    Uses table statistics for unfiltered queries, exact count for filtered.
+    Get exact count for pagination.
+    Always uses COUNT(*) for accurate results.
     """
     cursor = conn.cursor(dictionary=True)
     try:
-        if not where_sql or where_sql.strip() == "":
-            # Unfiltered query - use table statistics (much faster)
-            cursor.execute("""
-                SELECT TABLE_ROWS as approx_count
-                FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = DATABASE()
-                AND TABLE_NAME = 'auth_events'
-            """)
-            result = cursor.fetchone()
-            if result and result['approx_count']:
-                return int(result['approx_count'])
-
-        # Filtered query - add threat intel join if filtering by threat level
+        # Always use exact count for accuracy
         threat_join = ""
         if needs_threat_join:
             threat_join = "LEFT JOIN ip_threat_intelligence ti ON ae.source_ip_text = ti.ip_address_text"
@@ -74,6 +62,7 @@ def list_events():
     - event_type: Filter by event type (failed, successful, invalid)
     - threat_level: Filter by threat level (clean, low, medium, high, critical)
     - search: Search by IP or username
+    - time_range: Filter by time (today, yesterday, last_7_days, last_30_days, all_time) - default: last_30_days
     - nocache: Set to 1 to bypass cache
     """
 
@@ -86,6 +75,7 @@ def list_events():
         search = request.args.get('search', '').strip()
         ip_filter = request.args.get('ip', '').strip()
         agent_id = request.args.get('agent_id')
+        time_range = request.args.get('time_range', 'last_30_days')  # Default to last 30 days
         nocache = request.args.get('nocache', '0') == '1'
 
         # Build filter dict for cache key
@@ -94,7 +84,8 @@ def list_events():
             'threat_level': threat_level,
             'search': search if search else None,
             'ip': ip_filter if ip_filter else None,
-            'agent_id': agent_id
+            'agent_id': agent_id,
+            'time_range': time_range
         }
         # Remove None values for cleaner cache key
         filters = {k: v for k, v in filters.items() if v is not None}
@@ -133,6 +124,17 @@ def list_events():
         if agent_id:
             where_clauses.append("ae.agent_id = %s")
             params.append(agent_id)
+
+        # Time range filter
+        if time_range and time_range != 'all_time':
+            if time_range == 'today':
+                where_clauses.append("DATE(ae.timestamp) = CURDATE()")
+            elif time_range == 'yesterday':
+                where_clauses.append("DATE(ae.timestamp) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)")
+            elif time_range == 'last_7_days':
+                where_clauses.append("ae.timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+            elif time_range == 'last_30_days':
+                where_clauses.append("ae.timestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY)")
 
         where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
 
@@ -249,11 +251,14 @@ def list_events():
 
                     if agent_id and agent_id in agent_data:
                         ag = agent_data[agent_id]
-                        event['agent_name'] = ag['display_name']
+                        # Use display_name if set, otherwise use hostname
+                        event['agent_name'] = ag['display_name'] or ag['hostname']
                         event['agent_hostname'] = ag['hostname']
+                        event['agent_id_resolved'] = agent_id
                     else:
                         event['agent_name'] = None
                         event['agent_hostname'] = None
+                        event['agent_id_resolved'] = agent_id
 
             # Get count - use cached or approximate for better performance
             count_cache_key = cache_key_hash('events_count', filters=filters)
@@ -311,9 +316,10 @@ def list_events():
 
                     # Agent
                     'agent': {
+                        'id': event.get('agent_id_resolved'),
                         'name': event['agent_name'],
                         'hostname': event['agent_hostname']
-                    } if event['agent_name'] else None
+                    } if event['agent_name'] or event.get('agent_id_resolved') else None
                 }
 
                 formatted_events.append(formatted_event)

@@ -22,6 +22,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 # Import routes
 from routes.auth_routes import auth_bp
 from routes.events_routes import events_routes
+from routes.events_analysis_routes import events_analysis_routes
 from routes.blocking_routes import blocking_routes
 from routes.agents import agent_routes  # Updated to use modular package
 from routes.geoip_routes import geoip_routes
@@ -38,6 +39,7 @@ from routes.notification_channels_routes import notification_channels_routes
 from routes.daily_reports_routes import daily_reports_routes
 from routes.trends_reports_routes import trends_reports_routes
 from routes.simulation_routes import simulation_routes
+from routes.simulation import live_sim_routes  # Live attack simulation
 from routes.ml_routes import ml_routes
 from routes.ml_training_routes import ml_training_routes
 from routes.demo_routes import demo_routes
@@ -49,6 +51,7 @@ from routes.event_actions_routes import event_actions_routes
 from routes.ip_info_routes import ip_info_routes
 from routes.dashboard_content_routes import dashboard_content_routes
 from routes.notification_pane_routes import notification_pane_routes
+from routes.fail2ban_routes import fail2ban_routes
 from auth import SessionManager, login_required
 
 # Import API blueprints
@@ -69,6 +72,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 2592000  # 30 days in seconds
 # Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(events_routes)  # Dashboard events API
+app.register_blueprint(events_analysis_routes)  # Events analysis API
 app.register_blueprint(blocking_routes)  # Blocking management API
 app.register_blueprint(agent_routes, url_prefix='/api')  # Agent management API
 app.register_blueprint(geoip_routes)  # GeoIP lookup API
@@ -85,6 +89,7 @@ app.register_blueprint(notification_channels_routes, url_prefix='/api/dashboard/
 app.register_blueprint(daily_reports_routes, url_prefix='/api/dashboard/daily-reports')  # Daily reports
 app.register_blueprint(trends_reports_routes, url_prefix='/api/dashboard/trends-reports')  # Trends reports
 app.register_blueprint(simulation_routes, url_prefix='/api/simulation')  # Simulation API
+app.register_blueprint(live_sim_routes, url_prefix='/api/live-sim')  # Live attack simulation API
 app.register_blueprint(ml_routes)  # ML Intelligence API
 app.register_blueprint(ml_training_routes)  # ML Training API
 app.register_blueprint(demo_routes, url_prefix='/api/demo')  # Demo scenarios API
@@ -96,6 +101,7 @@ app.register_blueprint(event_actions_routes)  # Event actions API (whitelist, wa
 app.register_blueprint(ip_info_routes)  # IP geolocation info API (FreeIPAPI)
 app.register_blueprint(dashboard_content_routes, url_prefix='/api/dashboard/content')  # Dashboard content API (thesis/guide)
 app.register_blueprint(notification_pane_routes, url_prefix='/api/notifications')  # Notification pane API
+app.register_blueprint(fail2ban_routes, url_prefix='/api/dashboard/fail2ban')  # Fail2ban events API
 app.register_blueprint(events_api)  # API for agent event submission
 
 

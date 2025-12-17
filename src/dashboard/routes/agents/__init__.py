@@ -17,3 +17,4 @@ from . import management
 from . import statistics
 from . import firewall
 from . import ufw
+from . import fail2ban

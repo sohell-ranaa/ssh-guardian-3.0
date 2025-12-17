@@ -60,8 +60,8 @@ def agent_stats():
         """)
         online_agents = cursor.fetchone()['count']
 
-        # Total events from agents
-        cursor.execute("SELECT SUM(total_events_sent) as count FROM agents")
+        # Total events (actual count from auth_events table)
+        cursor.execute("SELECT COUNT(*) as count FROM auth_events")
         total_events = cursor.fetchone()['count'] or 0
 
         # Total batches
@@ -84,7 +84,7 @@ def agent_stats():
             'active_agents': active_agents,
             'approved_agents': approved_agents,
             'online_agents': online_agents,
-            'total_events_from_agents': int(total_events),
+            'total_events': int(total_events),
             'total_batches': total_batches,
             'batches_last_24h': recent_batches
         }

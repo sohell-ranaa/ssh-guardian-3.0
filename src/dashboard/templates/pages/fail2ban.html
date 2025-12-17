@@ -1,0 +1,364 @@
+<!-- SSH Guardian v3.0 - Fail2ban Events Page -->
+<div id="page-fail2ban" class="page-content" style="display: none;">
+    <div class="page-header-with-cache">
+        <div>
+            <h1 class="page-title">Fail2ban Events</h1>
+            <p class="page-subtitle">Monitor ban/unban events reported by fail2ban</p>
+        </div>
+        <div class="page-header-actions">
+            <div class="cache-indicator loading" data-cache-endpoint="fail2ban">
+                <span class="cache-status-dot"></span>
+                <span class="cache-indicator-text">Loading...</span>
+                <span class="cache-time"></span>
+                <button class="cache-refresh-btn" onclick="loadFail2banPage()" title="Refresh data">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compact Stats -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">🔒</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total Bans</div>
+                    <div id="f2b-stat-bans" style="font-size: 20px; font-weight: 700; color: #ef4444;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">🔓</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Total Unbans</div>
+                    <div id="f2b-stat-unbans" style="font-size: 20px; font-weight: 700; color: #10b981;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">📊</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Active Bans</div>
+                    <div id="f2b-stat-active" style="font-size: 20px; font-weight: 700; color: #f59e0b;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">📅</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Today's Events</div>
+                    <div id="f2b-stat-today" style="font-size: 20px; font-weight: 700;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">🔁</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Repeat Offenders</div>
+                    <div id="f2b-stat-repeat" style="font-size: 20px; font-weight: 700; color: #8b5cf6;">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="padding: 14px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <button id="refreshF2b" onclick="loadFail2banPage()" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px;">
+                🔄 Refresh
+            </button>
+
+            <div style="flex: 1;"></div>
+
+            <select id="f2bAgentFilter" onchange="loadFail2banEvents()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface);">
+                <option value="">All Agents</option>
+            </select>
+
+            <select id="f2bActionFilter" onchange="loadFail2banEvents()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface);">
+                <option value="">All Actions</option>
+                <option value="ban">Bans Only</option>
+                <option value="unban">Unbans Only</option>
+            </select>
+
+            <select id="f2bJailFilter" onchange="loadFail2banEvents()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface);">
+                <option value="">All Jails</option>
+                <option value="sshd">sshd</option>
+            </select>
+
+            <select id="f2bTimeFilter" onchange="loadFail2banEvents()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface);">
+                <option value="24h">Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="all">All Time</option>
+            </select>
+
+            <input type="text" id="f2bIpSearch" placeholder="Search IP..." onkeyup="filterFail2banTable()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; width: 150px; background: var(--surface);">
+        </div>
+    </div>
+
+    <!-- Events Table -->
+    <div class="card">
+        <div id="f2bLoading" style="text-align: center; padding: 40px; color: var(--text-secondary); font-size: 13px;">
+            Loading fail2ban events...
+        </div>
+        <div id="f2bTable" style="display: none;">
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
+                            <th style="padding: 10px; text-align: left; font-weight: 600; white-space: nowrap;">Action</th>
+                            <th style="padding: 10px; text-align: left; font-weight: 600; white-space: nowrap;">IP Address</th>
+                            <th style="padding: 10px; text-align: left; font-weight: 600; white-space: nowrap;">Agent</th>
+                            <th style="padding: 10px; text-align: left; font-weight: 600; white-space: nowrap;">Jail</th>
+                            <th style="padding: 10px; text-align: center; font-weight: 600; white-space: nowrap;">Failures</th>
+                            <th style="padding: 10px; text-align: left; font-weight: 600; white-space: nowrap;">Ban Time</th>
+                            <th style="padding: 10px; text-align: left; font-weight: 600; white-space: nowrap;">Reported At</th>
+                            <th style="padding: 10px; text-align: center; font-weight: 600;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="f2bTableBody">
+                        <!-- Events will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="f2bPagination" style="padding: 14px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border);">
+                <div id="f2bInfo" style="color: var(--text-secondary); font-size: 13px;"></div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="prevF2bPage" onclick="f2bPrevPage()" style="padding: 6px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; cursor: pointer; font-size: 13px;">← Previous</button>
+                    <button id="nextF2bPage" onclick="f2bNextPage()" style="padding: 6px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; cursor: pointer; font-size: 13px;">Next →</button>
+                </div>
+            </div>
+        </div>
+        <div id="f2bError" style="display: none; text-align: center; padding: 40px; color: #D13438; font-size: 13px;">
+            Error loading fail2ban events
+        </div>
+        <div id="f2bEmpty" style="display: none; text-align: center; padding: 40px; color: var(--text-secondary);">
+            <div style="font-size: 48px; margin-bottom: 16px;">🔐</div>
+            <div style="font-size: 16px; font-weight: 500; margin-bottom: 8px;">No Fail2ban Events</div>
+            <div style="font-size: 13px;">No ban/unban events have been reported yet. Events will appear here when fail2ban reports activity from your agents.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Fail2ban page state
+let f2bCurrentPage = 1;
+let f2bPageSize = 25;
+let f2bTotalEvents = 0;
+let f2bAllEvents = [];
+
+async function loadFail2banPage() {
+    console.log('Loading fail2ban page...');
+    await Promise.all([
+        loadFail2banStats(),
+        loadFail2banEvents(),
+        loadF2bAgents()
+    ]);
+}
+
+async function loadFail2banStats() {
+    try {
+        const response = await fetch('/api/dashboard/fail2ban/stats');
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('f2b-stat-bans').textContent = data.stats.total_bans || 0;
+            document.getElementById('f2b-stat-unbans').textContent = data.stats.total_unbans || 0;
+            document.getElementById('f2b-stat-active').textContent = data.stats.active_bans || 0;
+            document.getElementById('f2b-stat-today').textContent = data.stats.today_events || 0;
+            document.getElementById('f2b-stat-repeat').textContent = data.stats.repeat_offenders || 0;
+        }
+    } catch (error) {
+        console.error('Error loading fail2ban stats:', error);
+    }
+}
+
+async function loadF2bAgents() {
+    try {
+        const response = await fetch('/api/agents/list');
+        const data = await response.json();
+
+        if (data.success && data.agents) {
+            const select = document.getElementById('f2bAgentFilter');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">All Agents</option>';
+
+            data.agents.forEach(agent => {
+                const option = document.createElement('option');
+                option.value = agent.id;
+                option.textContent = agent.hostname || agent.agent_id;
+                select.appendChild(option);
+            });
+
+            select.value = currentValue;
+        }
+    } catch (error) {
+        console.error('Error loading agents:', error);
+    }
+}
+
+async function loadFail2banEvents() {
+    const loading = document.getElementById('f2bLoading');
+    const table = document.getElementById('f2bTable');
+    const error = document.getElementById('f2bError');
+    const empty = document.getElementById('f2bEmpty');
+
+    loading.style.display = 'block';
+    table.style.display = 'none';
+    error.style.display = 'none';
+    empty.style.display = 'none';
+
+    try {
+        const agent = document.getElementById('f2bAgentFilter').value;
+        const action = document.getElementById('f2bActionFilter').value;
+        const jail = document.getElementById('f2bJailFilter').value;
+        const timeFilter = document.getElementById('f2bTimeFilter').value;
+
+        const params = new URLSearchParams({
+            page: f2bCurrentPage,
+            page_size: f2bPageSize
+        });
+
+        if (agent) params.append('agent_id', agent);
+        if (action) params.append('action', action);
+        if (jail) params.append('jail', jail);
+        if (timeFilter) params.append('time_range', timeFilter);
+
+        const response = await fetch(`/api/dashboard/fail2ban/events?${params}`);
+        const data = await response.json();
+
+        loading.style.display = 'none';
+
+        if (data.success) {
+            f2bAllEvents = data.events || [];
+            f2bTotalEvents = data.total || f2bAllEvents.length;
+
+            if (f2bAllEvents.length === 0) {
+                empty.style.display = 'block';
+            } else {
+                table.style.display = 'block';
+                renderFail2banTable();
+            }
+        } else {
+            error.style.display = 'block';
+            error.textContent = data.error || 'Error loading fail2ban events';
+        }
+    } catch (err) {
+        console.error('Error loading fail2ban events:', err);
+        loading.style.display = 'none';
+        error.style.display = 'block';
+    }
+}
+
+function renderFail2banTable() {
+    const tbody = document.getElementById('f2bTableBody');
+    tbody.innerHTML = '';
+
+    f2bAllEvents.forEach(event => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--border)';
+
+        // Action badge
+        const actionBadge = event.action === 'ban'
+            ? '<span style="background: #fee2e2; color: #dc2626; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">🔒 BAN</span>'
+            : '<span style="background: #d1fae5; color: #059669; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">🔓 UNBAN</span>';
+
+        // Format bantime
+        let banTimeStr = '-';
+        if (event.bantime_seconds && event.bantime_seconds > 0) {
+            const minutes = Math.floor(event.bantime_seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            if (hours > 0) {
+                banTimeStr = `${hours}h ${minutes % 60}m`;
+            } else {
+                banTimeStr = `${minutes}m`;
+            }
+        }
+
+        // Format timestamp
+        const reportedAt = event.reported_at ? new Date(event.reported_at).toLocaleString() : '-';
+
+        tr.innerHTML = `
+            <td style="padding: 10px;">${actionBadge}</td>
+            <td style="padding: 10px; font-family: monospace; font-weight: 500;">${event.ip_address}</td>
+            <td style="padding: 10px;">${event.agent_hostname || event.agent_id || '-'}</td>
+            <td style="padding: 10px;"><span style="background: var(--background); padding: 2px 8px; border-radius: 4px; font-size: 12px;">${event.jail_name}</span></td>
+            <td style="padding: 10px; text-align: center;">${event.failures || '-'}</td>
+            <td style="padding: 10px;">${banTimeStr}</td>
+            <td style="padding: 10px; font-size: 12px; color: var(--text-secondary);">${reportedAt}</td>
+            <td style="padding: 10px; text-align: center;">
+                <button onclick="viewIpDetails('${event.ip_address}')" style="padding: 4px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 11px; margin-right: 4px;" title="View IP Details">🔍</button>
+                <button onclick="gotoIpBlocks('${event.ip_address}')" style="padding: 4px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 11px;" title="View in Blocked IPs">🚫</button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    // Update pagination info
+    const start = (f2bCurrentPage - 1) * f2bPageSize + 1;
+    const end = Math.min(f2bCurrentPage * f2bPageSize, f2bTotalEvents);
+    document.getElementById('f2bInfo').textContent = `Showing ${start}-${end} of ${f2bTotalEvents} events`;
+
+    // Update pagination buttons
+    document.getElementById('prevF2bPage').disabled = f2bCurrentPage <= 1;
+    document.getElementById('nextF2bPage').disabled = end >= f2bTotalEvents;
+}
+
+function f2bPrevPage() {
+    if (f2bCurrentPage > 1) {
+        f2bCurrentPage--;
+        loadFail2banEvents();
+    }
+}
+
+function f2bNextPage() {
+    const maxPage = Math.ceil(f2bTotalEvents / f2bPageSize);
+    if (f2bCurrentPage < maxPage) {
+        f2bCurrentPage++;
+        loadFail2banEvents();
+    }
+}
+
+function filterFail2banTable() {
+    const search = document.getElementById('f2bIpSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('#f2bTableBody tr');
+
+    rows.forEach(row => {
+        const ip = row.cells[1]?.textContent.toLowerCase() || '';
+        row.style.display = ip.includes(search) ? '' : 'none';
+    });
+}
+
+function viewIpDetails(ip) {
+    // Navigate to threat intel page with this IP
+    window.location.hash = `ip-threat`;
+    setTimeout(() => {
+        const searchInput = document.getElementById('threatSearch');
+        if (searchInput) {
+            searchInput.value = ip;
+            if (typeof searchThreatIntel === 'function') {
+                searchThreatIntel(ip);
+            }
+        }
+    }, 200);
+}
+
+function gotoIpBlocks(ip) {
+    // Navigate to Firewall & Blocking page with Blocked IPs tab
+    window.location.hash = 'firewall';
+    // Wait for page to load then switch to blocked tab
+    setTimeout(() => {
+        if (typeof switchFirewallTab === 'function') {
+            switchFirewallTab('blocked');
+        }
+    }, 300);
+}
+</script>

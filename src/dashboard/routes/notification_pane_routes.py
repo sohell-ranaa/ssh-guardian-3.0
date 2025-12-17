@@ -79,31 +79,57 @@ def get_recent_notifications():
     """Get recent notifications for pane display (max 20)"""
     try:
         limit = min(int(request.args.get('limit', 20)), 50)
+        unread_only = request.args.get('unread_only', 'false').lower() == 'true'
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("""
-            SELECT
-                n.id,
-                n.notification_uuid,
-                n.trigger_type,
-                n.trigger_event_id,
-                n.trigger_block_id,
-                n.message_title,
-                n.message_body,
-                n.priority,
-                n.status,
-                n.is_read,
-                n.read_at,
-                n.ip_address,
-                n.created_at,
-                nr.rule_name
-            FROM notifications n
-            LEFT JOIN notification_rules nr ON n.notification_rule_id = nr.id
-            ORDER BY n.created_at DESC
-            LIMIT %s
-        """, (limit,))
+        # Build query based on filter
+        if unread_only:
+            cursor.execute("""
+                SELECT
+                    n.id,
+                    n.notification_uuid,
+                    n.trigger_type,
+                    n.trigger_event_id,
+                    n.trigger_block_id,
+                    n.message_title,
+                    n.message_body,
+                    n.priority,
+                    n.status,
+                    n.is_read,
+                    n.read_at,
+                    n.ip_address,
+                    n.created_at,
+                    nr.rule_name
+                FROM notifications n
+                LEFT JOIN notification_rules nr ON n.notification_rule_id = nr.id
+                WHERE n.is_read = FALSE OR n.is_read IS NULL
+                ORDER BY n.created_at DESC
+                LIMIT %s
+            """, (limit,))
+        else:
+            cursor.execute("""
+                SELECT
+                    n.id,
+                    n.notification_uuid,
+                    n.trigger_type,
+                    n.trigger_event_id,
+                    n.trigger_block_id,
+                    n.message_title,
+                    n.message_body,
+                    n.priority,
+                    n.status,
+                    n.is_read,
+                    n.read_at,
+                    n.ip_address,
+                    n.created_at,
+                    nr.rule_name
+                FROM notifications n
+                LEFT JOIN notification_rules nr ON n.notification_rule_id = nr.id
+                ORDER BY n.created_at DESC
+                LIMIT %s
+            """, (limit,))
 
         notifications = cursor.fetchall()
 

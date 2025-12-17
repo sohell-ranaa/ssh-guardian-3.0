@@ -137,6 +137,10 @@
         if (event.location?.is_tor) flags.push('Tor');
         if (event.location?.is_datacenter) flags.push('Datacenter');
 
+        // Get agent info
+        const agentName = event.agent?.name || event.agent?.hostname || 'Unknown Agent';
+        const agentId = event.agent?.id || null;
+
         const modal = document.createElement('div');
         modal.id = 'event-detail-modal';
         modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
@@ -155,6 +159,13 @@
                     <button onclick="this.closest('#event-detail-modal').remove(); window.location.hash='events-live';" style="background: none; border: none; cursor: pointer; font-size: 24px; color: var(--text-secondary); line-height: 1;">&times;</button>
                 </div>
                 <div style="padding: 20px;">
+                    <!-- Agent/Server Info Banner -->
+                    <div style="background: var(--background); border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; border-left: 4px solid var(--azure-blue);">
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Agent / Server</div>
+                        <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">${escapeHtml(agentName)}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">${escapeHtml(event.server) || 'N/A'}</div>
+                    </div>
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
                         <div>
                             <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">IP Address</label>
@@ -177,17 +188,13 @@
                             <div style="color: var(--text-primary);">${formatTimestamp(event.timestamp)}</div>
                         </div>
                         <div>
-                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Server</label>
-                            <div style="color: var(--text-primary);">${escapeHtml(event.server) || 'N/A'}</div>
+                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Auth Method</label>
+                            <div style="color: var(--text-primary);">${escapeHtml(event.auth_method) || 'N/A'}</div>
                         </div>
-                        <div>
+                        <div style="grid-column: span 2;">
                             <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Location</label>
                             <div style="color: var(--text-primary);">${location}</div>
                             ${flags.length > 0 ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${flags.join(' | ')}</div>` : ''}
-                        </div>
-                        <div>
-                            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Auth Method</label>
-                            <div style="color: var(--text-primary);">${escapeHtml(event.auth_method) || 'N/A'}</div>
                         </div>
                     </div>
 
@@ -214,7 +221,7 @@
                     ` : ''}
 
                     <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border);">
-                        <button onclick="blockIPFromModal('${escapeHtml(event.ip)}')" style="padding: 8px 16px; background: #D83B01; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                        <button onclick="blockIPFromModal('${escapeHtml(event.ip)}', ${agentId || 'null'})" style="padding: 8px 16px; background: rgba(200, 80, 60, 0.15); color: #c8503c; border: 1px solid rgba(200, 80, 60, 0.3); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">
                             Block IP
                         </button>
                         <button onclick="this.closest('#event-detail-modal').remove(); window.location.hash='events-live';" style="padding: 8px 16px; background: var(--background); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px;">
@@ -229,36 +236,77 @@
     }
 
     /**
-     * Block IP from the modal
+     * Block IP from the modal - includes agent_id for agent-based blocking
      */
-    window.blockIPFromModal = async function(ip) {
+    window.blockIPFromModal = async function(ip, agentId) {
         if (!confirm(`Block IP address ${ip}?`)) return;
 
         try {
-            const response = await fetch('/api/dashboard/blocking/blocks/add', {
+            const payload = {
+                ip_address: ip,
+                reason: 'Blocked from event details',
+                block_type: 'manual',
+                duration_minutes: 1440 // 24 hours default
+            };
+
+            // Add agent_id if provided (agent-based blocking)
+            if (agentId) {
+                payload.agent_id = agentId;
+            }
+
+            const response = await fetch('/api/dashboard/blocking/blocks/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ip_address: ip,
-                    block_reason: 'Blocked from event details',
-                    block_type: 'manual'
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
             if (data.success) {
-                alert(`IP ${ip} has been blocked.`);
+                // Close the modal
                 const modal = document.getElementById('event-detail-modal');
                 if (modal) modal.remove();
-                window.location.hash = 'events-live';
+
+                // Show notification
+                showBlockSuccessNotification(`IP ${ip} has been blocked successfully.`);
+
+                // Navigate to Firewall & Blocking -> Blocked IPs tab
+                window.location.hash = 'blocked-ips';
             } else {
-                alert(`Failed to block IP: ${data.error}`);
+                alert(`Failed to block IP: ${data.error || data.message}`);
             }
         } catch (error) {
             console.error('Error blocking IP:', error);
             alert('Failed to block IP. Please try again.');
         }
     };
+
+    /**
+     * Show success notification for block action
+     */
+    function showBlockSuccessNotification(message) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 16px 24px;
+            background: #388e3c;
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10001;
+            animation: slideInRight 0.3s ease;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
 
     /**
      * Start auto-refresh for live events
@@ -325,12 +373,14 @@
         const typeFilter = document.getElementById('eventTypeFilter');
         const threatFilter = document.getElementById('threatLevelFilter');
         const agentFilter = document.getElementById('agentFilter');
+        const timeRangeFilter = document.getElementById('timeRangeFilter');
 
         const search = searchInput ? searchInput.value : '';
         const ipFilterValue = ipFilter ? ipFilter.value : '';
         const eventType = typeFilter ? typeFilter.value : '';
         const threatLevel = threatFilter ? threatFilter.value : '';
         const agentId = agentFilter ? agentFilter.value : '';
+        const timeRange = timeRangeFilter ? timeRangeFilter.value : 'last_30_days';
 
         const params = new URLSearchParams({
             limit: pageSize,
@@ -347,6 +397,7 @@
         if (eventType) params.append('event_type', eventType);
         if (threatLevel) params.append('threat_level', threatLevel);
         if (agentId) params.append('agent_id', agentId);
+        if (timeRange) params.append('time_range', timeRange);
 
         // Show loading
         const loadingEl = document.getElementById('eventsLoading');
@@ -376,8 +427,8 @@
                 throw new Error(data?.error || 'Failed to load events');
             }
 
-            // Update overview statistics
-            updateOverviewStats(data.events || []);
+            // Update overview statistics (pass pagination for accurate total)
+            updateOverviewStats(data.events || [], data.pagination);
 
             const tbody = document.getElementById('eventsTableBody');
             if (!tbody) return;
@@ -412,6 +463,10 @@
                     const safeEventType = escapeHtml(event.event_type);
                     const safeReason = `Blocked from Live Events - ${safeEventType} attempt`;
 
+                    // Get agent/server display
+                    const agentDisplay = event.agent?.name || event.agent?.hostname || 'Unknown Agent';
+                    const serverDisplay = escapeHtml(event.server) || 'N/A';
+
                     row.innerHTML = `
                         <td style="padding: 12px; font-size: 12px;">${formatTimestamp(event.timestamp)}</td>
                         <td style="padding: 12px;">
@@ -433,29 +488,20 @@
                             ${threatInfo}
                         </td>
                         <td style="padding: 12px; font-size: 12px;">
-                            ${event.agent ? `<div style="font-weight: 500;">${escapeHtml(event.agent.name)}</div>` : ''}
-                            Server: ${escapeHtml(event.server) || 'N/A'}<br>
-                            Method: ${escapeHtml(event.auth_method) || 'N/A'}
+                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">${escapeHtml(agentDisplay)}</div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">${serverDisplay}</div>
                         </td>
                         <td style="padding: 12px;">
-                            <div style="display: flex; gap: 4px; align-items: center;">
-                                <button class="block-ip-btn" data-ip="${safeIp}" data-reason="${safeReason}" style="padding: 4px 8px; border: 1px solid var(--border); background: #D83B01; color: white; border-radius: 2px; cursor: pointer; font-size: 11px;">
-                                    Block IP
-                                </button>
-                                <div class="event-actions-dropdown" style="position: relative;">
-                                    <button class="actions-menu-btn" data-ip="${safeIp}" data-event-id="${event.id}" style="padding: 4px 10px; border: 1px solid var(--border); background: var(--background); color: var(--text-primary); border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                        Actions ▼
-                                    </button>
-                                </div>
-                            </div>
+                            <button class="view-details-btn" data-event='${JSON.stringify(event).replace(/'/g, "&#39;")}' style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500;">
+                                View Details
+                            </button>
                         </td>
                     `;
                     tbody.appendChild(row);
                 });
 
-                // Attach event listeners to block buttons and action buttons safely
-                attachBlockButtonListeners();
-                attachActionButtonListeners();
+                // Attach event listeners to view details buttons
+                attachViewDetailsListeners();
 
                 // Update IP status indicators
                 updateIpStatusIndicators();
@@ -489,49 +535,50 @@
     }
 
     /**
-     * Attach event listeners to block buttons (prevents XSS via onclick)
+     * Attach event listeners to view details buttons
      */
-    function attachBlockButtonListeners() {
-        const buttons = document.querySelectorAll('.block-ip-btn');
+    function attachViewDetailsListeners() {
+        const buttons = document.querySelectorAll('.view-details-btn');
         buttons.forEach(btn => {
             btn.addEventListener('click', function() {
-                const ip = this.getAttribute('data-ip');
-                const reason = this.getAttribute('data-reason');
-                if (ip && typeof quickBlock === 'function') {
-                    quickBlock(ip, reason);
+                try {
+                    const eventData = JSON.parse(this.getAttribute('data-event'));
+                    showEventDetailsModal(eventData);
+                } catch (e) {
+                    console.error('Error parsing event data:', e);
                 }
             });
         });
     }
 
-    /**
-     * Attach event listeners to action menu buttons (prevents XSS via onclick)
-     */
-    function attachActionButtonListeners() {
-        const buttons = document.querySelectorAll('.actions-menu-btn');
-        buttons.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const ip = this.getAttribute('data-ip');
-                const eventId = this.getAttribute('data-event-id');
-                if (ip && typeof showIpActions === 'function') {
-                    showIpActions(ip, eventId, this);
-                }
-            });
-        });
-    }
+    // Store overview stats to persist across pagination
+    let overviewStatsCache = null;
 
     /**
-     * Update overview statistics based on current filtered events
+     * Update overview statistics based on current filtered events and pagination
+     * Only updates on first page load (page 0) to show accurate totals
      */
-    function updateOverviewStats(events) {
+    function updateOverviewStats(events, pagination) {
         const totalEl = document.getElementById('overviewTotal');
         const failedEl = document.getElementById('overviewFailed');
         const successfulEl = document.getElementById('overviewSuccessful');
         const uniqueIPsEl = document.getElementById('overviewUniqueIPs');
         const highThreatEl = document.getElementById('overviewHighThreat');
 
+        // Only calculate stats on first page to get accurate overview
+        // On subsequent pages, keep the cached stats
+        if (currentPage > 0 && overviewStatsCache) {
+            // Use cached stats for pagination
+            if (totalEl) totalEl.textContent = overviewStatsCache.total.toLocaleString();
+            if (failedEl) failedEl.textContent = overviewStatsCache.failed.toLocaleString();
+            if (successfulEl) successfulEl.textContent = overviewStatsCache.successful.toLocaleString();
+            if (uniqueIPsEl) uniqueIPsEl.textContent = overviewStatsCache.uniqueIPs.toLocaleString();
+            if (highThreatEl) highThreatEl.textContent = overviewStatsCache.highThreat.toLocaleString();
+            return;
+        }
+
         if (!events || events.length === 0) {
+            overviewStatsCache = { total: 0, failed: 0, successful: 0, uniqueIPs: 0, highThreat: 0 };
             if (totalEl) totalEl.textContent = '0';
             if (failedEl) failedEl.textContent = '0';
             if (successfulEl) successfulEl.textContent = '0';
@@ -540,8 +587,8 @@
             return;
         }
 
-        // Calculate statistics
-        const total = events.length;
+        // Use pagination total for total count (accurate for filtered results)
+        const total = pagination?.total || events.length;
         const failed = events.filter(e => e.event_type === 'failed').length;
         const successful = events.filter(e => e.event_type === 'successful').length;
         const uniqueIPs = new Set(events.map(e => e.ip)).size;
@@ -549,6 +596,9 @@
             const level = e.threat?.level || e.threat_level;
             return level === 'high' || level === 'critical';
         }).length;
+
+        // Cache the stats
+        overviewStatsCache = { total, failed, successful, uniqueIPs, highThreat };
 
         // Update DOM
         if (totalEl) totalEl.textContent = total.toLocaleString();
@@ -642,34 +692,19 @@
     }
 
     /**
-     * Format timestamp for display using saved time settings (with seconds)
+     * Format timestamp for display using user's timezone and format settings
      */
     function formatTimestamp(timestamp) {
         if (!timestamp) return 'N/A';
 
-        const date = new Date(timestamp);
-
-        // Use TimeSettings module if available for consistent formatting
+        // Use TimeSettings module for consistent formatting with user preferences
         if (window.TimeSettings && window.TimeSettings.isLoaded()) {
-            const formatted = window.TimeSettings.format(timestamp, 'short');
-            // Add seconds if not already included
-            if (!formatted.match(/:\d{2}$/)) {
-                const seconds = String(date.getSeconds()).padStart(2, '0');
-                return formatted + ':' + seconds;
-            }
-            return formatted;
+            return window.TimeSettings.formatFull(timestamp);
         }
 
-        // Fallback to browser locale with seconds
-        return date.toLocaleString(undefined, {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
+        // Fallback if TimeSettings not loaded yet
+        const date = new Date(timestamp);
+        return date.toLocaleString();
     }
 
     /**
@@ -753,30 +788,30 @@
     }
 
     /**
-     * Get status badge HTML
+     * Get status badge HTML - muted/offshade colors
      */
     function getStatusBadge(eventType) {
         const safeType = escapeHtml(eventType);
         const badges = {
-            'failed': '<span style="background: #D83B01; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">FAILED</span>',
-            'successful': '<span style="background: #107C10; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">SUCCESS</span>',
-            'invalid': '<span style="background: #605E5C; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">INVALID</span>'
+            'failed': '<span style="background: rgba(200, 80, 60, 0.15); color: #c8503c; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(200, 80, 60, 0.3);">FAILED</span>',
+            'successful': '<span style="background: rgba(56, 142, 60, 0.15); color: #388e3c; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(56, 142, 60, 0.3);">SUCCESS</span>',
+            'invalid': '<span style="background: rgba(117, 117, 117, 0.15); color: #757575; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(117, 117, 117, 0.3);">INVALID</span>'
         };
-        return badges[eventType] || `<span style="background: #605E5C; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">${safeType?.toUpperCase() || 'UNKNOWN'}</span>`;
+        return badges[eventType] || `<span style="background: rgba(117, 117, 117, 0.15); color: #757575; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(117, 117, 117, 0.3);">${safeType?.toUpperCase() || 'UNKNOWN'}</span>`;
     }
 
     /**
-     * Get threat level badge HTML
+     * Get threat level badge HTML - muted/offshade colors
      */
     function getThreatBadge(level) {
         const badges = {
-            'clean': '<span style="background: #107C10; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">CLEAN</span>',
-            'low': '<span style="background: #FFB900; color: #323130; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">LOW</span>',
-            'medium': '<span style="background: #FF8C00; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">MEDIUM</span>',
-            'high': '<span style="background: #D83B01; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">HIGH</span>',
-            'critical': '<span style="background: #A80000; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">CRITICAL</span>'
+            'clean': '<span style="background: rgba(56, 142, 60, 0.15); color: #388e3c; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(56, 142, 60, 0.3);">CLEAN</span>',
+            'low': '<span style="background: rgba(251, 192, 45, 0.2); color: #b8860b; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(251, 192, 45, 0.4);">LOW</span>',
+            'medium': '<span style="background: rgba(245, 124, 0, 0.15); color: #e65100; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(245, 124, 0, 0.3);">MEDIUM</span>',
+            'high': '<span style="background: rgba(200, 80, 60, 0.15); color: #c8503c; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(200, 80, 60, 0.3);">HIGH</span>',
+            'critical': '<span style="background: rgba(183, 28, 28, 0.15); color: #b71c1c; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(183, 28, 28, 0.3);">CRITICAL</span>'
         };
-        return badges[level] || '<span style="background: #605E5C; color: white; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600;">UNKNOWN</span>';
+        return badges[level] || '<span style="background: rgba(117, 117, 117, 0.15); color: #757575; padding: 4px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; border: 1px solid rgba(117, 117, 117, 0.3);">UNKNOWN</span>';
     }
 
     /**
@@ -843,6 +878,15 @@
         const agentFilter = document.getElementById('agentFilter');
         if (agentFilter) {
             agentFilter.onchange = () => {
+                currentPage = 0;
+                loadEvents();
+            };
+        }
+
+        // Time range filter
+        const timeRangeFilter = document.getElementById('timeRangeFilter');
+        if (timeRangeFilter) {
+            timeRangeFilter.onchange = () => {
                 currentPage = 0;
                 loadEvents();
             };

@@ -52,6 +52,7 @@ def list_blocks():
     - is_active: Filter by active status (true/false)
     - block_source: Filter by source (manual, rule_based, etc.)
     - search: Search by IP address (partial match)
+    - agent_id: Filter by agent ID (agent-based blocking)
     """
     try:
         limit = min(int(request.args.get('limit', 50)), 500)
@@ -59,13 +60,15 @@ def list_blocks():
         is_active = request.args.get('is_active')
         block_source = request.args.get('block_source')
         search = request.args.get('search', '').strip()
+        agent_id = request.args.get('agent_id')
 
         # Generate cache key from parameters
         cache = get_cache()
         cache_k = cache_key_hash('blocking', 'blocks_list',
                                  limit=limit, offset=offset,
                                  is_active=is_active, block_source=block_source,
-                                 search=search if search else None)
+                                 search=search if search else None,
+                                 agent_id=agent_id)
 
         # Try cache first
         cached = cache.get(cache_k)
@@ -88,6 +91,11 @@ def list_blocks():
             where_clauses.append("ib.ip_address_text LIKE %s")
             params.append(f"%{search}%")
 
+        # Agent-based filtering
+        if agent_id:
+            where_clauses.append("(ib.agent_id = %s OR (ib.trigger_event_id IS NOT NULL AND ae.agent_id = %s))")
+            params.extend([agent_id, agent_id])
+
         where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
 
         conn = get_connection()
@@ -108,6 +116,7 @@ def list_blocks():
                     ib.unblock_at,
                     ib.auto_unblock,
                     ib.unblock_reason,
+                    ib.agent_id,
 
                     -- Rule info
                     br.rule_name,
@@ -115,9 +124,17 @@ def list_blocks():
                     -- Trigger event info
                     ae.source_ip_text as trigger_ip,
                     ae.target_username as trigger_username,
+                    ae.agent_id as event_agent_id,
 
-                    -- Agent info
-                    COALESCE(ag.display_name, ag.hostname, 'Manual Block') as agent_name,
+                    -- Agent info (from ip_blocks.agent_id or from auth_events.agent_id)
+                    COALESCE(
+                        ag_direct.display_name,
+                        ag_direct.hostname,
+                        ag.display_name,
+                        ag.hostname,
+                        'Manual Block'
+                    ) as agent_name,
+                    COALESCE(ib.agent_id, ae.agent_id) as resolved_agent_id,
 
                     -- GeoIP info
                     geo.country_name,
@@ -130,6 +147,7 @@ def list_blocks():
                 LEFT JOIN blocking_rules br ON ib.blocking_rule_id = br.id
                 LEFT JOIN auth_events ae ON ib.trigger_event_id = ae.id
                 LEFT JOIN agents ag ON ae.agent_id = ag.id
+                LEFT JOIN agents ag_direct ON ib.agent_id = ag_direct.id
                 LEFT JOIN ip_geolocation geo ON ib.ip_address_text = geo.ip_address_text
                 LEFT JOIN users u ON ib.unblocked_by_user_id = u.id
 
@@ -143,12 +161,20 @@ def list_blocks():
             cursor.execute(query, params)
             blocks = cursor.fetchall()
 
-            # Get total count
-            count_query = f"""
-                SELECT COUNT(*) as total
-                FROM ip_blocks ib
-                WHERE 1=1 {where_sql}
-            """
+            # Get total count (include auth_events join if filtering by agent_id)
+            if agent_id:
+                count_query = f"""
+                    SELECT COUNT(*) as total
+                    FROM ip_blocks ib
+                    LEFT JOIN auth_events ae ON ib.trigger_event_id = ae.id
+                    WHERE 1=1 {where_sql}
+                """
+            else:
+                count_query = f"""
+                    SELECT COUNT(*) as total
+                    FROM ip_blocks ib
+                    WHERE 1=1 {where_sql}
+                """
 
             cursor.execute(count_query, params[:-2])
             total = cursor.fetchone()['total']
@@ -162,6 +188,7 @@ def list_blocks():
                     'reason': block['block_reason'],
                     'source': block['block_source'],
                     'agent_name': block['agent_name'],
+                    'agent_id': block['resolved_agent_id'],
                     'failed_attempts': block['failed_attempts'],
                     'threat_level': block['threat_level'],
                     'is_active': bool(block['is_active']),
@@ -218,7 +245,8 @@ def manual_block():
     {
         "ip_address": "192.168.1.100",
         "reason": "Suspicious activity",
-        "duration_minutes": 1440  # Optional, default 24 hours
+        "duration_minutes": 1440,  # Optional, default 24 hours
+        "agent_id": 1  # Optional, for agent-based blocking
     }
     """
     try:
@@ -233,13 +261,15 @@ def manual_block():
         ip_address = data['ip_address']
         reason = data['reason']
         duration_minutes = data.get('duration_minutes', 1440)
+        agent_id = data.get('agent_id')
 
         # Block the IP
         result = block_ip_manual(
             ip_address=ip_address,
             reason=reason,
             user_id=get_current_user_id(),
-            duration_minutes=duration_minutes
+            duration_minutes=duration_minutes,
+            agent_id=agent_id
         )
 
         if result['success']:
@@ -292,6 +322,23 @@ def manual_unblock():
         ip_address = data['ip_address']
         reason = data.get('reason', 'Manual unblock')
 
+        # Check if this was a fail2ban block before unblocking
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        was_fail2ban_block = False
+
+        try:
+            cursor.execute("""
+                SELECT block_source FROM ip_blocks
+                WHERE ip_address_text = %s AND is_active = TRUE
+            """, (ip_address,))
+            block = cursor.fetchone()
+            if block and block['block_source'] == 'fail2ban':
+                was_fail2ban_block = True
+        finally:
+            cursor.close()
+            conn.close()
+
         # Unblock the IP
         result = unblock_ip(
             ip_address=ip_address,
@@ -300,6 +347,27 @@ def manual_unblock():
         )
 
         if result['success']:
+            # If it was a fail2ban block, mark for fail2ban sync
+            if was_fail2ban_block:
+                try:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE ip_blocks
+                        SET fail2ban_sync_status = 'pending'
+                        WHERE ip_address_text = %s
+                        AND is_active = FALSE
+                        AND manually_unblocked_at IS NOT NULL
+                        ORDER BY manually_unblocked_at DESC
+                        LIMIT 1
+                    """, (ip_address,))
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                    result['fail2ban_sync_pending'] = True
+                except Exception as e:
+                    print(f"Note: Could not set fail2ban sync status: {e}")
+
             # Invalidate cache
             invalidate_blocking_cache()
 
@@ -309,7 +377,7 @@ def manual_unblock():
                 action='ip_unblocked',
                 resource_type='ip_block',
                 resource_id=ip_address,
-                details={'ip_address': ip_address, 'reason': reason},
+                details={'ip_address': ip_address, 'reason': reason, 'was_fail2ban': was_fail2ban_block},
                 ip_address=request.remote_addr,
                 user_agent=request.headers.get('User-Agent')
             )

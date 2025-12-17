@@ -127,71 +127,32 @@
         if (!container || !timeSettingsData) return;
 
         const html = `
-            <div class="settings-section">
-                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">Time & Date Display</h2>
+            <div class="card" style="padding: 16px;">
+                <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px 0;">🕐 Time & Date</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <select id="time-setting-timezone" style="padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 12px;">
+                        ${(timeSettingsData.available_timezones || []).map(tz => {
+                            const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                            const displayText = tz === 'Local' ? 'Local' : tz;
+                            const isSelected = timeSettingsData.timezone === tz ? 'selected' : '';
+                            return '<option value="' + tz + '" ' + isSelected + '>' + displayText + '</option>';
+                        }).join('')}
+                    </select>
+                    <select id="time-setting-time-format" style="padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 12px;">
+                        <option value="24h" ${timeSettingsData.time_format === '24h' ? 'selected' : ''}>24h</option>
+                        <option value="12h" ${timeSettingsData.time_format === '12h' ? 'selected' : ''}>12h</option>
+                    </select>
+                    <select id="time-setting-date-format" style="padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 12px;">
+                        ${(timeSettingsData.available_date_formats || []).map(fmt => {
+                            return `<option value="${fmt}" ${timeSettingsData.date_format === fmt ? 'selected' : ''}>${fmt}</option>`;
+                        }).join('')}
+                    </select>
                 </div>
-
-                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
-                        <!-- Timezone Selection -->
-                        <div>
-                            <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
-                                Display Timezone
-                            </label>
-                            <select id="time-setting-timezone" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                                ${(timeSettingsData.available_timezones || []).map(tz => {
-                                    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                                    const displayText = tz === 'Local' ? 'Local (Browser: ' + browserTz + ')' : tz;
-                                    const isSelected = timeSettingsData.timezone === tz ? 'selected' : '';
-                                    return '<option value="' + tz + '" ' + isSelected + '>' + displayText + '</option>';
-                                }).join('')}
-                            </select>
-                            <p id="timezone-hint" style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                                ${timeSettingsData.timezone === 'Local'
-                                    ? "Using your browser's timezone automatically"
-                                    : 'All timestamps will be displayed in this timezone'}
-                            </p>
-                        </div>
-
-                        <!-- Time Format -->
-                        <div>
-                            <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
-                                Time Format
-                            </label>
-                            <select id="time-setting-time-format" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                                <option value="24h" ${timeSettingsData.time_format === '24h' ? 'selected' : ''}>24-hour (14:30:00)</option>
-                                <option value="12h" ${timeSettingsData.time_format === '12h' ? 'selected' : ''}>12-hour (2:30:00 PM)</option>
-                            </select>
-                        </div>
-
-                        <!-- Date Format -->
-                        <div>
-                            <label style="display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
-                                Date Format
-                            </label>
-                            <select id="time-setting-date-format" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text-primary); font-size: 14px;">
-                                ${(timeSettingsData.available_date_formats || []).map(fmt => {
-                                    const example = getDateFormatExample(fmt);
-                                    return `<option value="${fmt}" ${timeSettingsData.date_format === fmt ? 'selected' : ''}>${example} (${fmt})</option>`;
-                                }).join('')}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <span style="font-size: 14px; color: var(--text-secondary);">Preview: </span>
-                                <span id="time-preview" style="font-size: 14px; font-weight: 500; font-family: monospace; color: var(--text-primary);">
-                                    ${getCurrentTimePreview()}
-                                </span>
-                            </div>
-                            <button id="save-time-settings-btn" class="btn btn-primary">
-                                Save Time Settings
-                            </button>
-                        </div>
-                    </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="time-preview" style="font-size: 12px; font-family: monospace; color: var(--text-secondary);">${getCurrentTimePreview()}</span>
+                    <button id="save-time-settings-btn" style="padding: 8px 14px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer;">
+                        Save
+                    </button>
                 </div>
             </div>
         `;
@@ -399,21 +360,29 @@
 
         if (!container) return;
 
-        if (Object.keys(grouped).length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No settings found</p>';
+        // Filter out 'display' category (already shown in Time & Date section) and 'navigation' (shown above)
+        const filteredGrouped = {};
+        for (const [category, settings] of Object.entries(grouped)) {
+            if (category !== 'display' && category !== 'navigation') {
+                filteredGrouped[category] = settings;
+            }
+        }
+
+        if (Object.keys(filteredGrouped).length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No additional settings</p>';
             return;
         }
 
         let html = '';
 
         // Render each category
-        for (const [category, settings] of Object.entries(grouped)) {
+        for (const [category, settings] of Object.entries(filteredGrouped)) {
             html += `
-                <div class="settings-category-section" style="margin-bottom: 32px;">
-                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px; text-transform: capitalize; color: var(--text-primary);">
-                        ${category}
+                <div class="settings-category-section" style="margin-bottom: 16px;">
+                    <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 10px; text-transform: capitalize; color: var(--text-primary);">
+                        ${getCategoryIcon(category)} ${category}
                     </h3>
-                    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
                         ${settings.map((setting, index) => renderSettingRow(setting, index === settings.length - 1)).join('')}
                     </div>
                 </div>
@@ -427,10 +396,24 @@
     }
 
     /**
+     * Get icon for category
+     */
+    function getCategoryIcon(category) {
+        const icons = {
+            'general': '⚙️',
+            'security': '🔒',
+            'notifications': '🔔',
+            'display': '🎨',
+            'navigation': '🧭'
+        };
+        return icons[category] || '📋';
+    }
+
+    /**
      * Render a single setting row
      */
     function renderSettingRow(setting, isLast) {
-        const borderStyle = isLast ? '' : 'border-bottom: 1px solid var(--border);';
+        const borderStyle = isLast ? '' : 'border-bottom: 1px solid var(--border-light);';
         const isBoolean = setting.setting_type === 'boolean';
         const isNumber = setting.setting_type === 'number';
         const isSensitive = setting.is_sensitive;
@@ -440,13 +423,13 @@
         if (isBoolean) {
             const isChecked = setting.setting_value === 'true' || setting.setting_value === '1';
             inputHtml = `
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                     <input type="checkbox"
                            id="setting-${setting.id}"
                            data-setting-id="${setting.id}"
                            ${isChecked ? 'checked' : ''}
-                           style="width: 18px; height: 18px; cursor: pointer;">
-                    <span style="font-size: 13px; color: var(--text-secondary);">Enabled</span>
+                           style="width: 16px; height: 16px; cursor: pointer;">
+                    <span style="font-size: 12px; color: var(--text-secondary);">Enabled</span>
                 </label>
             `;
         } else if (isNumber) {
@@ -455,7 +438,7 @@
                        id="setting-${setting.id}"
                        data-setting-id="${setting.id}"
                        value="${setting.setting_value || ''}"
-                       style="width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                       style="width: 120px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 13px;">
             `;
         } else {
             inputHtml = `
@@ -464,27 +447,23 @@
                        data-setting-id="${setting.id}"
                        value="${setting.setting_value || ''}"
                        placeholder="${setting.description || ''}"
-                       style="width: 100%; max-width: 500px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 14px;">
+                       style="width: 100%; max-width: 280px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary); font-size: 13px;">
             `;
         }
 
         return `
-            <div style="padding: 20px; ${borderStyle}">
-                <div style="display: flex; justify-content: space-between; align-items: start; gap: 24px;">
-                    <div style="flex: 1;">
-                        <div style="font-weight: 500; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);">
-                            ${formatSettingKey(setting.setting_key)}
-                        </div>
-                        ${setting.description ? `
-                            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                                ${setting.description}
-                            </div>
-                        ` : ''}
-                        ${inputHtml}
+            <div style="padding: 12px 16px; ${borderStyle} display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 500; font-size: 13px; color: var(--text-primary);">
+                        ${formatSettingKey(setting.setting_key)}
                     </div>
+                    ${setting.description ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${setting.description}</div>` : ''}
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                    ${inputHtml}
                     <button class="btn-save-setting"
                             data-setting-id="${setting.id}"
-                            style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap;">
+                            style="padding: 6px 12px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
                         Save
                     </button>
                 </div>

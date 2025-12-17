@@ -1,0 +1,42 @@
+# SSH Guardian fail2ban Jail Configuration
+# Copy to /etc/fail2ban/jail.d/ssh_guardian.local on agent servers
+#
+# Prerequisites:
+# 1. Copy ssh_guardian.conf to /etc/fail2ban/action.d/
+# 2. Update server_url, api_key, and agent_id below
+# 3. Restart fail2ban: systemctl restart fail2ban
+
+[DEFAULT]
+# SSH Guardian server configuration
+# Update these values for your deployment
+ssh_guardian_server = http://localhost:8081
+ssh_guardian_api_key = YOUR_API_KEY_HERE
+ssh_guardian_agent_id = YOUR_AGENT_ID_HERE
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+backend = auto
+
+# Detection thresholds
+maxretry = 5
+findtime = 600
+bantime = 3600
+
+# Actions: Block via iptables + Report to SSH Guardian
+action = iptables-multiport[name=sshd, port="ssh", protocol=tcp]
+         ssh_guardian[server_url=%(ssh_guardian_server)s, api_key=%(ssh_guardian_api_key)s, agent_id=%(ssh_guardian_agent_id)s]
+
+# Optional: More aggressive settings for repeat offenders
+# Uncomment to enable recidive jail
+# [recidive]
+# enabled = true
+# filter = recidive
+# logpath = /var/log/fail2ban.log
+# action = iptables-allports[name=recidive]
+#          ssh_guardian[server_url=%(ssh_guardian_server)s, api_key=%(ssh_guardian_api_key)s, agent_id=%(ssh_guardian_agent_id)s]
+# bantime = 604800  ; 1 week
+# findtime = 86400  ; 1 day
+# maxretry = 3

@@ -23,39 +23,39 @@ REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 
-# Cache TTL defaults (in seconds) - OPTIMIZED FOR PERFORMANCE
-# Minimum 15 minutes (900s) for all data to reduce DB load
+# Cache TTL defaults (in seconds) - OPTIMIZED FOR FRESHNESS
+# Short TTLs for real-time data visibility
 # These are fallback defaults; actual TTLs are loaded from database
 CACHE_TTL = {
-    # Dynamic data - reduced for live events page
-    'events_list': 60,           # 1 minute - events list (for fresher live data)
-    'events_count': 900,         # 15 minutes - total count
-    'dashboard_summary': 900,    # 15 minutes - dashboard home stats
-    'events_analysis': 900,      # 15 minutes - events analysis
-    'events_timeline': 900,      # 15 minutes - timeline data
+    # Real-time data - very short TTL (15-30 seconds)
+    'events_list': 15,           # 15 seconds - events list (near real-time)
+    'events_count': 30,          # 30 seconds - total count
+    'dashboard_summary': 30,     # 30 seconds - dashboard home stats
+    'events_analysis': 30,       # 30 seconds - events analysis
+    'events_timeline': 30,       # 30 seconds - timeline data
 
-    # Semi-static data - 30 minutes
-    'events_stats': 1800,        # 30 minutes - stats summary
-    'ip_history': 1800,          # 30 minutes - IP history
-    'ml_predictions': 1800,      # 30 minutes - ML results
-    'blocking': 900,             # 15 minutes - block list
-    'audit': 900,                # 15 minutes - audit logs
-    'notifications': 900,        # 15 minutes - notification history
+    # Frequently changing data - 1-2 minutes
+    'events_stats': 60,          # 1 minute - stats summary
+    'ip_history': 60,            # 1 minute - IP history
+    'ml_predictions': 180,       # 3 minutes - ML results
+    'blocking': 60,              # 1 minute - block list
+    'audit': 120,                # 2 minutes - audit logs
+    'notifications': 60,         # 1 minute - notification history
 
-    # Static data - cache for long periods (1-2 hours)
-    'threat_intel': 7200,        # 2 hours - threat intel (external API data)
-    'geoip': 7200,               # 2 hours - GeoIP data (rarely changes)
-    'trends': 3600,              # 1 hour - historical trends
-    'daily_reports': 7200,       # 2 hours - daily reports (generated once)
-    'ml_models': 7200,           # 2 hours - ML model info
-    'settings': 3600,            # 1 hour - settings/config
+    # Semi-static data - 5-10 minutes
+    'threat_intel': 600,         # 10 minutes - threat intel (external API data)
+    'geoip': 600,                # 10 minutes - GeoIP data
+    'trends': 300,               # 5 minutes - historical trends
+    'daily_reports': 900,        # 15 minutes - daily reports
+    'ml_models': 300,            # 5 minutes - ML model info
+    'settings': 60,              # 1 minute - settings/config
 }
 
 # TTL settings loaded from database (refreshed periodically)
 _db_ttl_settings = {}
 _db_enabled_settings = {}  # Track which endpoints have caching enabled
 _ttl_last_loaded = None
-_ttl_reload_interval = 300  # Reload TTL settings every 5 minutes
+_ttl_reload_interval = 60  # Reload TTL settings every 1 minute for faster updates
 _ttl_settings_version = 0  # Local version tracker
 
 # Redis key for TTL settings version (used for immediate reload signaling)

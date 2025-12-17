@@ -90,9 +90,42 @@ def lookup_threat(ip_address):
                 'from_cache': False
             })
         else:
+            # Not in database - fetch from API and save
+            threat_intel = ThreatIntelligence()
+            threat_data = threat_intel.lookup_ip_threat(ip_address)
+
+            if threat_data:
+                # Fetch the saved record from DB
+                conn2 = get_connection()
+                cursor2 = conn2.cursor(dictionary=True)
+                cursor2.execute("""
+                    SELECT * FROM ip_threat_intelligence WHERE ip_address_text = %s
+                """, (ip_address,))
+                result = cursor2.fetchone()
+                cursor2.close()
+                conn2.close()
+
+                if result:
+                    if 'ip_address' in result:
+                        del result['ip_address']
+                    for field in ['abuseipdb_last_reported', 'abuseipdb_checked_at', 'shodan_last_update',
+                                  'shodan_checked_at', 'virustotal_checked_at', 'refresh_after',
+                                  'created_at', 'updated_at']:
+                        if result.get(field):
+                            result[field] = result[field].isoformat()
+                    if result.get('threat_confidence') is not None:
+                        result['threat_confidence'] = float(result['threat_confidence'])
+
+                    return jsonify({
+                        'success': True,
+                        'data': result,
+                        'from_cache': False,
+                        'freshly_fetched': True
+                    })
+
             return jsonify({
                 'success': False,
-                'message': 'No threat intelligence data found for this IP'
+                'message': 'No threat intelligence data found and lookup failed'
             })
 
     except Exception as e:

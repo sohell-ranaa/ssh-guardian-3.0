@@ -44,6 +44,8 @@ def sync_ufw_rules():
     Receive UFW rules from an agent and store them.
     This is called periodically by the agent to sync its UFW state.
     """
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
 
@@ -65,8 +67,6 @@ def sync_ufw_rules():
         agent_row = cursor.fetchone()
 
         if not agent_row:
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'Agent not found'}), 404
 
         db_agent_id = agent_row['id']
@@ -120,9 +120,6 @@ def sync_ufw_rules():
         cache = get_cache()
         cache.delete_pattern(f'ufw:{db_agent_id}')
 
-        cursor.close()
-        conn.close()
-
         return jsonify({
             'success': True,
             'message': 'UFW state synced',
@@ -132,6 +129,11 @@ def sync_ufw_rules():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def _store_ufw_rules(cursor, agent_id: int, rules: list):
@@ -221,6 +223,8 @@ def get_pending_ufw_commands():
     Get pending UFW commands for an agent.
     The agent polls this endpoint to receive commands to execute.
     """
+    conn = None
+    cursor = None
     try:
         agent_id = request.args.get('agent_id')
 
@@ -238,8 +242,6 @@ def get_pending_ufw_commands():
         agent_row = cursor.fetchone()
 
         if not agent_row:
-            cursor.close()
-            conn.close()
             return jsonify({'success': False, 'error': 'Agent not found'}), 404
 
         db_agent_id = agent_row['id']
@@ -266,9 +268,6 @@ def get_pending_ufw_commands():
             """, command_ids)
             conn.commit()
 
-        cursor.close()
-        conn.close()
-
         # Format commands for agent
         formatted_commands = []
         for cmd in commands:
@@ -288,6 +287,11 @@ def get_pending_ufw_commands():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 @agent_routes.route('/agents/ufw/command-result', methods=['POST'])

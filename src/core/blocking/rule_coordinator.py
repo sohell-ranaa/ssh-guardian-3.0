@@ -25,7 +25,10 @@ from .ml_evaluators import (
     evaluate_velocity_rule,
     evaluate_tor_detection_rule,
     evaluate_proxy_detection_rule,
-    evaluate_impossible_travel_rule
+    evaluate_impossible_travel_rule,
+    evaluate_distributed_brute_force_rule,
+    evaluate_account_takeover_rule,
+    evaluate_off_hours_anomaly_rule
 )
 from .threat_combo_evaluator import evaluate_threat_combo_rule
 from .ip_operations import block_ip
@@ -120,6 +123,21 @@ def evaluate_rules_for_ip(ip_address, ml_result=None, event_id=None, event_type=
                 eval_result = evaluate_threat_combo_rule(rule, ip_address, event_type)
                 eval_result['should_block'] = eval_result.get('triggered', False)
 
+            elif rule['rule_type'] == 'distributed_brute_force':
+                # Distributed brute force: many IPs, many usernames, slow frequency
+                eval_result = evaluate_distributed_brute_force_rule(rule, ip_address)
+                eval_result['should_block'] = eval_result.get('triggered', False)
+
+            elif rule['rule_type'] == 'account_takeover':
+                # Account takeover: same username from multiple IPs/locations
+                eval_result = evaluate_account_takeover_rule(rule, ip_address, username)
+                eval_result['should_block'] = eval_result.get('triggered', False)
+
+            elif rule['rule_type'] == 'off_hours_anomaly':
+                # Off-hours anomaly: login attempts outside business hours
+                eval_result = evaluate_off_hours_anomaly_rule(rule, ip_address, username)
+                eval_result['should_block'] = eval_result.get('triggered', False)
+
             elif rule['rule_type'] == 'repeat_offender':
                 # This is handled during block duration calculation
                 eval_result = {'should_block': False, 'reason': 'Duration modifier only'}
@@ -161,6 +179,28 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
             'requires_approval': bool
         }
     """
+    # Early check: Skip if IP is already blocked (by fail2ban, ML, or manual)
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT id, block_source, blocked_at FROM ip_blocks
+            WHERE ip_address_text = %s AND is_active = TRUE
+        """, (ip_address,))
+        existing_block = cursor.fetchone()
+        if existing_block:
+            return {
+                'blocked': False,
+                'block_id': existing_block['id'],
+                'triggered_rules': [],
+                'message': f'IP already blocked by {existing_block["block_source"]}',
+                'requires_approval': False,
+                'already_blocked': True
+            }
+    finally:
+        cursor.close()
+        conn.close()
+
     # Evaluate all rules
     eval_results = evaluate_rules_for_ip(ip_address, ml_result, event_id, event_type, username)
 

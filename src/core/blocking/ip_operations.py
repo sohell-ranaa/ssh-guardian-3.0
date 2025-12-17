@@ -20,7 +20,8 @@ from .ufw_sync import create_ufw_block_commands, create_ufw_unblock_commands
 
 def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_id=None,
              trigger_event_id=None, failed_attempts=0, threat_level=None,
-             block_duration_minutes=1440, auto_unblock=True, created_by_user_id=None):
+             block_duration_minutes=1440, auto_unblock=True, created_by_user_id=None,
+             agent_id=None):
     """
     Block an IP address
 
@@ -35,6 +36,7 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
         block_duration_minutes (int): How long to block (0 = permanent)
         auto_unblock (bool): Automatically unblock after duration
         created_by_user_id (int): User ID if manually blocked
+        agent_id (int): Agent ID for agent-based blocking (optional)
 
     Returns:
         dict: {
@@ -97,6 +99,7 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     block_source,
                     blocking_rule_id,
                     trigger_event_id,
+                    agent_id,
                     failed_attempts,
                     threat_level,
                     is_active,
@@ -105,7 +108,7 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     auto_unblock,
                     created_by_user_id
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s, %s, %s
                 )
             """, (
                 ip_binary,
@@ -114,6 +117,7 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 block_source,
                 blocking_rule_id,
                 trigger_event_id,
+                agent_id,
                 failed_attempts,
                 threat_level,
                 unblock_at,
@@ -299,12 +303,13 @@ def unblock_ip(ip_address, unblock_reason='Manual unblock', unblocked_by_user_id
         }
 
 
-def block_ip_manual(ip_address, reason, user_id=None, duration_minutes=1440):
+def block_ip_manual(ip_address, reason, user_id=None, duration_minutes=1440, agent_id=None):
     """Manually block an IP address"""
     return block_ip(
         ip_address=ip_address,
         block_reason=reason,
         block_source='manual',
         block_duration_minutes=duration_minutes,
-        created_by_user_id=user_id
+        created_by_user_id=user_id,
+        agent_id=agent_id
     )

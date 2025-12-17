@@ -32,27 +32,40 @@ POOL_CONFIG = {
     "connect_timeout": int(os.getenv("DB_TIMEOUT", 10))
 }
 
-# Global connection pool
+# Global connection pool with thread-safe initialization
+import threading
+_pool_lock = threading.Lock()
 connection_pool = None
+_pool_initialized = False
 
 
 def initialize_pool():
-    """Initialize the connection pool"""
-    global connection_pool
+    """Initialize the connection pool (thread-safe)"""
+    global connection_pool, _pool_initialized
 
-    try:
-        connection_pool = pooling.MySQLConnectionPool(
-            **POOL_CONFIG,
-            **DB_CONFIG
-        )
-        print(f"✅ Database connection pool '{POOL_CONFIG['pool_name']}' created successfully")
-        print(f"   Pool size: {POOL_CONFIG['pool_size']} connections")
-        print(f"   Database: {DB_CONFIG['database']}")
+    # Already initialized - skip
+    if _pool_initialized and connection_pool is not None:
         return True
-    except Error as e:
-        print(f"❌ Error creating connection pool: {e}")
-        connection_pool = None
-        return False
+
+    with _pool_lock:
+        # Double-check after acquiring lock
+        if _pool_initialized and connection_pool is not None:
+            return True
+
+        try:
+            connection_pool = pooling.MySQLConnectionPool(
+                **POOL_CONFIG,
+                **DB_CONFIG
+            )
+            _pool_initialized = True
+            print(f"✅ Database connection pool '{POOL_CONFIG['pool_name']}' created successfully")
+            print(f"   Pool size: {POOL_CONFIG['pool_size']} connections")
+            print(f"   Database: {DB_CONFIG['database']}")
+            return True
+        except Error as e:
+            print(f"❌ Error creating connection pool: {e}")
+            connection_pool = None
+            return False
 
 
 def get_connection():
@@ -365,8 +378,9 @@ def get_database_stats():
 # INITIALIZATION
 # ============================================================================
 
-# Initialize pool on module import
-initialize_pool()
+# Pool is now lazily initialized on first get_connection() call
+# This prevents multiple pool creation when module is imported multiple times
+# initialize_pool()  # Commented out - using lazy initialization
 
 
 if __name__ == "__main__":

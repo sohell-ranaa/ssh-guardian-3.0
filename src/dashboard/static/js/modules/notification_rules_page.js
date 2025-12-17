@@ -31,6 +31,7 @@
         try {
             await loadTriggers();
             await loadRules();
+            await loadRecentNotifications();
             setupNotificationRulesEventListeners();
         } catch (error) {
             console.error('Error loading Notification Rules page:', error);
@@ -80,6 +81,89 @@
                 container.innerHTML = '<div style="text-align: center; padding: 40px; color: #D13438;">Failed to load notification rules.</div>';
             }
         }
+    }
+
+    /**
+     * Load recent notifications
+     */
+    async function loadRecentNotifications() {
+        const container = document.getElementById('recent-notifications-container');
+        if (!container) return;
+
+        try {
+            const response = await fetch('/api/dashboard/notification-history/list?limit=10');
+            const data = await response.json();
+
+            if (data.success && data.data.notifications && data.data.notifications.length > 0) {
+                renderRecentNotifications(data.data.notifications);
+            } else {
+                container.innerHTML = '<div style="text-align: center; padding: 30px; color: var(--text-secondary);">No recent notifications</div>';
+            }
+        } catch (error) {
+            console.error('Error loading recent notifications:', error);
+            container.innerHTML = '<div style="text-align: center; padding: 30px; color: var(--text-secondary);">Failed to load notifications</div>';
+        }
+    }
+
+    /**
+     * Render recent notifications
+     */
+    function renderRecentNotifications(notifications) {
+        const container = document.getElementById('recent-notifications-container');
+        if (!container) return;
+
+        let html = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--background); text-align: left;">
+                        <th style="padding: 10px 12px; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Time</th>
+                        <th style="padding: 10px 12px; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Trigger</th>
+                        <th style="padding: 10px 12px; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Rule</th>
+                        <th style="padding: 10px 12px; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Channels</th>
+                        <th style="padding: 10px 12px; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        notifications.forEach(notif => {
+            const triggerInfo = getTriggerInfo(notif.trigger_type);
+            const channels = parseJSON(notif.channels, []);
+            const deliveryStatus = parseJSON(notif.delivery_status, {});
+            const statusColor = notif.status === 'sent' ? '#107C10' : notif.status === 'failed' ? '#D13438' : '#F59E0B';
+            const statusBg = notif.status === 'sent' ? '#DFF6DD' : notif.status === 'failed' ? '#FDE7E9' : '#FFF4CE';
+
+            // Build channel delivery badges
+            let channelBadges = '';
+            channels.forEach(ch => {
+                const chStatus = deliveryStatus[ch];
+                const chColor = chStatus === 'sent' ? '#107C10' : chStatus === 'failed' ? '#D13438' : '#605E5C';
+                const chBg = chStatus === 'sent' ? '#DFF6DD' : chStatus === 'failed' ? '#FDE7E9' : '#F3F2F1';
+                const chIcon = ch === 'telegram' ? '📱' : ch === 'email' ? '📧' : '🔗';
+                channelBadges += `<span style="display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 10px; font-size: 11px; background: ${chBg}; color: ${chColor}; margin-right: 4px;">${chIcon} ${chStatus || 'pending'}</span>`;
+            });
+
+            html += `
+                <tr style="border-bottom: 1px solid var(--border-light);">
+                    <td style="padding: 12px; color: var(--text-secondary); white-space: nowrap;">${formatDateTime(notif.created_at)}</td>
+                    <td style="padding: 12px;">
+                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; background: ${triggerInfo.bgColor}; color: ${triggerInfo.color};">
+                            ${triggerInfo.icon} ${triggerInfo.label}
+                        </span>
+                    </td>
+                    <td style="padding: 12px; color: var(--text-primary);">${escapeHtml(notif.rule_name || 'Unknown')}</td>
+                    <td style="padding: 12px;">${channelBadges}</td>
+                    <td style="padding: 12px;">
+                        <span style="padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; background: ${statusBg}; color: ${statusColor}; text-transform: uppercase;">
+                            ${notif.status}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
     }
 
     /**
@@ -195,19 +279,82 @@
     }
 
     /**
-     * Get trigger display info
+     * Get trigger display info - aligned with blocking rules
      */
     function getTriggerInfo(trigger) {
         const triggerMap = {
-            'ip_blocked': { icon: '🚫', label: 'IP Blocked', color: '#D13438', bgColor: '#FDE7E9' },
-            'high_risk_detected': { icon: '⚠️', label: 'High Risk', color: '#FF8C00', bgColor: '#FFF4CE' },
-            'anomaly_detected': { icon: '🔍', label: 'Anomaly', color: '#5C2D91', bgColor: '#EDE5F4' },
-            'brute_force_detected': { icon: '🔨', label: 'Brute Force', color: '#D13438', bgColor: '#FDE7E9' },
+            // Core triggers
+            'ip_blocked': { icon: '🛡️', label: 'IP Blocked', color: '#0078D4', bgColor: '#deecf9' },
             'agent_offline': { icon: '📴', label: 'Agent Offline', color: '#605E5C', bgColor: '#F3F2F1' },
-            'system_error': { icon: '❌', label: 'System Error', color: '#D13438', bgColor: '#FDE7E9' }
+            'system_error': { icon: '❌', label: 'System Error', color: '#D13438', bgColor: '#FDE7E9' },
+            'successful_login': { icon: '✅', label: 'Login Success', color: '#107C10', bgColor: '#DFF6DD' },
+
+            // Attack triggers
+            'brute_force_detected': { icon: '🔨', label: 'Brute Force', color: '#D13438', bgColor: '#FDE7E9' },
+            'distributed_brute_force_detected': { icon: '🤖', label: 'Distributed BF', color: '#8B0000', bgColor: '#FFE4E1' },
+            'account_takeover_detected': { icon: '🎭', label: 'Account Takeover', color: '#8B008B', bgColor: '#F5E6F5' },
+            'credential_stuffing_detected': { icon: '🔑', label: 'Credential Stuffing', color: '#B8860B', bgColor: '#FFF8DC' },
+            'off_hours_anomaly_detected': { icon: '🌙', label: 'Off-Hours', color: '#4B0082', bgColor: '#E6E6FA' },
+            'velocity_attack_detected': { icon: '⚡', label: 'Velocity/DDoS', color: '#FF4500', bgColor: '#FFE4E1' },
+
+            // ML/API triggers
+            'ml_threat_detected': { icon: '🧠', label: 'ML Threat', color: '#6366f1', bgColor: '#EEF2FF' },
+            'high_risk_detected': { icon: '⚠️', label: 'High Risk (API)', color: '#FF8C00', bgColor: '#FFF4CE' },
+            'anomaly_detected': { icon: '🔍', label: 'Anomaly', color: '#5C2D91', bgColor: '#EDE5F4' },
+
+            // Geo/Network triggers
+            'geo_anomaly_detected': { icon: '🌍', label: 'Impossible Travel', color: '#0077B6', bgColor: '#E0F7FA' },
+            'tor_detected': { icon: '🧅', label: 'Tor Exit Node', color: '#7B68EE', bgColor: '#F0E6FF' },
+            'proxy_detected': { icon: '🔒', label: 'Proxy/VPN', color: '#2F4F4F', bgColor: '#E0FFFF' },
+            'geo_blocked': { icon: '🚫', label: 'Geo-Blocked', color: '#CD5C5C', bgColor: '#FFE4E1' }
         };
 
         return triggerMap[trigger] || { icon: '📝', label: trigger, color: '#605E5C', bgColor: '#F3F2F1' };
+    }
+
+    /**
+     * Format triggers for select dropdown with optgroups
+     */
+    function formatTriggersForSelect(triggerList, selectedValue) {
+        const categories = {
+            'core': { label: '📋 Core System', triggers: [] },
+            'attack': { label: '⚔️ Attack Detection', triggers: [] },
+            'ml': { label: '🧠 ML & API Intelligence', triggers: [] },
+            'geo': { label: '🌍 Geo & Network', triggers: [] }
+        };
+
+        // Group triggers by category
+        triggerList.forEach(t => {
+            const cat = t.category || 'core';
+            if (categories[cat]) {
+                categories[cat].triggers.push(t);
+            }
+        });
+
+        let html = '';
+        for (const [key, cat] of Object.entries(categories)) {
+            if (cat.triggers.length > 0) {
+                html += `<optgroup label="${cat.label}">`;
+                cat.triggers.forEach(t => {
+                    const icon = t.icon || '📝';
+                    const selected = t.value === selectedValue ? 'selected' : '';
+                    html += `<option value="${t.value}" ${selected}>${icon} ${t.label}</option>`;
+                });
+                html += '</optgroup>';
+            }
+        }
+        return html;
+    }
+
+    /**
+     * Get trigger description
+     */
+    function getTriggerDescription(triggerList, value) {
+        const trigger = triggerList.find(t => t.value === value);
+        if (trigger) {
+            return `<strong>${trigger.icon || '📝'} ${trigger.label}:</strong> ${trigger.description}`;
+        }
+        return '';
     }
 
     /**
@@ -215,7 +362,7 @@
      */
     window.showCreateRuleModal = function() {
         currentRuleId = null;
-        showRuleModal('Create Notification Rule', {});
+        showRuleModal('➕ Create Notification Rule', {});
     };
 
     /**
@@ -228,7 +375,7 @@
 
             if (data.success) {
                 currentRuleId = ruleId;
-                showRuleModal('Edit Notification Rule', data.data);
+                showRuleModal('✏️ Edit Notification Rule', data.data);
             } else {
                 showNotification(data.error || 'Failed to load rule', 'error');
             }
@@ -270,8 +417,11 @@
                             <label style="display: block; font-size: 13px; font-weight: 600; color: #323130; margin-bottom: 6px;">Trigger On *</label>
                             <select id="rule-trigger" required style="width: 100%; padding: 10px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px;">
                                 <option value="">Select trigger...</option>
-                                ${triggers.map(t => `<option value="${t.value}" ${rule.trigger_on === t.value ? 'selected' : ''}>${t.label} - ${t.description}</option>`).join('')}
+                                ${formatTriggersForSelect(triggers, rule.trigger_on)}
                             </select>
+                            <div id="trigger-description" style="margin-top: 6px; padding: 8px 10px; background: #FAF9F8; border-radius: 4px; font-size: 12px; color: #605E5C; display: ${rule.trigger_on ? 'block' : 'none'};">
+                                ${rule.trigger_on ? getTriggerDescription(triggers, rule.trigger_on) : ''}
+                            </div>
                         </div>
 
                         <!-- Channels -->
@@ -352,10 +502,10 @@
                 </form>
                 <div style="padding: 16px 20px; border-top: 1px solid #EDEBE9; display: flex; justify-content: flex-end; gap: 12px;">
                     <button onclick="closeRuleModal()" style="padding: 10px 20px; background: #F3F2F1; border: 1px solid #EDEBE9; border-radius: 4px; cursor: pointer; font-size: 14px; color: #323130;">
-                        Cancel
+                        ✕ Cancel
                     </button>
                     <button onclick="saveRule()" style="padding: 10px 20px; background: #0078D4; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; color: #FFFFFF;">
-                        ${currentRuleId ? 'Update Rule' : 'Create Rule'}
+                        ${currentRuleId ? '💾 Update Rule' : '➕ Create Rule'}
                     </button>
                 </div>
             </div>
@@ -367,6 +517,20 @@
         document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
             checkbox.addEventListener('change', updateChannelSettings);
         });
+
+        // Setup trigger select listener to show description
+        const triggerSelect = document.getElementById('rule-trigger');
+        if (triggerSelect) {
+            triggerSelect.addEventListener('change', function() {
+                const descDiv = document.getElementById('trigger-description');
+                if (this.value) {
+                    descDiv.innerHTML = getTriggerDescription(triggers, this.value);
+                    descDiv.style.display = 'block';
+                } else {
+                    descDiv.style.display = 'none';
+                }
+            });
+        }
 
         // Close on backdrop click
         modal.addEventListener('click', (e) => {
@@ -538,15 +702,24 @@
             if (data.success) {
                 const results = data.data.results || [];
                 const successCount = results.filter(r => r.success).length;
-                const messages = results.map(r => `${r.channel}: ${r.success ? r.message : r.error}`).join('\n');
+
+                // Build detailed message
+                let detailMessages = results.map(r => {
+                    const icon = r.channel === 'telegram' ? '📱' : r.channel === 'email' ? '📧' : '🔗';
+                    const status = r.success ? '✅' : '❌';
+                    return `${icon} ${r.channel}: ${status} ${r.success ? r.message : r.error}`;
+                }).join('\n');
 
                 if (successCount === results.length) {
-                    showNotification('All test notifications sent successfully', 'success');
+                    showNotification(`All test notifications sent!\n${detailMessages}`, 'success');
                 } else if (successCount > 0) {
-                    showNotification(`Some notifications sent:\n${messages}`, 'warning');
+                    showNotification(`Partial success:\n${detailMessages}`, 'warning');
                 } else {
-                    showNotification(`Test failed:\n${messages}`, 'error');
+                    showNotification(`Test failed:\n${detailMessages}`, 'error');
                 }
+
+                // Reload recent notifications to show test result
+                setTimeout(() => loadRecentNotifications(), 1000);
             } else {
                 showNotification(data.error || 'Failed to test rule', 'error');
             }

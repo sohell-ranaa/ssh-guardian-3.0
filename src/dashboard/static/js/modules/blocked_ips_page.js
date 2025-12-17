@@ -5,6 +5,8 @@
 
 // Load Blocked IPs page data
 async function loadBlockedIPsPage() {
+    // Load agents list for dropdown first
+    await loadAgentsForBlockFilter();
     await loadIPBlocks();
     setupBlockFilters();
     setupManualBlockForm();
@@ -12,6 +14,35 @@ async function loadBlockedIPsPage() {
     setupFormToggles();
     setupRefreshButton();
 }
+
+// Load agents for the agent filter dropdown (agent-based blocking)
+async function loadAgentsForBlockFilter() {
+    try {
+        const response = await fetch('/api/agents/list');
+        const data = await response.json();
+
+        if (!data.agents) return;
+
+        const agentFilter = document.getElementById('blockAgentFilter');
+        if (!agentFilter) return;
+
+        // Clear existing options except "All Agents"
+        agentFilter.innerHTML = '<option value="">All Agents (Global)</option>';
+
+        // Add agents
+        (data.agents || []).forEach(agent => {
+            const option = document.createElement('option');
+            option.value = agent.id;
+            option.textContent = agent.display_name || agent.hostname || `Agent ${agent.id}`;
+            agentFilter.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading agents for filter:', error);
+    }
+}
+
+// Current agent filter for agent-based blocking
+let currentAgentFilter = '';
 
 // Load all IP blocks
 async function loadIPBlocks() {
@@ -25,12 +56,18 @@ async function loadIPBlocks() {
         tableEl.style.display = 'none';
         errorEl.style.display = 'none';
 
+        // Build API URL with agent filter if set
+        let apiUrl = '/api/dashboard/blocking/blocks/list';
+        if (currentAgentFilter) {
+            apiUrl += `?agent_id=${encodeURIComponent(currentAgentFilter)}`;
+        }
+
         // Use fetchWithCache if available to track cache status
         let data;
         if (typeof fetchWithCache === 'function') {
-            data = await fetchWithCache('/api/dashboard/blocking/blocks/list', 'blocking');
+            data = await fetchWithCache(apiUrl, 'blocking');
         } else {
-            const response = await fetch('/api/dashboard/blocking/blocks/list');
+            const response = await fetch(apiUrl);
             data = await response.json();
         }
 
@@ -421,10 +458,16 @@ function setupBlockFilters() {
     const sourceFilter = document.getElementById('blockSourceFilter');
     const statusFilter = document.getElementById('blockStatusFilter');
 
+    // Agent filter triggers server-side reload (agent-based blocking)
     if (agentFilter) {
-        agentFilter.onchange = applyBlockFilters;
+        agentFilter.onchange = async () => {
+            currentAgentFilter = agentFilter.value;
+            // Reload data from server with new agent filter
+            await loadIPBlocks();
+        };
     }
 
+    // Source and status filters are client-side only
     if (sourceFilter) {
         sourceFilter.onchange = applyBlockFilters;
     }
@@ -434,9 +477,8 @@ function setupBlockFilters() {
     }
 }
 
-// Apply filters to block table
+// Apply filters to block table (client-side filtering for source and status)
 function applyBlockFilters() {
-    const agentFilter = document.getElementById('blockAgentFilter')?.value || '';
     const sourceFilter = document.getElementById('blockSourceFilter')?.value || '';
     const statusFilter = document.getElementById('blockStatusFilter')?.value || '';
 
@@ -445,19 +487,11 @@ function applyBlockFilters() {
     rows.forEach(row => {
         let showRow = true;
 
-        // Get agent from data attribute
-        const rowAgent = row.getAttribute('data-agent') || '';
-
         // Get source from data attribute
         const rowSource = row.getAttribute('data-source') || '';
 
         // Get status from data attribute
         const isActive = row.getAttribute('data-is-active') === 'true';
-
-        // Apply agent filter
-        if (agentFilter && rowAgent !== agentFilter) {
-            showRow = false;
-        }
 
         // Apply source filter
         if (sourceFilter && rowSource !== sourceFilter) {

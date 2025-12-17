@@ -116,9 +116,9 @@ async function loadGeoIPRecent() {
                 <tbody>
                     ${data.data.map(ip => {
                         const flags = [];
-                        if (ip.is_proxy) flags.push('<span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Proxy</span>');
-                        if (ip.is_vpn) flags.push('<span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">VPN</span>');
-                        if (ip.is_tor) flags.push('<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Tor</span>');
+                        if (ip.is_proxy) flags.push('<span style="background: #f97316; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Proxy</span>');
+                        if (ip.is_vpn) flags.push('<span style="background: #f97316; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">VPN</span>');
+                        if (ip.is_tor) flags.push('<span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Tor</span>');
 
                         return `
                             <tr style="border-bottom: 1px solid var(--border);">

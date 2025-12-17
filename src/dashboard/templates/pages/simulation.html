@@ -20,7 +20,7 @@
         </div>
     </div>
 
-    <!-- Simplified 3-Tab Navigation -->
+    <!-- 3-Tab Navigation -->
     <div class="simulation-tabs" style="display: flex; gap: 8px; border-bottom: 2px solid var(--border); margin-bottom: 24px; position: sticky; top: 0; z-index: 100; background: var(--background); padding: 8px 0;">
         <button class="sim-tab-btn active" data-tab="scenarios" onclick="switchSimulationTab('scenarios')">
             <span style="font-size: 18px;">1️⃣</span> Scenarios
@@ -55,18 +55,81 @@
                 <span style="color: var(--text-secondary); margin-left: 8px;">Last refresh: <span id="ip-pool-time">Never</span></span>
             </div>
 
-            <!-- Agent Selection + Options -->
-            <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 20px; padding: 12px 16px; background: var(--background); border-radius: 8px; border: 1px solid var(--border);">
-                <label style="font-weight: 600; font-size: 13px; white-space: nowrap;">Deploy to:</label>
-                <select id="scenario-agent" style="flex: 1; max-width: 280px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--card-bg); color: var(--text-primary);">
-                    <option value="">Analysis Only</option>
+            <!-- Target Server Selection -->
+            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 10px 14px; background: var(--background); border-radius: 4px; border: 1px solid var(--border);">
+                <label style="font-weight: 600; font-size: 12px; color: var(--text-secondary); white-space: nowrap;">Run on:</label>
+                <select id="scenario-target" style="flex: 1; max-width: 300px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface); color: var(--text-primary);">
+                    <option value="">Local Analysis Only</option>
                 </select>
-                <span id="scenario-agent-status" style="font-size: 12px; color: var(--text-secondary);"></span>
+                <span id="scenario-target-status" style="font-size: 11px; color: var(--text-hint);"></span>
+                <button onclick="showAddTargetModal()" style="padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--text-primary);" title="Manage Target Servers">
+                    Manage
+                </button>
             </div>
 
-            <!-- Scenarios Grid -->
-            <div id="demo-scenarios-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
-                <!-- Loaded dynamically -->
+            <!-- Live Attack Status Panel (shows during remote attacks) -->
+            <div id="live-attack-status" style="display: none; margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, rgba(0, 120, 212, 0.1), rgba(0, 90, 170, 0.05)); border: 2px solid var(--azure-blue); border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div id="live-status-spinner" class="scenario-spinner" style="width: 24px; height: 24px;"></div>
+                    <div style="flex: 1;">
+                        <div id="live-status-title" style="font-weight: 600; font-size: 15px; color: var(--text-primary);">Attack Running...</div>
+                        <div id="live-status-subtitle" style="font-size: 12px; color: var(--text-secondary);">Waiting for response</div>
+                    </div>
+                    <button onclick="hideLiveStatus()" style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-secondary);">✕</button>
+                </div>
+                <div id="live-status-steps" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="live-step" data-step="inject">📤 Injecting</span>
+                    <span class="live-step" data-step="detect">👁️ Detecting</span>
+                    <span class="live-step" data-step="block">🚫 Blocking</span>
+                    <span class="live-step" data-step="complete">✅ Done</span>
+                </div>
+            </div>
+
+            <!-- Category: UFW Blocking Scenarios -->
+            <div id="category-ufw" style="margin-bottom: 24px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border);">
+                    <span style="font-size: 20px;">🛡️</span>
+                    <div>
+                        <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">UFW Blocking Scenarios</h4>
+                        <p style="margin: 0; font-size: 12px; color: var(--text-secondary);">Trigger SSH Guardian rules → Agent blocks IP via UFW</p>
+                    </div>
+                </div>
+                <div id="scenarios-ufw" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+                    <!-- UFW scenarios loaded here -->
+                </div>
+            </div>
+
+            <!-- Category: Fail2ban Scenarios -->
+            <div id="category-fail2ban" style="margin-bottom: 24px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border);">
+                    <span style="font-size: 20px;">🔒</span>
+                    <div>
+                        <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Fail2ban Scenarios</h4>
+                        <p style="margin: 0; font-size: 12px; color: var(--text-secondary);">Generate auth.log entries → Fail2ban detects & bans automatically</p>
+                    </div>
+                    <span style="margin-left: auto; padding: 4px 10px; background: #E6A502; color: white; font-size: 11px; font-weight: 600; border-radius: 4px;">REQUIRES TARGET SERVER</span>
+                </div>
+                <div id="scenarios-fail2ban" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+                    <!-- Fail2ban scenarios loaded here -->
+                </div>
+            </div>
+
+            <!-- Category: Baseline (hidden by default) -->
+            <div id="category-baseline" style="margin-bottom: 24px; display: none;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border);">
+                    <span style="font-size: 20px;">✅</span>
+                    <div>
+                        <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Baseline (Clean IPs)</h4>
+                        <p style="margin: 0; font-size: 12px; color: var(--text-secondary);">For comparison - should NOT be blocked</p>
+                    </div>
+                </div>
+                <div id="scenarios-baseline" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+                    <!-- Baseline scenarios loaded here -->
+                </div>
+            </div>
+
+            <!-- Fallback grid for uncategorized -->
+            <div id="demo-scenarios-grid" style="display: none; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
             </div>
         </div>
     </div>
@@ -90,6 +153,7 @@
         </div>
         <div id="results-content" style="display: none;"></div>
     </div>
+
 </div>
 
 <style>
@@ -152,6 +216,16 @@
 .pipeline-step.skipped .step-status { color: #8B8B8B; font-style: italic; }
 .pipeline-step .step-details.visible { display: block; }
 @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } }
+
+/* Live Attack Status Steps */
+.live-step { padding: 6px 12px; background: var(--background); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text-secondary); }
+.live-step.active { background: var(--azure-blue); color: white; border-color: var(--azure-blue); animation: pulse 1.5s infinite; }
+.live-step.complete { background: #2EA44F; color: white; border-color: #2EA44F; }
+.live-step.failed { background: #D13438; color: white; border-color: #D13438; }
+
+/* Category disabled state for fail2ban without target */
+.category-disabled .demo-scenario-card { opacity: 0.6; pointer-events: none; }
+.category-disabled .demo-scenario-card::after { content: 'Select a target server first'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
 </style>
 
 <script>
@@ -203,8 +277,8 @@ async function loadSimulationPage() {
         // Load demo scenarios
         await loadDemoScenarios();
 
-        // Load scenario agent dropdown
-        await loadScenarioAgents();
+        // Load target server dropdown
+        await loadScenarioTargets();
 
         // Load IP pool stats
         await loadIPPoolStats();
@@ -232,21 +306,42 @@ async function loadSimulationPage() {
     }
 }
 
-// Load agents for scenario dropdown
-async function loadScenarioAgents() {
+// Load target servers for scenario dropdown (agent-based)
+async function loadScenarioTargets() {
     try {
-        const response = await fetch('/api/pipeline-sim/agents', { credentials: 'same-origin' });
+        const response = await fetch('/api/live-sim/targets/from-agents', { credentials: 'same-origin' });
         const data = await response.json();
 
-        const select = document.getElementById('scenario-agent');
-        if (data.success && data.agents.length > 0) {
-            select.innerHTML = '<option value="">No agent (analysis only)</option>' +
-                data.agents.map(agent =>
-                    `<option value="${agent.id}">${agent.display_name || agent.hostname} ${agent.is_active ? '(Active)' : '(Inactive)'}</option>`
-                ).join('');
+        const select = document.getElementById('scenario-target');
+        if (data.success) {
+            // Filter to only enabled agents
+            const enabledAgents = data.agents.filter(a => a.sim_enabled);
+
+            if (enabledAgents.length > 0) {
+                select.innerHTML = '<option value="">Local Analysis Only</option>' +
+                    enabledAgents.map(a => {
+                        const name = a.display_name || a.hostname;
+                        const statusIcon = a.test_status === 'success' ? '✅' : a.test_status === 'failed' ? '❌' : '';
+                        return `<option value="${a.sim_target_id}" data-ip="${a.ip_address_primary}" data-port="${a.sim_port || 5001}">
+                            🎯 ${name} (${a.ip_address_primary}) ${statusIcon}
+                        </option>`;
+                    }).join('');
+            } else {
+                select.innerHTML = '<option value="">Local Analysis Only (no agents configured)</option>';
+            }
+        } else {
+            select.innerHTML = '<option value="">Local Analysis Only</option>';
         }
+
+        // Add change listener to update fail2ban category state
+        select.addEventListener('change', () => {
+            updateFail2banCategoryState();
+        });
+
+        // Initial state update
+        updateFail2banCategoryState();
     } catch (error) {
-        console.error('[Simulation] Error loading scenario agents:', error);
+        console.error('[Simulation] Error loading target servers:', error);
     }
 }
 
@@ -349,31 +444,107 @@ async function loadDemoScenarios() {
     }
 }
 
-// Render demo scenarios
+// Render demo scenarios by category
 function renderDemoScenarios(scenarios) {
-    const grid = document.getElementById('demo-scenarios-grid');
     const colors = { critical: '#D13438', high: '#E6A502', medium: '#0078D4', low: '#2EA44F' };
     const icons = { critical: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
 
-    grid.innerHTML = scenarios.map(s => `
-        <div class="demo-scenario-card" data-scenario="${s.id}" onclick="runDemoScenario('${s.id}')">
-            <!-- Loading overlay (hidden by default) -->
+    // Group scenarios by category
+    const ufwScenarios = scenarios.filter(s => s.category === 'ufw_block');
+    const f2bScenarios = scenarios.filter(s => s.category === 'fail2ban');
+    const baselineScenarios = scenarios.filter(s => s.category === 'baseline');
+
+    // Helper to render a single scenario card
+    const renderCard = (s) => `
+        <div class="demo-scenario-card" data-scenario="${s.id}" data-category="${s.category}" onclick="runDemoScenario('${s.id}')">
             <div class="scenario-loading-overlay" style="display: none;">
                 <div class="scenario-spinner"></div>
                 <div class="scenario-loading-text">Analyzing...</div>
             </div>
             <div class="scenario-card-content">
-                <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${s.name}</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">${s.description}</div>
+                <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">${s.name}</div>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.4;">${s.description}</div>
+                ${s.trigger ? `<div style="font-size: 11px; color: var(--azure-blue); margin-bottom: 8px;"><strong>Trigger:</strong> ${s.trigger}</div>` : ''}
+                ${s.block_duration ? `<div style="font-size: 11px; color: #E6A502; margin-bottom: 8px;"><strong>Block:</strong> ${s.block_duration}</div>` : ''}
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: ${colors[s.severity]}; color: white;">
+                    <span style="padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; background: ${colors[s.severity]}; color: white;">
                         ${icons[s.severity]} ${s.severity}
                     </span>
-                    <span class="scenario-ip" style="font-family: monospace; font-size: 12px; color: var(--azure-blue); font-weight: 600;">${s.ip}</span>
+                    <span class="scenario-ip" style="font-family: monospace; font-size: 11px; color: var(--azure-blue); font-weight: 600;">${s.ip}</span>
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+
+    // Render UFW scenarios
+    const ufwContainer = document.getElementById('scenarios-ufw');
+    if (ufwContainer) {
+        ufwContainer.innerHTML = ufwScenarios.length > 0
+            ? ufwScenarios.map(renderCard).join('')
+            : '<p style="color: var(--text-secondary); font-size: 13px;">No UFW scenarios available</p>';
+    }
+
+    // Render Fail2ban scenarios
+    const f2bContainer = document.getElementById('scenarios-fail2ban');
+    if (f2bContainer) {
+        f2bContainer.innerHTML = f2bScenarios.length > 0
+            ? f2bScenarios.map(renderCard).join('')
+            : '<p style="color: var(--text-secondary); font-size: 13px;">No Fail2ban scenarios available</p>';
+    }
+
+    // Render Baseline scenarios
+    const baselineContainer = document.getElementById('scenarios-baseline');
+    if (baselineContainer && baselineScenarios.length > 0) {
+        baselineContainer.innerHTML = baselineScenarios.map(renderCard).join('');
+        document.getElementById('category-baseline').style.display = 'block';
+    }
+
+    // Update fail2ban category state based on target selection
+    updateFail2banCategoryState();
+
+    console.log(`[Simulation] Rendered ${ufwScenarios.length} UFW, ${f2bScenarios.length} Fail2ban, ${baselineScenarios.length} Baseline scenarios`);
+}
+
+// Update fail2ban category state based on target selection
+function updateFail2banCategoryState() {
+    const targetId = document.getElementById('scenario-target')?.value;
+    const f2bCategory = document.getElementById('category-fail2ban');
+
+    if (f2bCategory) {
+        if (targetId) {
+            f2bCategory.classList.remove('category-disabled');
+        } else {
+            f2bCategory.classList.add('category-disabled');
+        }
+    }
+}
+
+// Live attack status functions
+function showLiveStatus(title, subtitle) {
+    const panel = document.getElementById('live-attack-status');
+    if (panel) {
+        panel.style.display = 'block';
+        document.getElementById('live-status-title').textContent = title || 'Attack Running...';
+        document.getElementById('live-status-subtitle').textContent = subtitle || 'Waiting for response';
+
+        // Reset all steps
+        document.querySelectorAll('.live-step').forEach(el => {
+            el.classList.remove('active', 'complete', 'failed');
+        });
+    }
+}
+
+function updateLiveStep(step, status) {
+    const stepEl = document.querySelector(`.live-step[data-step="${step}"]`);
+    if (stepEl) {
+        stepEl.classList.remove('active', 'complete', 'failed');
+        if (status) stepEl.classList.add(status);
+    }
+}
+
+function hideLiveStatus() {
+    const panel = document.getElementById('live-attack-status');
+    if (panel) panel.style.display = 'none';
 }
 
 // Run demo scenario
@@ -388,96 +559,175 @@ async function runDemoScenario(scenarioId) {
         loadingOverlay.style.display = 'flex';
     }
 
-    // Get agent selection - if agent selected, run full pipeline automatically
-    const agentId = document.getElementById('scenario-agent')?.value || '';
-    const runFullPipeline = !!agentId;
+    // Get target server selection - if target selected, run on remote server
+    const targetId = document.getElementById('scenario-target')?.value || '';
+    const runOnRemote = !!targetId;
 
     // Update status indicator
-    const statusEl = document.getElementById('scenario-agent-status');
+    const statusEl = document.getElementById('scenario-target-status');
     if (statusEl) {
-        statusEl.textContent = runFullPipeline ? 'Will block & deploy UFW rules' : '';
-        statusEl.style.color = runFullPipeline ? '#2EA44F' : 'var(--text-secondary)';
+        if (runOnRemote) {
+            const targetSelect = document.getElementById('scenario-target');
+            const targetOption = targetSelect.selectedOptions[0];
+            statusEl.textContent = `→ ${targetOption?.dataset?.ip || 'Remote'}`;
+            statusEl.style.color = '#2EA44F';
+        } else {
+            statusEl.textContent = '';
+        }
     }
 
-    // Update loading text based on pipeline type
+    // Update loading text based on mode
     if (loadingText) {
-        loadingText.textContent = runFullPipeline ? 'Running full pipeline...' : 'Analyzing threat...';
+        loadingText.textContent = runOnRemote ? 'Injecting to remote server...' : 'Analyzing threat...';
     }
 
     try {
-        const response = await fetch(`/api/demo/run/${scenarioId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-                agent_id: agentId ? parseInt(agentId) : null,
-                run_full_pipeline: runFullPipeline
-            })
-        });
-        const data = await response.json();
+        let data;
 
-        if (data.success) {
-            currentAnalysisData = data;
+        if (runOnRemote) {
+            // Show live status panel
+            const targetSelect = document.getElementById('scenario-target');
+            const targetName = targetSelect.selectedOptions[0]?.text || 'Remote Server';
+            showLiveStatus(`Running: ${scenarioId}`, `Target: ${targetName}`);
+            updateLiveStep('inject', 'active');
 
-            // Check blocking status from enrichment result
-            const blocking = data.blocking || {};
-            const blocked = blocking.blocked || data.pipeline_steps?.ip_blocked?.is_blocked;
-            const skipped = blocking.skipped;
-            const alreadyBlocked = blocking.success === false &&
-                blocking.message && blocking.message.toLowerCase().includes('already blocked');
-            const triggeredRules = blocking.triggered_rules || data.pipeline_steps?.ip_blocked?.triggered_rules || [];
+            // Run on remote server via live simulation API
+            const response = await fetch('/api/live-sim/live/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    target_id: parseInt(targetId),
+                    scenario_id: scenarioId
+                })
+            });
+            const runResult = await response.json();
 
-            // Update loading text based on blocking status
-            if (loadingText) {
-                if (blocked) {
-                    loadingText.textContent = '🚫 BLOCKED!';
-                } else if (alreadyBlocked) {
-                    loadingText.textContent = '⚠️ Already Blocked';
-                } else if (skipped) {
-                    loadingText.textContent = '✅ Analyzed';
-                } else {
-                    loadingText.textContent = 'Complete!';
-                }
-            }
-
-            // Show toast for blocking result
-            if (blocked) {
-                const rulesText = triggeredRules.length > 0 ? ` (${triggeredRules.join(', ')})` : '';
-                showToast(`🚫 IP ${data.ip} AUTO-BLOCKED${rulesText}`, 'warning', 5000);
-            } else if (alreadyBlocked) {
-                showToast(`⚠️ IP ${data.ip} is already blocked (ID: #${blocking.block_id})`, 'warning', 5000);
-            } else if (skipped) {
-                showToast(`ℹ️ Analysis complete - select an agent to enable blocking`, 'info', 3000);
-            }
-
-            try {
-                populateAnalysisTab(data);
-                populateResultsTab(data);
-
-                // Brief delay to show status before switching tabs
-                await new Promise(resolve => setTimeout(resolve, blocked || alreadyBlocked ? 800 : 300));
-                switchSimulationTab('analysis');
-
-                if (typeof CacheManager !== 'undefined') {
-                    CacheManager.updateStatus('simulation', false, 0);
+            if (runResult.success) {
+                if (loadingText) {
+                    loadingText.textContent = `✅ Injected ${runResult.lines_written} events`;
                 }
 
-                let suffix = '';
-                if (blocked) suffix = ' - IP BLOCKED';
-                else if (alreadyBlocked) suffix = ' - Already Blocked';
-                else if (runFullPipeline) suffix = ' + Deployed';
-                else if (skipped) suffix = ' (Analysis Only)';
+                // Update live status
+                updateLiveStep('inject', 'complete');
+                updateLiveStep('detect', 'active');
+                document.getElementById('live-status-subtitle').textContent =
+                    `Injected ${runResult.lines_written} events - waiting for detection...`;
 
-                const toastType = blocked ? 'warning' : (alreadyBlocked ? 'warning' : 'success');
-                showToast(`${data.scenario_name} completed${suffix}`, toastType);
-            } catch (renderError) {
-                showToast(`Rendering failed: ${renderError.message}`, 'error');
+                showToast(`🎯 Injected ${runResult.lines_written} events to ${runResult.target_name}`, 'success', 3000);
+
+                // Poll for status updates with live status callback
+                pollRemoteSimStatus(runResult.run_id, scenarioId, (status) => {
+                    // Update live status based on poll result
+                    if (status.detected) {
+                        updateLiveStep('detect', 'complete');
+                        updateLiveStep('block', 'active');
+                        document.getElementById('live-status-subtitle').textContent = 'Detected! Blocking...';
+                    }
+                    if (status.blocked) {
+                        updateLiveStep('block', 'complete');
+                        updateLiveStep('complete', 'complete');
+                        document.getElementById('live-status-title').textContent = '✅ Attack Blocked!';
+                        document.getElementById('live-status-subtitle').textContent = `IP ${status.ip} was blocked by ${status.blocked_by || 'fail2ban'}`;
+                        document.getElementById('live-status-spinner').style.display = 'none';
+                    }
+                    if (status.completed && !status.blocked) {
+                        updateLiveStep('complete', 'complete');
+                        document.getElementById('live-status-title').textContent = '✅ Simulation Complete';
+                        document.getElementById('live-status-subtitle').textContent = 'Check Firewall & Blocking page for results';
+                        document.getElementById('live-status-spinner').style.display = 'none';
+                    }
+                });
+
+                // Hide card loading after short delay
+                setTimeout(() => {
+                    card.classList.remove('running');
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
+                }, 2000);
+                return;
+            } else {
+                if (loadingText) loadingText.textContent = 'Failed!';
+                updateLiveStep('inject', 'failed');
+                document.getElementById('live-status-title').textContent = '❌ Injection Failed';
+                document.getElementById('live-status-subtitle').textContent = runResult.error;
+                document.getElementById('live-status-spinner').style.display = 'none';
+                showToast(`Failed: ${runResult.error}`, 'error');
             }
         } else {
-            if (loadingText) {
-                loadingText.textContent = 'Failed!';
+            // Run local analysis (original behavior)
+            const response = await fetch(`/api/demo/run/${scenarioId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    agent_id: null,
+                    run_full_pipeline: false
+                })
+            });
+            data = await response.json();
+
+            if (data.success) {
+                currentAnalysisData = data;
+
+                // Check blocking status from enrichment result
+                const blocking = data.blocking || {};
+                const blocked = blocking.blocked || data.pipeline_steps?.ip_blocked?.is_blocked;
+                const skipped = blocking.skipped;
+                const alreadyBlocked = blocking.success === false &&
+                    blocking.message && blocking.message.toLowerCase().includes('already blocked');
+                const triggeredRules = blocking.triggered_rules || data.pipeline_steps?.ip_blocked?.triggered_rules || [];
+
+                // Update loading text based on blocking status
+                if (loadingText) {
+                    if (blocked) {
+                        loadingText.textContent = '🚫 BLOCKED!';
+                    } else if (alreadyBlocked) {
+                        loadingText.textContent = '⚠️ Already Blocked';
+                    } else if (skipped) {
+                        loadingText.textContent = '✅ Analyzed';
+                    } else {
+                        loadingText.textContent = 'Complete!';
+                    }
+                }
+
+                // Show toast for blocking result
+                if (blocked) {
+                    const rulesText = triggeredRules.length > 0 ? ` (${triggeredRules.join(', ')})` : '';
+                    showToast(`🚫 IP ${data.ip} AUTO-BLOCKED${rulesText}`, 'warning', 5000);
+                } else if (alreadyBlocked) {
+                    showToast(`⚠️ IP ${data.ip} is already blocked (ID: #${blocking.block_id})`, 'warning', 5000);
+                } else if (skipped) {
+                    showToast(`ℹ️ Analysis complete - select a target server to run live attack`, 'info', 3000);
+                }
+
+                try {
+                    populateAnalysisTab(data);
+                    populateResultsTab(data);
+
+                    // Brief delay to show status before switching tabs
+                    await new Promise(resolve => setTimeout(resolve, blocked || alreadyBlocked ? 800 : 300));
+                    switchSimulationTab('analysis');
+
+                    if (typeof CacheManager !== 'undefined') {
+                        CacheManager.updateStatus('simulation', false, 0);
+                    }
+
+                    let suffix = '';
+                    if (blocked) suffix = ' - IP BLOCKED';
+                    else if (alreadyBlocked) suffix = ' - Already Blocked';
+                    else if (skipped) suffix = ' (Analysis Only)';
+
+                    const toastType = blocked ? 'warning' : (alreadyBlocked ? 'warning' : 'success');
+                    showToast(`${data.scenario_name} completed${suffix}`, toastType);
+                } catch (renderError) {
+                    showToast(`Rendering failed: ${renderError.message}`, 'error');
+                }
+            } else {
+                if (loadingText) {
+                    loadingText.textContent = 'Failed!';
+                }
+                showToast(`Failed: ${data.error}`, 'error');
             }
-            showToast(`Failed: ${data.error}`, 'error');
         }
     } catch (error) {
         console.error('[Demo] Error:', error);
@@ -494,6 +744,76 @@ async function runDemoScenario(scenarioId) {
             }
         }, 500);
     }
+}
+
+// Poll remote simulation status and show updates
+async function pollRemoteSimStatus(runId, scenarioId, statusCallback) {
+    let attempts = 0;
+    const maxAttempts = 60; // Poll for up to 2 minutes
+    let detectedOnce = false;
+
+    const poll = async () => {
+        if (attempts >= maxAttempts) {
+            console.log('[LiveSim] Stopped polling after max attempts');
+            showToast('Simulation polling stopped - check Firewall page for results', 'info');
+            if (statusCallback) statusCallback({ completed: true, timeout: true });
+            return;
+        }
+
+        attempts++;
+
+        try {
+            const response = await fetch(`/api/live-sim/live/${runId}/status`, { credentials: 'same-origin' });
+            const data = await response.json();
+
+            if (data.success) {
+                // Show progress toasts and call callback
+                if (data.events_detected > 0 && !detectedOnce) {
+                    detectedOnce = true;
+                    showToast(`👁️ Detected ${data.events_detected} events from agent`, 'info', 3000);
+                    if (statusCallback) statusCallback({ detected: true, events: data.events_detected });
+                }
+
+                if (data.is_complete) {
+                    let blockedBy = null;
+                    let ip = data.source_ip;
+
+                    if (data.fail2ban_block) {
+                        blockedBy = 'fail2ban';
+                        showToast('🚫 Fail2ban blocked the attacking IP!', 'success', 5000);
+                    }
+                    if (data.ip_block) {
+                        blockedBy = blockedBy ? `${blockedBy} + SSH Guardian` : 'SSH Guardian';
+                        showToast(`🔒 SSH Guardian blocked IP (${data.ip_block.source})`, 'success', 5000);
+                    }
+
+                    if (statusCallback) {
+                        statusCallback({
+                            completed: true,
+                            blocked: !!blockedBy,
+                            blocked_by: blockedBy,
+                            ip: ip,
+                            fail2ban: data.fail2ban_block,
+                            ufw: data.ip_block
+                        });
+                    }
+
+                    if (!blockedBy) {
+                        showToast('✅ Simulation complete - IP not blocked (may need more events)', 'info', 4000);
+                    }
+                    return; // Stop polling
+                }
+            }
+        } catch (error) {
+            console.error('[LiveSim] Error polling status:', error);
+        }
+
+        // Continue polling every 2 seconds
+        setTimeout(poll, 2000);
+    };
+
+    // Start polling after a short delay to let events propagate
+    setTimeout(poll, 3000);
 }
 
 // Render Blocking Banner
@@ -886,7 +1206,7 @@ function getActionButton(rec) {
 function executeAction(actionType, actionData) {
     console.log('[Action]', actionType, actionData);
     if (actionType === 'block_ip') blockIPInline(actionData.ip);
-    else if (actionType === 'add_blocklist') window.location.href = '/dashboard?page=ip-blocks';
+    else if (actionType === 'add_blocklist') window.location.href = '/dashboard?page=firewall';
     else if (actionType === 'view_events') window.location.href = '/dashboard?page=events-live';
 }
 
@@ -1114,6 +1434,680 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupPageVisibilityWatcher);
 } else {
     setupPageVisibilityWatcher();
+}
+
+// ========================
+// TARGET SERVER MANAGEMENT
+// ========================
+
+let targetManagementModal = null;
+
+// Open Target Management Modal - Shows all agents with simulation status
+function showAddTargetModal() {
+    // Remove existing modal if any
+    if (targetManagementModal) {
+        targetManagementModal.remove();
+    }
+
+    targetManagementModal = document.createElement('div');
+    targetManagementModal.id = 'target-management-modal';
+    targetManagementModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+
+    targetManagementModal.innerHTML = `
+        <div style="background: var(--surface); border-radius: 8px; max-width: 700px; width: 95%; max-height: 85vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column;">
+            <!-- Header -->
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--surface);">
+                <div>
+                    <h3 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">
+                        Simulation Targets
+                    </h3>
+                    <p style="margin: 0; font-size: 12px; color: var(--text-secondary);">Enable simulation on registered agents</p>
+                </div>
+                <button onclick="closeTargetModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); padding: 4px; line-height: 1;">×</button>
+            </div>
+
+            <!-- Content Area -->
+            <div id="target-modal-content" style="flex: 1; overflow-y: auto; padding: 16px; background: var(--surface);">
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <div class="scenario-spinner" style="margin: 0 auto 12px;"></div>
+                    <div style="font-size: 13px;">Loading agents...</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Close on backdrop click
+    targetManagementModal.addEventListener('click', (e) => {
+        if (e.target === targetManagementModal) {
+            closeTargetModal();
+        }
+    });
+
+    document.body.appendChild(targetManagementModal);
+    loadAgentsForSimulation();
+}
+
+function closeTargetModal() {
+    if (targetManagementModal) {
+        targetManagementModal.remove();
+        targetManagementModal = null;
+    }
+    loadScenarioTargets(); // Refresh dropdown
+}
+
+// Load agents with their simulation status
+async function loadAgentsForSimulation() {
+    const container = document.getElementById('target-modal-content');
+
+    try {
+        const response = await fetch('/api/live-sim/targets/from-agents', { credentials: 'same-origin' });
+        const data = await response.json();
+
+        if (!data.success) {
+            container.innerHTML = `<div style="text-align: center; padding: 40px; color: #D13438; font-size: 13px;">Error: ${data.error}</div>`;
+            return;
+        }
+
+        if (data.agents.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 48px 20px;">
+                    <div style="font-size: 48px; margin-bottom: 12px; opacity: 0.6;">📡</div>
+                    <h4 style="margin: 0 0 6px 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">No Agents Registered</h4>
+                    <p style="margin: 0; font-size: 12px; color: var(--text-secondary);">Register an SSH Guardian agent first to enable simulation targets.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const enabledCount = data.agents.filter(a => a.sim_enabled).length;
+
+        container.innerHTML = `
+            <div style="margin-bottom: 12px; font-size: 12px; color: var(--text-hint);">
+                ${enabledCount} of ${data.agents.length} agent(s) enabled for simulation
+            </div>
+            <div id="agents-list-container">
+                ${data.agents.map(a => renderAgentCard(a)).join('')}
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `<div style="text-align: center; padding: 40px; color: #D13438; font-size: 13px;">Failed to load agents: ${error.message}</div>`;
+    }
+}
+
+// Render a single agent card with simulation status
+function renderAgentCard(agent) {
+    const name = agent.display_name || agent.hostname;
+    const statusColor = agent.agent_status === 'online' ? '#2EA44F' : agent.agent_status === 'offline' ? '#D13438' : 'var(--text-hint)';
+    const statusIcon = agent.agent_status === 'online' ? '●' : '○';
+    const isLocal = agent.is_local;
+
+    // Simulation status
+    const simEnabled = agent.sim_enabled;
+    const simStatusColor = agent.test_status === 'success' ? '#2EA44F' : agent.test_status === 'failed' ? '#D13438' : 'var(--text-hint)';
+    const simStatusText = agent.test_status === 'success' ? 'Ready' : agent.test_status === 'failed' ? 'Failed' : 'Not Tested';
+
+    // Local badge
+    const localBadge = isLocal ? `<span style="padding: 2px 6px; border-radius: 2px; font-size: 10px; font-weight: 600; background: #0078D415; color: #0078D4;">LOCAL</span>` : '';
+
+    if (simEnabled) {
+        // For local targets, show simplified info (no port/key needed)
+        const connectionInfo = isLocal
+            ? `<span style="color: var(--text-secondary);">Direct write to auth.log</span>`
+            : `${escapeHtml(agent.ip_address_primary || 'N/A')}:${agent.sim_port || 5001}`;
+
+        // For local targets, hide Config and Key buttons
+        const buttons = isLocal
+            ? `
+                <button onclick="testAgentSimulation(${agent.agent_id})" title="Test Write Access" style="padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; font-size: 12px; color: var(--text-primary);">
+                    Test
+                </button>
+                <button onclick="disableAgentSimulation(${agent.agent_id}, '${escapeHtml(name)}')" title="Disable Simulation" style="padding: 6px 10px; background: var(--surface); border: 1px solid #D13438; border-radius: 2px; cursor: pointer; font-size: 12px; color: #D13438;">
+                    Disable
+                </button>
+            `
+            : `
+                <button onclick="testAgentSimulation(${agent.agent_id})" title="Test Connection" style="padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; font-size: 12px; color: var(--text-primary);">
+                    Test
+                </button>
+                <button onclick="showAgentSimConfig(${agent.agent_id}, '${escapeHtml(name)}', ${agent.sim_port || 5001})" title="Configure" style="padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; font-size: 12px; color: var(--text-primary);">
+                    Config
+                </button>
+                <button onclick="showAgentApiKey(${agent.agent_id}, '${escapeHtml(name)}', '${agent.api_key}')" title="View API Key" style="padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; font-size: 12px; color: var(--text-primary);">
+                    Key
+                </button>
+                <button onclick="disableAgentSimulation(${agent.agent_id}, '${escapeHtml(name)}')" title="Disable Simulation" style="padding: 6px 10px; background: var(--surface); border: 1px solid #D13438; border-radius: 2px; cursor: pointer; font-size: 12px; color: #D13438;">
+                    Disable
+                </button>
+            `;
+
+        return `
+            <div class="agent-card" style="padding: 14px 16px; background: var(--background); border-radius: 4px; border: 1px solid var(--border); margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                            <span style="color: ${statusColor}; font-size: 10px;">${statusIcon}</span>
+                            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">${escapeHtml(name)}</span>
+                            ${localBadge}
+                            <span style="padding: 2px 6px; border-radius: 2px; font-size: 10px; font-weight: 600; background: #2EA44F15; color: #2EA44F;">
+                                SIM ENABLED
+                            </span>
+                            <span style="padding: 2px 6px; border-radius: 2px; font-size: 10px; font-weight: 500; background: ${simStatusColor}15; color: ${simStatusColor};">
+                                ${simStatusText}
+                            </span>
+                        </div>
+                        <div style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--azure-blue); margin-bottom: 4px;">
+                            ${connectionInfo}
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-hint);">
+                            ${agent.last_tested_at ? `Last tested: ${new Date(agent.last_tested_at).toLocaleString()}` : 'Never tested'}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                        ${buttons}
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="agent-card" style="padding: 14px 16px; background: var(--background); border-radius: 4px; border: 1px solid var(--border); margin-bottom: 8px; opacity: 0.8;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                            <span style="color: ${statusColor}; font-size: 10px;">${statusIcon}</span>
+                            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">${escapeHtml(name)}</span>
+                            ${localBadge}
+                            <span style="padding: 2px 6px; border-radius: 2px; font-size: 10px; font-weight: 500; background: var(--background); color: var(--text-hint); border: 1px solid var(--border);">
+                                Not Configured
+                            </span>
+                        </div>
+                        <div style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--text-secondary);">
+                            ${isLocal ? 'Local machine (direct write)' : escapeHtml(agent.ip_address_primary || 'No IP')}
+                        </div>
+                    </div>
+                    <button onclick="enableAgentSimulation(${agent.agent_id}, '${escapeHtml(name)}', '${escapeHtml(agent.ip_address_primary || '')}', ${isLocal})" style="padding: 8px 14px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                        Enable Simulation
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Enable simulation for an agent
+async function enableAgentSimulation(agentId, name, ip, isLocal = false) {
+    if (isLocal) {
+        // LOCAL AGENT: No port/API key needed, just confirm
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;';
+
+        dialog.innerHTML = `
+            <div style="background: var(--surface); border-radius: 4px; padding: 20px; max-width: 400px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                <h3 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">Enable Local Simulation</h3>
+                <p style="margin: 0 0 16px 0; font-size: 12px; color: var(--text-secondary);">${escapeHtml(name)}</p>
+
+                <div style="padding: 12px; background: #0078D410; border: 1px solid #0078D4; border-radius: 4px; margin-bottom: 16px;">
+                    <div style="font-weight: 600; font-size: 13px; color: #0078D4; margin-bottom: 4px;">Local Agent Detected</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        This agent is on the same machine as the dashboard. Simulation will write directly to <code>/var/log/auth.log</code> without needing a separate receiver or API key.
+                    </div>
+                </div>
+
+                <div id="enable-sim-error" style="display: none; padding: 10px 12px; background: rgba(209,52,56,0.08); border: 1px solid #D13438; border-radius: 4px; color: #D13438; margin-bottom: 14px; font-size: 12px;"></div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="this.closest('[style*=fixed]').remove()" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-primary);">
+                        Cancel
+                    </button>
+                    <button id="enable-sim-btn" onclick="confirmEnableLocalSimulation(${agentId}, '${escapeHtml(name)}', '${escapeHtml(ip)}', this)" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">
+                        Enable Local Simulation
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(dialog);
+        return;
+    }
+
+    // REMOTE AGENT: Show port configuration dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;';
+
+    dialog.innerHTML = `
+        <div style="background: var(--surface); border-radius: 4px; padding: 20px; max-width: 400px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <h3 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">Enable Remote Simulation</h3>
+            <p style="margin: 0 0 16px 0; font-size: 12px; color: var(--text-secondary);">Configure simulation receiver for "${escapeHtml(name)}"</p>
+
+            <div id="enable-sim-error" style="display: none; padding: 10px 12px; background: rgba(209,52,56,0.08); border: 1px solid #D13438; border-radius: 4px; color: #D13438; margin-bottom: 14px; font-size: 12px;"></div>
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">IP Address *</label>
+                <input id="enable-sim-ip" type="text" value="${escapeHtml(ip)}" placeholder="e.g., 192.168.1.100"
+                    style="width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface); color: var(--text-primary); box-sizing: border-box;">
+                <div style="font-size: 11px; color: var(--text-hint); margin-top: 4px;">Change if different from agent's registered IP</div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">Receiver Port *</label>
+                <input id="enable-sim-port" type="number" value="5001" placeholder="5001"
+                    style="width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface); color: var(--text-primary); box-sizing: border-box;">
+                <div style="font-size: 11px; color: var(--text-hint); margin-top: 4px;">Port where simulation receiver will listen</div>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="this.closest('[style*=fixed]').remove()" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-primary);">
+                    Cancel
+                </button>
+                <button id="enable-sim-btn" onclick="confirmEnableSimulation(${agentId}, '${escapeHtml(name)}', this)" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">
+                    Enable & Generate Key
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+}
+
+// Enable local simulation (no port/API key needed)
+async function confirmEnableLocalSimulation(agentId, name, ip, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Enabling...';
+    const errorEl = document.getElementById('enable-sim-error');
+
+    try {
+        const response = await fetch(`/api/live-sim/targets/enable-agent/${agentId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ ip_address: ip, port: 0 })  // port 0 indicates local
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            btn.closest('[style*=fixed]').remove();
+            showToast(`Local simulation enabled for ${name}`, 'success');
+            loadAgentsForSimulation();
+        } else {
+            errorEl.textContent = data.error || 'Failed to enable simulation';
+            errorEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Enable Local Simulation';
+        }
+    } catch (error) {
+        errorEl.textContent = 'Network error';
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Enable Local Simulation';
+    }
+}
+
+async function confirmEnableSimulation(agentId, name, btn) {
+    const ip = document.getElementById('enable-sim-ip').value.trim();
+    const port = parseInt(document.getElementById('enable-sim-port').value) || 5001;
+    const errorEl = document.getElementById('enable-sim-error');
+
+    // Validate IP
+    if (!ip) {
+        errorEl.textContent = 'IP address is required';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(ip)) {
+        errorEl.textContent = 'Invalid IP address format';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (port < 1 || port > 65535) {
+        errorEl.textContent = 'Port must be between 1 and 65535';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Enabling...';
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/live-sim/targets/enable-agent/${agentId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ ip_address: ip, port: port })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Close enable dialog
+            btn.closest('[style*=fixed]').remove();
+            // Show API key dialog
+            showNewApiKeyDialog(name, data.api_key, data.ip_address, data.port);
+            // Refresh agent list
+            loadAgentsForSimulation();
+        } else {
+            errorEl.textContent = data.error;
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        errorEl.textContent = 'Failed to enable simulation: ' + error.message;
+        errorEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enable & Generate Key';
+    }
+}
+
+// Disable simulation for an agent
+async function disableAgentSimulation(agentId, name) {
+    if (!confirm(`Disable simulation for "${name}"?\n\nThis will remove the simulation target and invalidate the API key.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/live-sim/targets/disable-agent/${agentId}`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Simulation disabled', 'success');
+            loadAgentsForSimulation();
+        } else {
+            showToast(`Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showToast('Failed to disable simulation', 'error');
+    }
+}
+
+// Test agent simulation connection (tests both health AND API key)
+async function testAgentSimulation(agentId) {
+    showToast('Testing connection and API key...', 'info');
+
+    try {
+        // Use the dedicated test-agent endpoint
+        const response = await fetch(`/api/live-sim/targets/test-agent/${agentId}`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`${data.target_name}: Connection and API key verified!`, 'success');
+        } else {
+            // Show detailed error message
+            let errorMsg = data.message || 'Unknown error';
+            if (data.api_key_valid === false && data.health_data) {
+                // Server is reachable but API key is wrong
+                errorMsg = `API key mismatch: ${errorMsg}`;
+            }
+            showToast(`Test failed: ${errorMsg}`, 'error');
+        }
+
+        loadAgentsForSimulation(); // Refresh to show updated status
+    } catch (error) {
+        showToast('Failed to test connection', 'error');
+    }
+}
+
+// Show agent simulation configuration
+function showAgentSimConfig(agentId, name, currentPort) {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;';
+
+    dialog.innerHTML = `
+        <div style="background: var(--surface); border-radius: 4px; padding: 20px; max-width: 400px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <h3 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">Configure Simulation</h3>
+            <p style="margin: 0 0 16px 0; font-size: 12px; color: var(--text-secondary);">${escapeHtml(name)}</p>
+
+            <div id="config-sim-error" style="display: none; padding: 10px 12px; background: rgba(209,52,56,0.08); border: 1px solid #D13438; border-radius: 4px; color: #D13438; margin-bottom: 14px; font-size: 12px;"></div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 12px; color: var(--text-secondary);">Receiver Port</label>
+                <input id="config-sim-port" type="number" value="${currentPort}" placeholder="5001"
+                    style="width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: var(--surface); color: var(--text-primary); box-sizing: border-box;">
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="this.closest('[style*=fixed]').remove()" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-primary);">
+                    Cancel
+                </button>
+                <button id="config-sim-btn" onclick="saveAgentSimConfig(${agentId}, this)" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">
+                    Save
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+}
+
+async function saveAgentSimConfig(agentId, btn) {
+    const port = parseInt(document.getElementById('config-sim-port').value) || 5001;
+    const errorEl = document.getElementById('config-sim-error');
+
+    if (port < 1 || port > 65535) {
+        errorEl.textContent = 'Port must be between 1 and 65535';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/live-sim/targets/update-agent/${agentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ port })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            btn.closest('[style*=fixed]').remove();
+            showToast('Configuration saved', 'success');
+            loadAgentsForSimulation();
+        } else {
+            errorEl.textContent = data.error;
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        errorEl.textContent = 'Failed to save: ' + error.message;
+        errorEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+    }
+}
+
+// Show API key for agent
+function showAgentApiKey(agentId, name, apiKey) {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;';
+
+    dialog.innerHTML = `
+        <div style="background: var(--surface); border-radius: 4px; padding: 20px; max-width: 480px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">API Key - ${escapeHtml(name)}</h3>
+                <button onclick="this.closest('[style*=fixed]').remove()" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-secondary); padding: 0;">×</button>
+            </div>
+
+            <div style="background: var(--background); border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" value="${apiKey}" readonly
+                        style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; background: var(--surface); color: var(--text-primary);">
+                    <button onclick="copyApiKeyFromInput(this)" style="padding: 8px 12px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button onclick="this.closest('[style*=fixed]').remove()" style="flex: 1; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--text-primary);">
+                    Close
+                </button>
+                <button onclick="regenerateAgentApiKey(${agentId}, '${escapeHtml(name)}', this)" style="flex: 1; padding: 8px; background: rgba(230,165,2,0.08); border: 1px solid #E6A502; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; color: #E6A502;">
+                    Regenerate Key
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+}
+
+// Regenerate API key for agent
+async function regenerateAgentApiKey(agentId, name, btn) {
+    if (!confirm(`Regenerate API key for "${name}"?\n\nThe old key will stop working immediately.`)) {
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Regenerating...';
+
+    try {
+        const response = await fetch(`/api/live-sim/targets/regenerate-key-agent/${agentId}`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            btn.closest('[style*=fixed]').remove();
+            showNewApiKeyDialog(name + ' (regenerated)', data.api_key);
+            loadAgentsForSimulation();
+        } else {
+            showToast(`Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showToast('Failed to regenerate key', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Regenerate Key';
+    }
+}
+
+// Show API key dialog for new target (with optional connection info)
+function showNewApiKeyDialog(name, apiKey, ip = null, port = null) {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1001;';
+
+    const connectionInfo = ip ? `
+        <div style="background: var(--background); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--azure-blue);">
+            ${escapeHtml(ip)}:${port || 5001}
+        </div>
+    ` : '';
+
+    dialog.innerHTML = `
+        <div style="background: var(--surface); border-radius: 4px; padding: 20px; max-width: 480px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <div style="text-align: center; margin-bottom: 16px;">
+                <div style="font-size: 36px; margin-bottom: 8px;">🔑</div>
+                <h3 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #2EA44F;">Simulation Enabled!</h3>
+                <p style="margin: 0; font-size: 12px; color: var(--text-secondary);">"${escapeHtml(name)}" is ready for simulation.</p>
+            </div>
+
+            ${connectionInfo}
+
+            <div style="background: var(--background); border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 11px; color: var(--text-hint);">API KEY (save this securely)</label>
+                <div style="display: flex; gap: 6px;">
+                    <input id="new-api-key-input" type="text" value="${apiKey}" readonly
+                        style="flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; background: var(--surface); color: var(--text-primary);">
+                    <button onclick="copyApiKeyFromInput(this)" style="padding: 8px 12px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <div style="background: rgba(230,165,2,0.08); border: 1px solid #E6A502; border-radius: 4px; padding: 10px; margin-bottom: 16px;">
+                <div style="font-weight: 600; font-size: 12px; color: #E6A502; margin-bottom: 2px;">Important</div>
+                <div style="font-size: 11px; color: var(--text-primary);">
+                    Save this API key securely. Use it when installing the simulation receiver on the target server.
+                </div>
+            </div>
+
+            <button onclick="this.closest('[style*=fixed]').remove(); showToast('Simulation enabled', 'success');" style="width: 100%; padding: 10px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">
+                Got it, I've saved the key
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+}
+
+// Copy API key to clipboard
+function copyApiKey(apiKey) {
+    // Handle both direct calls and event-based calls
+    const textToCopy = apiKey || '';
+
+    if (!textToCopy) {
+        showToast('No API key to copy', 'error');
+        return;
+    }
+
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast('API key copied to clipboard', 'success');
+        }).catch((err) => {
+            console.error('Clipboard API failed:', err);
+            fallbackCopy(textToCopy);
+        });
+    } else {
+        fallbackCopy(textToCopy);
+    }
+}
+
+// Fallback copy method for older browsers or when clipboard API fails
+function fallbackCopy(text) {
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        if (successful) {
+            showToast('API key copied to clipboard', 'success');
+        } else {
+            showToast('Failed to copy - please copy manually', 'error');
+        }
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showToast('Failed to copy - please copy manually', 'error');
+    }
+}
+
+// Copy from input field next to button
+function copyApiKeyFromInput(btn) {
+    const input = btn.parentElement.querySelector('input');
+    if (input && input.value) {
+        copyApiKey(input.value);
+    }
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 </script>
 </div>

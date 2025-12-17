@@ -133,11 +133,11 @@ window.NotificationPane = {
     },
 
     /**
-     * Load notifications for the pane
+     * Load notifications for the pane (unread only)
      */
     async loadNotifications() {
         try {
-            const response = await fetch('/api/notifications/recent?limit=20');
+            const response = await fetch('/api/notifications/recent?limit=20&unread_only=true');
             const data = await response.json();
 
             if (data.success) {
@@ -162,8 +162,9 @@ window.NotificationPane = {
         if (!notifications || notifications.length === 0) {
             container.innerHTML = `
                 <div class="pane-empty">
-                    <div class="pane-empty-icon">&#128276;</div>
-                    <p class="pane-empty-text">No notifications yet</p>
+                    <div class="pane-empty-icon">✓</div>
+                    <p class="pane-empty-text">All caught up!</p>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">No unread notifications</p>
                 </div>
             `;
             return;
@@ -173,18 +174,17 @@ window.NotificationPane = {
     },
 
     /**
-     * Render a single notification item
+     * Render a single notification item (all shown are unread)
      */
     renderNotificationItem(notification) {
-        const isUnread = !notification.is_read;
         const priority = notification.priority || 'normal';
         const timeAgo = this.formatTimeAgo(notification.created_at);
 
         // Strip HTML and truncate body
         let title = this.stripHtml(notification.message_title || '');
         let body = this.stripHtml(notification.message_body || '');
-        if (body.length > 120) {
-            body = body.substring(0, 120) + '...';
+        if (body.length > 100) {
+            body = body.substring(0, 100) + '...';
         }
 
         // Store IP and event ID as data attributes for click handling
@@ -193,7 +193,7 @@ window.NotificationPane = {
         const triggerType = notification.trigger_type || '';
 
         return `
-            <div class="notification-item ${isUnread ? 'unread' : ''} ${priority}"
+            <div class="notification-item unread ${priority}"
                  data-id="${notification.id}"
                  data-ip="${this.escapeHtml(ipAddress)}"
                  data-event-id="${eventId}"
@@ -207,10 +207,10 @@ window.NotificationPane = {
                     <span class="notification-priority ${priority}">${priority}</span>
                 </div>
                 <div class="notification-actions">
-                    ${!notification.is_read ? `<button class="notification-action-btn" data-action="mark-read">Mark Read</button>` : ''}
-                    ${eventId ? `<button class="notification-action-btn" data-action="view-event">View Event</button>` : ''}
-                    ${this.shouldShowBlockIP(triggerType, ipAddress) ? `<button class="notification-action-btn danger" data-action="block-ip">Block IP</button>` : ''}
-                    <button class="notification-action-btn" data-action="delete">Delete</button>
+                    <button class="notification-action-btn" data-action="mark-read" title="Mark as read">✓</button>
+                    ${eventId ? `<button class="notification-action-btn" data-action="view-event" title="View event">👁</button>` : ''}
+                    ${this.shouldShowBlockIP(triggerType, ipAddress) ? `<button class="notification-action-btn danger" data-action="block-ip" title="Block IP">🚫</button>` : ''}
+                    <button class="notification-action-btn" data-action="delete" title="Delete">🗑</button>
                 </div>
             </div>
         `;
@@ -284,7 +284,7 @@ window.NotificationPane = {
     },
 
     /**
-     * Mark a notification as read
+     * Mark a notification as read and remove from pane
      */
     async markRead(notificationId, buttonElement) {
         try {
@@ -294,16 +294,25 @@ window.NotificationPane = {
             const data = await response.json();
 
             if (data.success) {
-                // Update UI
+                // Remove from UI with animation (since we only show unread)
                 const item = document.querySelector(`.notification-item[data-id="${notificationId}"]`);
                 if (item) {
-                    item.classList.remove('unread');
-                    // Remove the Mark Read button
-                    const markReadBtn = item.querySelector('[data-action="mark-read"]');
-                    if (markReadBtn) {
-                        markReadBtn.remove();
-                    }
+                    item.style.opacity = '0';
+                    item.style.transform = 'translateX(-20px)';
+                    item.style.transition = 'all 0.2s ease';
+                    setTimeout(() => {
+                        item.remove();
+
+                        // Check if list is empty
+                        const container = document.getElementById('notificationList');
+                        if (container && container.querySelectorAll('.notification-item').length === 0) {
+                            this.renderNotifications([]);
+                        }
+                    }, 200);
                 }
+
+                // Update notifications array
+                this.notifications = this.notifications.filter(n => n.id !== notificationId);
 
                 // Update badge
                 this.unreadCount = Math.max(0, this.unreadCount - 1);
@@ -315,7 +324,7 @@ window.NotificationPane = {
     },
 
     /**
-     * Mark all notifications as read
+     * Mark all notifications as read and clear list
      */
     async markAllRead() {
         try {
@@ -325,21 +334,16 @@ window.NotificationPane = {
             const data = await response.json();
 
             if (data.success) {
-                // Update UI - remove unread class from all items
-                document.querySelectorAll('.notification-item.unread').forEach(item => {
-                    item.classList.remove('unread');
-                });
-
-                // Remove all "Mark Read" buttons
-                document.querySelectorAll('[data-action="mark-read"]').forEach(btn => {
-                    btn.remove();
-                });
+                // Clear the notifications array
+                this.notifications = [];
 
                 // Update badge
                 this.unreadCount = 0;
                 this.updateBadge(0);
 
-                // Show success message (optional)
+                // Show empty state
+                this.renderNotifications([]);
+
                 console.log(`[NotificationPane] Marked ${data.data?.marked_read_count || 0} notifications as read`);
             }
         } catch (error) {

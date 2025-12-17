@@ -30,7 +30,7 @@ async function loadAgentStats() {
             document.getElementById('stat-total-agents').textContent = stats.total_agents;
             document.getElementById('stat-online-agents').textContent = stats.online_agents;
             document.getElementById('stat-approved-agents').textContent = stats.approved_agents;
-            document.getElementById('stat-total-events').textContent = stats.total_events_from_agents.toLocaleString();
+            document.getElementById('stat-total-events').textContent = (stats.total_events || 0).toLocaleString();
         }
     } catch (error) {
         console.error('Error loading agent stats:', error);

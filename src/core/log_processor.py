@@ -30,6 +30,21 @@ def _get_enrichment_module():
     return _enrichment_module
 
 
+# Proactive blocker module (lazy loaded)
+_proactive_blocker = None
+
+def _get_proactive_blocker():
+    """Lazy load proactive blocker to avoid circular imports"""
+    global _proactive_blocker
+    if _proactive_blocker is None:
+        try:
+            from blocking.proactive_blocker import evaluate_auth_event
+            _proactive_blocker = evaluate_auth_event
+        except ImportError:
+            _proactive_blocker = False
+    return _proactive_blocker
+
+
 # SSH Log Patterns
 LOG_PATTERNS = {
     'failed_password': re.compile(
@@ -203,12 +218,31 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                 # Don't fail the event if enrichment fails
                 enrichment_result = {'error': str(e)}
 
+            # Run proactive threat evaluation for failed logins
+            # This can block threats BEFORE fail2ban threshold is reached
+            proactive_result = None
+            if event_type == 'failed' and not skip_blocking:
+                try:
+                    evaluate_event = _get_proactive_blocker()
+                    if evaluate_event:
+                        proactive_result = evaluate_event({
+                            'source_ip': source_ip,
+                            'username': username,
+                            'event_type': event_type,
+                            'failure_reason': failure_reason,
+                            'timestamp': datetime.now().isoformat()
+                        })
+                except Exception as e:
+                    # Don't fail if proactive blocking fails
+                    proactive_result = {'error': str(e)}
+
             return {
                 'success': True,
                 'event_id': event_id,
                 'event_uuid': event_uuid,
                 'event_type': event_type,
-                'enrichment': enrichment_result
+                'enrichment': enrichment_result,
+                'proactive_block': proactive_result
             }
 
         finally:

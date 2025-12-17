@@ -95,8 +95,8 @@ async function loadThreatDistribution() {
         const distribution = [
             { level: 'Clean', count: levelCounts.clean || 0, color: '#10b981' },
             { level: 'Low', count: levelCounts.low || 0, color: '#3b82f6' },
-            { level: 'Medium', count: levelCounts.medium || 0, color: '#f59e0b' },
-            { level: 'High', count: levelCounts.high || 0, color: '#fb923c' },
+            { level: 'Medium', count: levelCounts.medium || 0, color: '#eab308' },
+            { level: 'High', count: levelCounts.high || 0, color: '#f97316' },
             { level: 'Critical', count: levelCounts.critical || 0, color: '#ef4444' }
         ].filter(item => item.count > 0);
 
@@ -312,34 +312,34 @@ async function lookupThreat() {
     }
 }
 
-// Get threat level badge HTML
+// Get threat level badge HTML - colors match top stat cards
 function getThreatLevelBadge(level) {
     const levelLower = (level || 'unknown').toLowerCase();
     let color, text;
 
     switch (levelLower) {
         case 'clean':
-            color = '#107C10';
+            color = '#10b981';  // Green (matches distribution)
             text = 'Clean';
             break;
         case 'low':
-            color = '#FFB900';
+            color = '#3b82f6';  // Blue
             text = 'Low';
             break;
         case 'medium':
-            color = '#FF8C00';
+            color = '#eab308';  // Yellow-amber
             text = 'Medium';
             break;
         case 'high':
-            color = '#D83B01';
+            color = '#f97316';  // Orange (matches High Risk card)
             text = 'High';
             break;
         case 'critical':
-            color = '#D13438';
+            color = '#ef4444';  // Red (matches Critical Risk card)
             text = 'Critical';
             break;
         default:
-            color = '#8A8886';
+            color = '#6b7280';  // Gray
             text = 'Unknown';
     }
 

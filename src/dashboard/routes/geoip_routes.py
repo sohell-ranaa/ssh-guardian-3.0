@@ -92,9 +92,43 @@ def lookup_ip(ip_address):
                 'from_cache': False
             })
         else:
+            # Not in database - fetch from API and save
+            geo_lookup = GeoIPLookup()
+            geo_data = geo_lookup.lookup_ip(ip_address)
+
+            if geo_data:
+                # Fetch the saved record from DB
+                conn2 = get_connection()
+                cursor2 = conn2.cursor(dictionary=True)
+                cursor2.execute("""
+                    SELECT * FROM ip_geolocation WHERE ip_address_text = %s
+                """, (ip_address,))
+                result = cursor2.fetchone()
+                cursor2.close()
+                conn2.close()
+
+                if result:
+                    if 'ip_address' in result:
+                        del result['ip_address']
+                    if result.get('first_seen'):
+                        result['first_seen'] = result['first_seen'].isoformat()
+                    if result.get('last_seen'):
+                        result['last_seen'] = result['last_seen'].isoformat()
+                    if result.get('latitude') is not None:
+                        result['latitude'] = float(result['latitude'])
+                    if result.get('longitude') is not None:
+                        result['longitude'] = float(result['longitude'])
+
+                    return jsonify({
+                        'success': True,
+                        'data': result,
+                        'from_cache': False,
+                        'freshly_fetched': True
+                    })
+
             return jsonify({
                 'success': False,
-                'message': 'IP address not found in database'
+                'message': 'IP address not found and lookup failed'
             })
 
     except Exception as e:

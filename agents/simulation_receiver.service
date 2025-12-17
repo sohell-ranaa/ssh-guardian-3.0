@@ -1,0 +1,24 @@
+[Unit]
+Description=SSH Guardian Simulation Receiver
+Documentation=https://github.com/ssh-guardian/v3
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/ssh-guardian
+ExecStart=/usr/bin/python3 /opt/ssh-guardian/simulation_receiver.py --api-key ${SIM_RECEIVER_API_KEY} --port 5001 --log-file /var/log/auth.log
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/ssh-guardian-sim-receiver.log
+StandardError=append:/var/log/ssh-guardian-sim-receiver.log
+EnvironmentFile=-/etc/ssh-guardian/sim_receiver.env
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=false
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

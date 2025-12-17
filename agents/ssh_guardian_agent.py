@@ -70,6 +70,10 @@ class AgentConfig:
         # Firewall management
         self.firewall_enabled = os.getenv("SSH_GUARDIAN_FIREWALL_ENABLED", "true").lower() == "true"
 
+        # Fail2ban integration (hybrid mode)
+        self.use_fail2ban = os.getenv("SSH_GUARDIAN_USE_FAIL2BAN", "false").lower() == "true"
+        self.fail2ban_sync_interval = int(os.getenv("SSH_GUARDIAN_FAIL2BAN_SYNC_INTERVAL", "30"))  # seconds
+
         # Load from config file if provided
         if config_file and os.path.exists(config_file):
             self.load_from_file(config_file)
@@ -103,7 +107,9 @@ class AgentConfig:
             "batch_size": self.batch_size,
             "heartbeat_interval": self.heartbeat_interval,
             "firewall_sync_interval": self.firewall_sync_interval,
-            "firewall_enabled": self.firewall_enabled
+            "firewall_enabled": self.firewall_enabled,
+            "use_fail2ban": self.use_fail2ban,
+            "fail2ban_sync_interval": self.fail2ban_sync_interval
         }
 
         os.makedirs(os.path.dirname(config_file), exist_ok=True)
@@ -470,6 +476,45 @@ class GuardianAPIClient:
             logging.error(f"Error getting UFW commands: {e}")
             return []
 
+    # =========================================================================
+    # FAIL2BAN API METHODS
+    # =========================================================================
+
+    def get_pending_fail2ban_unbans(self) -> List[Dict]:
+        """Get pending fail2ban unban commands from central server"""
+        try:
+            url = f"{self.config.server_url}/api/agents/fail2ban/pending-unbans"
+            response = self.session.get(url, timeout=30)
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('commands', [])
+            else:
+                logging.warning(f"Failed to get fail2ban unbans: {response.status_code}")
+                return []
+
+        except Exception as e:
+            logging.error(f"Error getting fail2ban unbans: {e}")
+            return []
+
+    def report_fail2ban_unban_result(self, block_id: int, success: bool, message: str) -> bool:
+        """Report the result of a fail2ban unban command execution"""
+        try:
+            payload = {
+                'id': block_id,
+                'success': success,
+                'message': message
+            }
+
+            url = f"{self.config.server_url}/api/agents/fail2ban/unban-result"
+            response = self.session.post(url, json=payload, timeout=30)
+
+            return response.status_code == 200
+
+        except Exception as e:
+            logging.error(f"Error reporting fail2ban unban result: {e}")
+            return False
+
     def _get_system_info(self) -> Dict:
         """Collect system information"""
         return {
@@ -607,6 +652,9 @@ class SSHGuardianAgent:
         elif self.firewall_collector:
             logging.info(f"Firewall Type: iptables")
             logging.info(f"Firewall Sync Interval: {self.config.firewall_sync_interval}s")
+        logging.info(f"Fail2ban Mode: {self.config.use_fail2ban}")
+        if self.config.use_fail2ban:
+            logging.info(f"Fail2ban Sync Interval: {self.config.fail2ban_sync_interval}s")
         logging.info("="*70)
 
         # Register agent
@@ -620,6 +668,7 @@ class SSHGuardianAgent:
         """Main agent loop"""
         last_heartbeat_time = time.time()
         last_firewall_sync_time = time.time()
+        last_fail2ban_sync_time = time.time()
 
         while self.running:
             try:
@@ -654,6 +703,12 @@ class SSHGuardianAgent:
 
                     # Process any pending firewall commands
                     self._process_firewall_commands()
+
+                # Fail2ban sync (for dashboard unbans)
+                if self.config.use_fail2ban:
+                    if current_time - last_fail2ban_sync_time >= self.config.fail2ban_sync_interval:
+                        self._sync_fail2ban_unbans()
+                        last_fail2ban_sync_time = current_time
 
                 # Sleep until next check
                 time.sleep(self.config.check_interval)
@@ -731,6 +786,65 @@ class SSHGuardianAgent:
             logging.debug("RuleSuggestionEngine not available, skipping suggestions")
         except Exception as e:
             logging.error(f"Error syncing extended data: {e}")
+
+    def _sync_fail2ban_unbans(self):
+        """
+        Sync pending unbans from dashboard to fail2ban.
+        When admin manually unblocks an IP in dashboard that was blocked by fail2ban,
+        we need to run `fail2ban-client unbanip` to actually unblock it.
+        """
+        if not self.config.use_fail2ban:
+            return
+
+        try:
+            # Get pending unban commands from server
+            pending_unbans = self.api_client.get_pending_fail2ban_unbans()
+
+            if not pending_unbans:
+                return
+
+            logging.info(f"🔓 Processing {len(pending_unbans)} fail2ban unban commands")
+
+            for cmd in pending_unbans:
+                block_id = cmd.get('id')
+                ip_address = cmd.get('ip')
+                jail = cmd.get('jail', 'sshd')
+
+                if not ip_address:
+                    continue
+
+                try:
+                    # Execute fail2ban-client unbanip
+                    result = subprocess.run(
+                        ['fail2ban-client', 'set', jail, 'unbanip', ip_address],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+
+                    success = result.returncode == 0
+                    message = result.stdout.strip() if success else result.stderr.strip()
+
+                    if success:
+                        logging.info(f"✅ fail2ban unban: {ip_address} (jail={jail})")
+                    else:
+                        logging.warning(f"⚠️ fail2ban unban failed: {ip_address} - {message}")
+
+                    # Report result back to server
+                    self.api_client.report_fail2ban_unban_result(block_id, success, message)
+
+                except subprocess.TimeoutExpired:
+                    logging.error(f"❌ fail2ban unban timeout: {ip_address}")
+                    self.api_client.report_fail2ban_unban_result(block_id, False, "Command timed out")
+                except FileNotFoundError:
+                    logging.error("❌ fail2ban-client not found. Is fail2ban installed?")
+                    self.api_client.report_fail2ban_unban_result(block_id, False, "fail2ban-client not found")
+                except Exception as e:
+                    logging.error(f"❌ fail2ban unban error: {ip_address} - {e}")
+                    self.api_client.report_fail2ban_unban_result(block_id, False, str(e))
+
+        except Exception as e:
+            logging.error(f"Error syncing fail2ban unbans: {e}")
 
     def _process_firewall_commands(self):
         """Process pending firewall commands from central server"""
@@ -867,10 +981,9 @@ def main():
     if args.batch_size:
         config.batch_size = args.batch_size
 
-    # Validate configuration
+    # API key is optional - will be auto-generated on registration
     if not config.api_key:
-        print("❌ Error: API key is required. Set SSH_GUARDIAN_API_KEY environment variable or use --api-key")
-        sys.exit(1)
+        print("ℹ️  No API key provided. Will be auto-generated on registration.")
 
     # Start agent
     agent = SSHGuardianAgent(config)

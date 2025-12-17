@@ -158,7 +158,8 @@ class NotificationDispatcher:
         try:
             cursor.execute("""
                 SELECT id, rule_name, trigger_on, channels, conditions,
-                       message_template, message_format, rate_limit_minutes
+                       message_template, message_format, rate_limit_minutes,
+                       email_recipients
                 FROM notification_rules
                 WHERE trigger_on = %s AND is_enabled = TRUE
             """, (trigger_type,))
@@ -205,53 +206,113 @@ class NotificationDispatcher:
             self._log(f"Telegram error: {str(e)}")
             return False
 
-    def send_email(self, subject: str, message: str, config: Dict) -> bool:
-        """Send email notification"""
+    def send_email(self, subject: str, message: str, config: Dict, recipients: List[str] = None) -> bool:
+        """Send email notification
+
+        Args:
+            subject: Email subject
+            message: Email body (HTML)
+            config: SMTP configuration
+            recipients: List of recipient emails (from rule), overrides config.to_email
+        """
         try:
             host = config.get('host')
-            port = int(config.get('port', 25))
+            port = int(config.get('port', 587))
             user = config.get('user')
             password = config.get('password')
             from_email = config.get('from_email')
             from_name = config.get('from_name', 'SSH Guardian')
-            use_tls = config.get('use_tls', 'false').lower() == 'true'
-            to_email = config.get('to_email', from_email)  # Default to from_email
+            use_tls = config.get('use_tls', 'true').lower() == 'true'
+
+            # Use recipients from rule, or fall back to config, or from_email
+            to_emails = recipients if recipients else []
+            if not to_emails:
+                default_to = config.get('to_email') or config.get('default_recipient')
+                if default_to:
+                    to_emails = [default_to]
+                elif from_email:
+                    to_emails = [from_email]
 
             if not host or not from_email:
-                self._log("SMTP not configured")
+                self._log("  [EMAIL] SMTP not configured (missing host or from_email)")
                 return False
+
+            if not to_emails:
+                self._log("  [EMAIL] No recipients configured")
+                return False
+
+            self._log(f"  [EMAIL] Sending to: {', '.join(to_emails)}")
 
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
             msg['From'] = f"{from_name} <{from_email}>"
-            msg['To'] = to_email
+            msg['To'] = ', '.join(to_emails)
 
-            # Plain text version
-            text_part = MIMEText(message.replace('<br>', '\n').replace('<b>', '').replace('</b>', ''), 'plain')
+            # Strip HTML tags for plain text version
+            import re
+            plain_text = re.sub(r'<[^>]+>', '', message)
+            plain_text = plain_text.replace('&nbsp;', ' ').replace('&amp;', '&')
+            text_part = MIMEText(plain_text, 'plain', 'utf-8')
             msg.attach(text_part)
 
-            # HTML version
-            html_part = MIMEText(f"<html><body>{message}</body></html>", 'html')
+            # HTML version with proper styling
+            html_content = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+                    .content {{ background: #f9f9f9; padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px; }}
+                    .footer {{ margin-top: 20px; font-size: 12px; color: #666; text-align: center; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="content">
+                        {message.replace(chr(10), '<br>')}
+                    </div>
+                    <div class="footer">
+                        Sent by SSH Guardian v3.0
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            html_part = MIMEText(html_content, 'html', 'utf-8')
             msg.attach(html_part)
 
+            # Connect to SMTP server
+            self._log(f"  [EMAIL] Connecting to {host}:{port} (TLS: {use_tls})")
+
             if port == 465:
-                server = smtplib.SMTP_SSL(host, port, timeout=10)
+                server = smtplib.SMTP_SSL(host, port, timeout=30)
             else:
-                server = smtplib.SMTP(host, port, timeout=10)
+                server = smtplib.SMTP(host, port, timeout=30)
                 if use_tls:
                     server.starttls()
 
             if user and password:
+                self._log(f"  [EMAIL] Authenticating as {user}")
                 server.login(user, password)
 
-            server.sendmail(from_email, [to_email], msg.as_string())
+            server.sendmail(from_email, to_emails, msg.as_string())
             server.quit()
 
-            self._log(f"Email sent to {to_email}")
+            self._log(f"  [EMAIL] Successfully sent to {', '.join(to_emails)}")
             return True
 
+        except smtplib.SMTPAuthenticationError as e:
+            self._log(f"  [EMAIL] Authentication failed: {str(e)}")
+            return False
+        except smtplib.SMTPConnectError as e:
+            self._log(f"  [EMAIL] Connection failed: {str(e)}")
+            return False
+        except smtplib.SMTPException as e:
+            self._log(f"  [EMAIL] SMTP error: {str(e)}")
+            return False
         except Exception as e:
-            self._log(f"Email error: {str(e)}")
+            self._log(f"  [EMAIL] Error: {str(e)}")
             return False
 
     def create_notification_record(self, rule_id: int, trigger_type: str,
@@ -377,7 +438,21 @@ class NotificationDispatcher:
                     config = self._get_smtp_config()
                     if config:
                         subject = f"SSH Guardian Alert: {trigger_type.replace('_', ' ').title()}"
-                        sent = self.send_email(subject, message, config)
+                        # Parse email_recipients from rule (JSON array or comma-separated string)
+                        email_recipients = None
+                        raw_recipients = rule.get('email_recipients')
+                        if raw_recipients:
+                            if isinstance(raw_recipients, str):
+                                try:
+                                    email_recipients = json.loads(raw_recipients)
+                                except json.JSONDecodeError:
+                                    # Treat as comma-separated string
+                                    email_recipients = [e.strip() for e in raw_recipients.split(',') if e.strip()]
+                            elif isinstance(raw_recipients, list):
+                                email_recipients = raw_recipients
+
+                        self._log(f"  [EMAIL] Rule recipients: {email_recipients}")
+                        sent = self.send_email(subject, message, config, recipients=email_recipients)
                         delivery_status['email'] = 'sent' if sent else 'failed'
                         if sent:
                             success = True
