@@ -1,165 +1,1059 @@
-<!-- SSH Guardian v3.0 - Live Events Page -->
+<!-- SSH Guardian v3.0 - Live Events Page (Unified Design) -->
 <div id="page-events-live" class="page-content" style="display: none;">
-    <div class="page-header-with-cache">
+    <div class="ev-header">
         <div>
-            <h1 class="page-title">Live Events</h1>
-            <p class="page-subtitle">Real-time SSH authentication events with threat intelligence</p>
+            <h1>Auth Events</h1>
+            <p>SSH logins, Fail2ban actions, and blocked IPs</p>
         </div>
-        <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="events">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadEventsLivePage()" title="Refresh data">↻</button>
+        <button class="refresh-btn" onclick="EV.refresh()">
+            <span class="refresh-icon">↻</span> Refresh
+        </button>
+    </div>
+
+    <div class="ev-tabs">
+        <button class="ev-tab active" data-tab="ssh" onclick="EV.tab('ssh')">SSH Logins</button>
+        <button class="ev-tab" data-tab="f2b" onclick="EV.tab('f2b')">Fail2ban</button>
+        <button class="ev-tab" data-tab="blocked" onclick="EV.tab('blocked')">Blocked</button>
+    </div>
+
+    <!-- SSH Logins Tab -->
+    <div id="ev-ssh" class="ev-content active">
+        <div class="ev-filters">
+            <select id="sshType"><option value="">All Types</option><option value="failed">Failed</option><option value="successful">Successful</option></select>
+            <select id="sshAgent"><option value="">All Agents</option></select>
+            <select id="sshTime"><option value="1h">Last Hour</option><option value="6h">6 Hours</option><option value="24h" selected>24 Hours</option><option value="7d">7 Days</option><option value="30d">30 Days</option></select>
+            <button class="ev-apply" onclick="EV.loadSSH(1)">Apply</button>
+        </div>
+        <div class="ev-card">
+            <div id="sshLoad" class="ev-msg">Loading...</div>
+            <div id="sshNone" class="ev-msg" style="display:none">No events found</div>
+            <div id="sshErr" class="ev-msg err" style="display:none">Failed to load</div>
+            <div class="ev-tbl-wrap">
+                <table id="sshTbl" class="ev-tbl" style="display:none">
+                    <thead><tr><th>Last Activity</th><th>IP Address</th><th>Location</th><th>Attempts</th><th>Users</th><th>Risk</th><th>Actions</th></tr></thead>
+                    <tbody id="sshBody"></tbody>
+                </table>
             </div>
+        </div>
+        <div id="sshPg" class="ev-pg" style="display:none">
+            <span id="sshInfo"></span>
+            <div><button onclick="EV.loadSSH(EV.sshPg-1)">← Prev</button><button onclick="EV.loadSSH(EV.sshPg+1)">Next →</button></div>
         </div>
     </div>
 
-    <!-- Overview Statistics -->
-    <div class="card" style="margin-bottom: 20px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Overview</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
-            <div style="padding: 12px; background: var(--background); border-radius: 6px; border-left: 3px solid #0078D4;">
-                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Total Events</div>
-                <div id="overviewTotal" style="font-size: 24px; font-weight: 600; color: var(--text-primary);">-</div>
+    <!-- Fail2ban Tab (Same design as SSH) -->
+    <div id="ev-f2b" class="ev-content">
+        <div class="ev-filters">
+            <input type="text" id="f2bIp" placeholder="Filter IP...">
+            <select id="f2bAction"><option value="">All Actions</option><option value="ban">Bans</option><option value="unban">Unbans</option></select>
+            <select id="f2bAgent"><option value="">All Agents</option></select>
+            <select id="f2bTime"><option value="24h">24 Hours</option><option value="7d" selected>7 Days</option><option value="30d">30 Days</option></select>
+            <button class="ev-apply" onclick="EV.loadF2B(1)">Apply</button>
+        </div>
+        <div class="ev-card">
+            <div id="f2bLoad" class="ev-msg">Loading...</div>
+            <div id="f2bNone" class="ev-msg" style="display:none">No events found</div>
+            <div id="f2bErr" class="ev-msg err" style="display:none">Failed to load</div>
+            <div class="ev-tbl-wrap">
+                <table id="f2bTbl" class="ev-tbl" style="display:none">
+                    <thead><tr><th>Last Activity</th><th>IP Address</th><th>Location</th><th>Actions</th><th>Failures</th><th>Risk</th><th></th></tr></thead>
+                    <tbody id="f2bBody"></tbody>
+                </table>
             </div>
-            <div style="padding: 12px; background: var(--background); border-radius: 6px; border-left: 3px solid #D83B01;">
-                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Failed</div>
-                <div id="overviewFailed" style="font-size: 24px; font-weight: 600; color: #D83B01;">-</div>
-            </div>
-            <div style="padding: 12px; background: var(--background); border-radius: 6px; border-left: 3px solid #107C10;">
-                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Successful</div>
-                <div id="overviewSuccessful" style="font-size: 24px; font-weight: 600; color: #107C10;">-</div>
-            </div>
-            <div style="padding: 12px; background: var(--background); border-radius: 6px; border-left: 3px solid #FFB900;">
-                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Unique IPs</div>
-                <div id="overviewUniqueIPs" style="font-size: 24px; font-weight: 600; color: var(--text-primary);">-</div>
-            </div>
-            <div style="padding: 12px; background: var(--background); border-radius: 6px; border-left: 3px solid #A80000;">
-                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">High Threat</div>
-                <div id="overviewHighThreat" style="font-size: 24px; font-weight: 600; color: #A80000;">-</div>
-            </div>
+        </div>
+        <div id="f2bPg" class="ev-pg" style="display:none">
+            <span id="f2bInfo"></span>
+            <div><button onclick="EV.loadF2B(EV.f2bPg-1)">← Prev</button><button onclick="EV.loadF2B(EV.f2bPg+1)">Next →</button></div>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="card" style="margin-bottom: 20px;">
-        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-            <input type="text" id="eventSearch" placeholder="Search username..."
-                   style="flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
-
-            <input type="text" id="ipFilter" placeholder="Filter by IP..."
-                   style="flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
-
-            <select id="eventTypeFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
-                <option value="">All Event Types</option>
-                <option value="failed">Failed</option>
-                <option value="successful">Successful</option>
-            </select>
-
-            <select id="threatLevelFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
-                <option value="">All Threat Levels</option>
-                <option value="clean">Clean</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-            </select>
-
-            <select id="agentFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px;">
-                <option value="">All Agents</option>
-                <!-- Agents will be populated dynamically -->
-            </select>
-
-            <select id="timeRangeFilter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; font-size: 13px; background: var(--surface);">
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="last_7_days">Last 7 Days</option>
-                <option value="last_30_days" selected>Last 30 Days</option>
-                <option value="all_time">All Time</option>
-            </select>
-
-            <button id="autoRefreshToggle" style="padding: 8px 12px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;" title="Click to enable auto-refresh">
-                ▶
-            </button>
-
-            <button id="refreshEvents" style="padding: 8px 12px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 18px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;" title="Refresh events">
-                ↻
-            </button>
+    <!-- Blocked Tab -->
+    <div id="ev-blocked" class="ev-content">
+        <div class="ev-filters">
+            <input type="text" id="blockIp" placeholder="Filter IP..." onkeyup="EV.debounceBlockFilter()">
+            <select id="blockStatus" onchange="EV.loadBlocked()"><option value="">All Status</option><option value="blocked">Blocked</option><option value="escalate">Escalated</option><option value="unblocked">Unblocked</option></select>
+            <select id="blockSource" onchange="EV.loadBlocked()"><option value="">All Sources</option><option value="rule">Rule Based</option><option value="manual">Manual</option><option value="ml">ML</option><option value="fail2ban">Fail2ban</option><option value="ufw">UFW</option></select>
+            <select id="blockAgent" onchange="EV.loadBlocked()"><option value="">All Agents</option></select>
+            <select id="blockTime" onchange="EV.loadBlocked()"><option value="24h">24 Hours</option><option value="7d" selected>7 Days</option><option value="30d">30 Days</option><option value="90d">90 Days</option></select>
         </div>
-    </div>
-
-    <!-- Events Table -->
-    <div class="card">
-        <div id="eventsLoading" style="text-align: center; padding: 40px; color: var(--text-secondary);">
-            Loading events...
-        </div>
-        <div id="eventsTable" style="display: none;">
-            <div class="table-wrapper">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                    <tr style="background: var(--background); border-bottom: 2px solid var(--border);">
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Time</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">IP Address</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Location</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Username</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Threat Level</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Details</th>
-                        <th style="padding: 12px; text-align: left; font-weight: 600;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="eventsTableBody">
-                    <!-- Events will be inserted here -->
-                </tbody>
-            </table>
-            </div>
-            <div id="eventsPagination" style="padding: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border);">
-                <div id="eventsInfo" style="color: var(--text-secondary); font-size: 13px;"></div>
-                <div style="display: flex; gap: 8px;">
-                    <button id="prevPage" style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 2px; cursor: pointer; font-size: 13px;">Previous</button>
-                    <button id="nextPage" style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 2px; cursor: pointer; font-size: 13px;">Next</button>
-                </div>
-            </div>
-        </div>
-        <div id="eventsError" style="display: none; text-align: center; padding: 40px; color: #D13438;">
-            Error loading events
+        <div id="blockedBox" class="ev-card"><div class="ev-msg">Loading...</div></div>
+        <div id="blockPg" class="ev-pg" style="display:none">
+            <span id="blockInfo"></span>
+            <div><button onclick="EV.loadBlocked(EV.blockPg-1)">← Prev</button><button onclick="EV.loadBlocked(EV.blockPg+1)">Next →</button></div>
         </div>
     </div>
 </div>
 
+<!-- Shared Modal (used by both SSH and F2B tabs) -->
+<div id="evModal" class="ev-modal" style="display:none" onclick="if(event.target===this)EV.closeModal()">
+    <div class="ev-modal-box" onclick="event.stopPropagation()">
+        <div class="ev-modal-hdr">
+            <div>
+                <h2 id="modalTitle">IP Details</h2>
+                <span id="modalAgent"></span>
+            </div>
+            <button onclick="EV.closeModal()">×</button>
+        </div>
+        <div class="ev-modal-tabs">
+            <button class="active" onclick="EV.modalTab('analysis')">Analysis</button>
+            <button onclick="EV.modalTab('history')">History</button>
+        </div>
+        <div class="ev-modal-body">
+            <div id="mAnalysis" class="ev-modal-pane active"></div>
+            <div id="mHistory" class="ev-modal-pane"></div>
+        </div>
+        <div class="ev-modal-ftr"><button onclick="EV.closeModal()">Close</button></div>
+    </div>
+</div>
+
+<style>
+/* Base */
+.ev-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:12px;flex-wrap:wrap}
+.ev-header h1{font-size:20px;font-weight:600;margin:0 0 4px 0}
+.ev-header p{font-size:13px;color:var(--text-secondary);margin:0}
+.ev-refresh{padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer}
+.ev-refresh:hover{background:var(--background)}
+
+/* Tabs */
+.ev-tabs{display:flex;gap:2px;background:var(--border);padding:2px;border-radius:8px;margin-bottom:16px}
+.ev-tab{flex:1;padding:10px 12px;background:var(--surface);border:none;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.ev-tab:first-child{border-radius:6px 0 0 6px}
+.ev-tab:last-child{border-radius:0 6px 6px 0}
+.ev-tab:hover{color:var(--text-primary)}
+.ev-tab.active{background:var(--azure-blue);color:white}
+.ev-content{display:none}
+.ev-content.active{display:block}
+
+/* Filters */
+.ev-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.ev-filters select,.ev-filters input{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);min-width:100px;flex:1}
+.ev-apply{padding:8px 16px;background:var(--azure-blue);color:white;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.2s}
+.ev-apply:hover{opacity:0.9}
+
+/* Table */
+.ev-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.ev-tbl-wrap{overflow-x:auto}
+.ev-tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+.ev-tbl th{padding:12px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;color:var(--text-secondary);background:var(--background);border-bottom:1px solid var(--border);white-space:nowrap}
+.ev-tbl td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.ev-tbl tbody tr{transition:all 0.15s ease}
+.ev-tbl tbody tr:hover{background:rgba(0,120,212,0.04);border-left:3px solid var(--azure-blue)}
+.ev-tbl tbody tr:last-child td{border-bottom:none}
+.ev-msg{padding:40px 20px;text-align:center;color:var(--text-secondary)}
+.ev-msg.err{color:#dc2626}
+
+/* Pagination */
+.ev-pg{display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:13px;color:var(--text-secondary);flex-wrap:wrap;gap:8px}
+.ev-pg button{padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;cursor:pointer;margin-left:6px;transition:all 0.2s}
+.ev-pg button:hover:not(:disabled){background:var(--background);border-color:var(--azure-blue);color:var(--azure-blue)}
+.ev-pg button:disabled{opacity:0.4;cursor:not-allowed;background:var(--background)}
+
+/* Cell styles (shared) */
+.c-ip{font-family:monospace;font-size:12px;color:var(--azure-blue);word-break:break-all}
+.c-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.c-tag{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:600}
+.c-tag.tor{background:#ede9fe;color:#7c3aed}
+.c-tag.vpn{background:#fef3c7;color:#d97706}
+.c-tag.proxy{background:#dbeafe;color:#2563eb}
+.c-loc{font-size:12px}
+.c-loc .isp{color:var(--text-secondary);font-size:11px;margin-top:2px}
+.c-att{display:flex;gap:6px;font-size:12px;flex-wrap:wrap}
+.c-att .f{color:#dc2626;font-weight:600}
+.c-att .s{color:#16a34a}
+.c-att .b{color:#dc2626;font-weight:600}
+.c-att .u{color:#6b7280}
+.c-users{padding:2px 8px;background:var(--background);border-radius:10px;font-size:11px;color:var(--text-secondary)}
+.c-risk{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.c-risk-bar{width:40px;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.c-risk-fill{height:100%;border-radius:3px}
+.c-risk-fill.low{background:#22c55e}
+.c-risk-fill.med{background:#f59e0b}
+.c-risk-fill.high{background:#ef4444}
+.c-risk-fill.crit{background:#991b1b}
+.c-badge{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.c-badge.failed,.c-badge.ban{background:#fef2f2;color:#dc2626}
+.c-badge.success,.c-badge.successful,.c-badge.unban{background:#f0fdf4;color:#16a34a}
+.c-badge.blocked{background:linear-gradient(135deg,#D13438,#A4262C);color:white;box-shadow:0 2px 4px rgba(209,52,56,0.25)}
+.c-badge.unblocked{background:linear-gradient(135deg,#107C10,#0B5C0B);color:white;box-shadow:0 2px 4px rgba(16,124,16,0.25)}
+.c-status{font-size:10px;padding:3px 6px;border-radius:4px;background:#fef2f2;color:#dc2626;margin-left:6px}
+
+/* Blocked table specific */
+.c-source{padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap}
+.c-source.rule,.c-source.rule_based{background:linear-gradient(135deg,#D13438,#A4262C);color:white;box-shadow:0 2px 4px rgba(209,52,56,0.25)}
+.c-source.manual{background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;box-shadow:0 2px 4px rgba(99,102,241,0.25)}
+.c-source.ml,.c-source.ml_threshold,.c-source.ml_behavioral{background:linear-gradient(135deg,#9333ea,#7928ca);color:white;box-shadow:0 2px 4px rgba(147,51,234,0.25)}
+.c-source.fail2ban{background:linear-gradient(135deg,#0078D4,#005A9E);color:white;box-shadow:0 2px 4px rgba(0,120,212,0.25)}
+.c-source.ufw{background:linear-gradient(135deg,#107C10,#0B5C0B);color:white;box-shadow:0 2px 4px rgba(16,124,16,0.25)}
+.c-source.api_reputation{background:linear-gradient(135deg,#CA5010,#9A3C0C);color:white;box-shadow:0 2px 4px rgba(202,80,16,0.25)}
+.c-reason{font-size:12px;color:var(--text-primary);background:rgba(255,183,77,0.15);padding:8px 12px;border-radius:4px;border-left:3px solid #FFB74D;line-height:1.4}
+.c-agent{font-size:11px;color:var(--text-secondary);background:var(--background);padding:4px 8px;border-radius:4px;border:1px solid var(--border);white-space:nowrap}
+.c-stat{padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;display:inline-flex;align-items:center;gap:4px}
+.c-stat.active{background:linear-gradient(135deg,#D13438,#A4262C);color:white;box-shadow:0 2px 4px rgba(209,52,56,0.25)}
+.c-stat.active::before{content:'●';font-size:8px}
+.c-stat.inactive{background:linear-gradient(135deg,#107C10,#0B5C0B);color:white;box-shadow:0 2px 4px rgba(16,124,16,0.25)}
+.c-stat.inactive::before{content:'○';font-size:8px}
+.c-stat.escalated{background:linear-gradient(135deg,#CA5010,#9A3C0C);color:white;box-shadow:0 2px 4px rgba(202,80,16,0.25)}
+.c-stat.escalated::before{content:'⬆';font-size:8px}
+.c-detail{padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;transition:all 0.2s}
+.c-detail:hover{background:var(--background);border-color:var(--azure-blue);color:var(--azure-blue)}
+
+/* Modal */
+.ev-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;box-sizing:border-box}
+.ev-modal-box{background:var(--surface);border-radius:12px;width:100%;max-width:850px;height:auto;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.ev-modal-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
+.ev-modal-hdr>div{overflow:hidden}
+.ev-modal-hdr h2{font-size:16px;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-modal-hdr span{font-size:12px;color:var(--text-secondary);margin-top:4px;display:block}
+.ev-modal-hdr>button{width:32px;height:32px;min-width:32px;border:1px solid var(--border);background:var(--background);border-radius:6px;font-size:20px;cursor:pointer;color:var(--text-secondary);flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-left:12px}
+.ev-modal-hdr>button:hover{background:var(--border)}
+.ev-modal-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--background);flex-shrink:0}
+.ev-modal-tabs button{flex:1;padding:12px 16px;background:none;border:none;font-size:14px;font-weight:500;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.2s}
+.ev-modal-tabs button:hover{color:var(--text-primary)}
+.ev-modal-tabs button.active{color:var(--azure-blue);border-bottom-color:var(--azure-blue)}
+.ev-modal-body{padding:20px;overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:200px}
+.ev-modal-pane{display:none}
+.ev-modal-pane.active{display:block}
+.ev-modal-ftr{padding:16px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;flex-shrink:0}
+.ev-modal-ftr button{padding:10px 24px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:14px;cursor:pointer;transition:all 0.2s}
+.ev-modal-ftr button:hover{background:var(--background);border-color:var(--text-secondary)}
+
+/* Modal Analysis */
+.m-stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px}
+.m-stat{background:var(--background);border-radius:8px;padding:14px 10px;text-align:center;border:1px solid var(--border)}
+.m-stat-val{font-size:22px;font-weight:700;line-height:1.2}
+.m-stat-val.red{color:#dc2626}
+.m-stat-val.green{color:#16a34a}
+.m-stat-val.blue{color:#0078D4}
+.m-stat-lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;margin-top:6px;letter-spacing:0.5px}
+.m-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.m-card{background:var(--background);border-radius:8px;padding:16px;border:1px solid var(--border)}
+.m-card h4{font-size:12px;font-weight:600;color:var(--azure-blue);text-transform:uppercase;margin:0 0 12px 0;letter-spacing:0.5px}
+.m-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;gap:12px}
+.m-row:last-child{border-bottom:none;padding-bottom:0}
+.m-row .l{color:var(--text-secondary);flex-shrink:0}
+.m-row .v{font-weight:600;text-align:right;word-break:break-all}
+.m-sec{background:var(--background);border-radius:8px;padding:16px;margin-bottom:16px;border:1px solid var(--border)}
+.m-sec:last-child{margin-bottom:0}
+.m-sec h4{font-size:11px;font-weight:700;color:var(--azure-blue);text-transform:uppercase;margin:0 0 12px 0;letter-spacing:0.5px}
+.m-meter{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.m-meter-bar{flex:1;height:10px;background:var(--border);border-radius:5px;overflow:hidden}
+.m-meter-fill{height:100%;border-radius:5px}
+.m-meter-val{font-size:20px;font-weight:700;min-width:45px;text-align:right}
+.m-intel{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.m-intel-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center}
+.m-intel-item .src{font-size:10px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px}
+.m-intel-item .score{font-size:20px;font-weight:700}
+.m-intel-item .det{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.m-recs{display:flex;flex-direction:column;gap:8px}
+.m-rec{display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px}
+.m-rec.crit{border-color:#dc2626;background:#fef2f2}
+.m-rec.warn{border-color:#d97706;background:#fffbeb}
+.m-rec.info{border-color:#0078D4;background:#eff6ff}
+
+/* Modal History */
+.h-over{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;padding:16px;background:var(--background);border-radius:8px;border:1px solid var(--border)}
+.h-stat{text-align:center}
+.h-stat-val{font-size:20px;font-weight:700;line-height:1.2}
+.h-stat-val.red{color:#dc2626}
+.h-stat-val.green{color:#16a34a}
+.h-stat-lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;margin-top:4px}
+.h-filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.h-filters input,.h-filters select{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);flex:1;min-width:100px;box-sizing:border-box}
+.h-filters .clear{padding:10px 16px;background:var(--background);border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+.h-filters .clear:hover{background:var(--surface);border-color:var(--text-secondary)}
+.h-wrap{max-height:280px;overflow-y:auto}
+.h-date{margin-bottom:12px}
+.h-date-hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--background);border:1px solid var(--border);border-radius:8px;cursor:pointer;gap:10px;transition:background 0.2s}
+.h-date-hdr:hover{background:var(--surface)}
+.h-date-hdr .arrow{margin-right:8px;color:var(--text-secondary);font-size:11px;transition:transform 0.2s}
+.h-date.expanded .h-date-hdr{border-radius:8px 8px 0 0;border-bottom:none}
+.h-date.expanded .arrow{transform:rotate(90deg)}
+.h-date-title{font-size:13px;font-weight:600;display:flex;align-items:center}
+.h-date-stats{display:flex;gap:12px;font-size:12px}
+.h-date-stats .f{color:#dc2626}
+.h-date-stats .s{color:#16a34a}
+.h-date-stats .t{color:var(--text-secondary)}
+.h-date-body{display:none;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow-x:auto}
+.h-date.expanded .h-date-body{display:block}
+.h-tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:420px}
+.h-tbl th{padding:10px 12px;text-align:left;font-weight:600;font-size:10px;text-transform:uppercase;color:var(--text-secondary);background:var(--surface);letter-spacing:0.5px}
+.h-tbl td{padding:10px 12px;border-bottom:1px solid var(--border)}
+.h-tbl tr:last-child td{border-bottom:none}
+.h-tbl .ip-cell{font-family:'SF Mono',Monaco,monospace;font-size:11px;color:var(--azure-blue);white-space:nowrap}
+.h-tbl .time-cell{font-family:'SF Mono',Monaco,monospace;font-size:11px;white-space:nowrap}
+.h-tbl .time-cell.unusual{color:#f59e0b;font-weight:600}
+.h-tbl .time-cell.unusual::before{content:'⚠ ';font-size:10px}
+.h-load{padding:40px;text-align:center;color:var(--text-secondary);font-size:14px}
+
+/* Responsive */
+@media screen and (max-width:900px){
+    .ev-modal{padding:16px}
+    .ev-modal-box{max-width:100%;max-height:90vh}
+    .m-stats{grid-template-columns:repeat(3,1fr)}
+    .m-cards{grid-template-columns:1fr}
+    .m-intel{grid-template-columns:repeat(3,1fr)}
+    .h-over{grid-template-columns:repeat(5,1fr)}
+}
+@media screen and (max-width:768px){
+    .ev-header h1{font-size:18px}
+    .ev-tabs{overflow-x:auto}
+    .ev-tab{padding:8px 10px;font-size:12px}
+    .ev-filters select,.ev-filters input{min-width:80px;font-size:12px}
+    .ev-modal{padding:12px}
+    .ev-modal-box{max-height:92vh;border-radius:10px}
+    .ev-modal-hdr{padding:14px 16px}
+    .ev-modal-hdr h2{font-size:15px}
+    .ev-modal-body{padding:16px}
+    .ev-modal-ftr{padding:14px 16px}
+    .m-stats{grid-template-columns:repeat(3,1fr);gap:10px}
+    .m-stat{padding:12px 8px}
+    .m-stat-val{font-size:18px}
+    .m-intel{grid-template-columns:1fr 1fr 1fr}
+    .h-over{grid-template-columns:repeat(3,1fr);padding:12px}
+    .h-stat-val{font-size:18px}
+    .h-wrap{max-height:220px}
+}
+@media screen and (max-width:576px){
+    .ev-header{flex-direction:column;align-items:flex-start}
+    .ev-refresh{align-self:flex-end}
+    .ev-filters{flex-direction:column}
+    .ev-filters select,.ev-filters input{width:100%}
+    .ev-modal{padding:0;align-items:flex-end}
+    .ev-modal-box{max-width:100%;max-height:90vh;height:auto;border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,0.2);animation:slideUp 0.25s ease}
+    .ev-modal-hdr{padding:16px;border-radius:16px 16px 0 0}
+    .ev-modal-hdr::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:36px;height:4px;background:var(--border);border-radius:2px}
+    .ev-modal-hdr h2{font-size:15px;margin-top:8px}
+    .ev-modal-hdr>button{width:36px;height:36px;min-width:36px}
+    .ev-modal-tabs button{padding:12px 8px;font-size:13px}
+    .ev-modal-body{padding:16px;flex:1;max-height:calc(90vh - 180px);-webkit-overflow-scrolling:touch}
+    .ev-modal-ftr{padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+    .ev-modal-ftr button{width:100%;padding:14px;font-size:15px;border-radius:8px}
+    .m-stats{grid-template-columns:repeat(3,1fr);gap:8px}
+    .m-stat{padding:10px 6px}
+    .m-stat-val{font-size:16px}
+    .m-stat-lbl{font-size:9px}
+    .m-cards{gap:12px}
+    .m-card{padding:14px}
+    .m-card h4{font-size:11px;margin-bottom:10px}
+    .m-row{font-size:12px;padding:6px 0}
+    .m-sec{padding:14px;margin-bottom:12px}
+    .m-sec h4{font-size:10px;margin-bottom:10px}
+    .m-meter-val{font-size:18px}
+    .m-intel{grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .m-intel-item{padding:10px 6px}
+    .m-intel-item .src{font-size:9px}
+    .m-intel-item .score{font-size:16px}
+    .m-intel-item .det{font-size:10px}
+    .m-rec{padding:10px;font-size:12px}
+    .h-over{grid-template-columns:repeat(3,1fr);padding:12px;gap:8px}
+    .h-stat-val{font-size:16px}
+    .h-filters{gap:8px}
+    .h-filters input,.h-filters select{padding:10px;font-size:12px;min-width:0}
+    .h-wrap{max-height:200px}
+    .h-date{margin-bottom:10px}
+    .h-date-hdr{padding:10px 12px}
+    .h-date-title{font-size:12px}
+    .h-date-stats{gap:8px;font-size:11px}
+    .h-tbl{min-width:380px}
+    .h-tbl th,.h-tbl td{padding:8px 10px;font-size:11px}
+}
+@media screen and (max-width:400px){
+    .m-stats{grid-template-columns:repeat(2,1fr)}
+    .m-intel{grid-template-columns:1fr 1fr}
+    .h-over{grid-template-columns:repeat(2,1fr)}
+    .h-date-stats{display:none}
+}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+</style>
+
 <script>
-// Populate agent filter dropdown when page loads
-(function() {
-    async function loadAgentsForFilter() {
-        try {
-            const response = await fetch('/api/agents/list');
-            const data = await response.json();
+const EV = {
+    // State
+    curTab: 'ssh',
+    sshPg: 1,
+    f2bPg: 1,
+    mIP: '',
+    mData: null,
+    mType: 'ssh', // 'ssh' or 'f2b' - which tab opened the modal
+    mPg: 1,
+    blockedIPs: new Set(),
+    searchTm: null,
+    rowData: [],    // Shared row data for both tabs
+    _keyBound: false,
 
-            if (data.success && data.agents) {
-                const agentFilter = document.getElementById('agentFilter');
-                if (agentFilter) {
-                    // Keep the "All Agents" option
-                    agentFilter.innerHTML = '<option value="">All Agents</option>';
-
-                    data.agents.forEach(agent => {
-                        const option = document.createElement('option');
-                        option.value = agent.id;
-                        option.textContent = agent.display_name || agent.hostname || `Agent ${agent.id}`;
-                        agentFilter.appendChild(option);
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error loading agents for filter:', error);
+    // ==================== INITIALIZATION ====================
+    init() {
+        document.getElementById('ev-' + this.curTab).style.display = 'block';
+        this.loadAgents();
+        this.loadBlockedList();
+        this.loadCurrent();
+        if (!this._keyBound) {
+            this._keyBound = true;
+            document.addEventListener('keydown', e => this.handleKey(e));
         }
-    }
+    },
 
-    // Load agents when the page is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', loadAgentsForFilter);
-    } else {
-        loadAgentsForFilter();
+    async loadBlockedList() {
+        try {
+            const r = await fetch('/api/dashboard/blocking/blocks/list?is_active=true&limit=1000');
+            const d = await r.json();
+            if (d.success && d.blocks) {
+                this.blockedIPs = new Set(d.blocks.map(b => b.ip_address || b.ip_address_text));
+            }
+        } catch (e) { console.error('Error loading blocked list:', e); }
+    },
+
+    async loadAgents() {
+        try {
+            const r = await fetch('/api/agents/list');
+            const d = await r.json();
+            if (d.success && d.agents) {
+                ['sshAgent', 'f2bAgent', 'blockAgent'].forEach(id => {
+                    const s = document.getElementById(id);
+                    if (s && s.options.length <= 1) {
+                        d.agents.forEach(a => s.add(new Option(a.hostname || a.agent_id, a.id)));
+                    }
+                });
+            }
+        } catch (e) { console.error('Error loading agents:', e); }
+    },
+
+    // ==================== TAB NAVIGATION ====================
+    tab(t) {
+        this.curTab = t;
+        document.querySelectorAll('.ev-tab').forEach(e => e.classList.toggle('active', e.dataset.tab === t));
+        document.querySelectorAll('.ev-content').forEach(e => { e.classList.remove('active'); e.style.display = 'none'; });
+        const c = document.getElementById('ev-' + t);
+        if (c) { c.classList.add('active'); c.style.display = 'block'; }
+        this.loadCurrent();
+    },
+
+    loadCurrent() {
+        if (this.curTab === 'ssh') this.loadSSH(1);
+        else if (this.curTab === 'f2b') this.loadF2B(1);
+        else this.loadBlocked();
+    },
+
+    refresh() { this.loadBlockedList(); this.loadCurrent(); },
+
+    // ==================== SSH TAB ====================
+    async loadSSH(pg = 1) {
+        this.sshPg = pg;
+        const $ = id => document.getElementById(id);
+        $('sshBody').innerHTML = '';
+        $('sshLoad').style.display = 'block';
+        $('sshTbl').style.display = 'none';
+        $('sshNone').style.display = 'none';
+        $('sshErr').style.display = 'none';
+        $('sshPg').style.display = 'none';
+
+        try {
+            const type = $('sshType')?.value || '';
+            const agent = $('sshAgent')?.value || '';
+            const time = $('sshTime')?.value || '24h';
+            let url = `/api/dashboard/events/grouped?time_range=${time}&limit=30&offset=${(pg - 1) * 30}&_t=${Date.now()}`;
+            if (type) url += `&event_type=${type}`;
+            if (agent) url += `&agent_id=${agent}`;
+
+            const r = await fetch(url);
+            const d = await r.json();
+            $('sshLoad').style.display = 'none';
+
+            if (d.success && d.groups?.length) {
+                this.rowData = d.groups.map(g => ({ ...g, _type: 'ssh' }));
+                $('sshBody').innerHTML = d.groups.map((g, i) => this.renderSSHRow(g, i)).join('');
+                $('sshTbl').style.display = 'table';
+                if (d.pagination) {
+                    $('sshInfo').textContent = `${d.pagination.offset + 1}-${Math.min(d.pagination.offset + d.groups.length, d.pagination.total)} of ${d.pagination.total}`;
+                    $('sshPg').querySelectorAll('button')[0].disabled = d.pagination.offset === 0;
+                    $('sshPg').querySelectorAll('button')[1].disabled = !d.pagination.has_more;
+                    $('sshPg').style.display = 'flex';
+                }
+            } else {
+                $('sshNone').style.display = 'block';
+            }
+        } catch (e) {
+            console.error('SSH load error:', e);
+            $('sshLoad').style.display = 'none';
+            $('sshErr').style.display = 'block';
+        }
+    },
+
+    renderSSHRow(g, idx) {
+        const loc = g.location || {};
+        const flag = this.getFlag(loc.country_code);
+        const risk = g.max_risk_score || 0;
+        const cls = this.getRiskClass(risk);
+        const tags = this.getTags(loc);
+        const blocked = this.blockedIPs.has(g.ip_address);
+
+        return `<tr>
+            <td>${this.fmtTime(g.last_activity || g.latest_timestamp)}</td>
+            <td><div class="c-ip">${this.esc(g.ip_address)}</div>${tags}</td>
+            <td class="c-loc"><div>${flag} ${loc.city || ''} ${loc.country_code || ''}</div>${loc.isp ? `<div class="isp">${this.esc(loc.isp)}</div>` : ''}</td>
+            <td><div class="c-att"><span class="f">${g.failed_count || 0}F</span><span class="s">${g.success_count || 0}S</span></div></td>
+            <td><span class="c-users">${g.unique_users || 0}</span></td>
+            <td>${this.renderRisk(risk, cls)}</td>
+            <td><button class="c-detail" onclick="EV.openModal(${idx})">Details</button>${blocked ? '<span class="c-status">Blocked</span>' : ''}</td>
+        </tr>`;
+    },
+
+    // ==================== FAIL2BAN TAB (Same design as SSH) ====================
+    async loadF2B(pg = 1) {
+        this.f2bPg = pg;
+        const $ = id => document.getElementById(id);
+        $('f2bBody').innerHTML = '';
+        $('f2bLoad').style.display = 'block';
+        $('f2bTbl').style.display = 'none';
+        $('f2bNone').style.display = 'none';
+        $('f2bErr').style.display = 'none';
+        $('f2bPg').style.display = 'none';
+
+        try {
+            const ip = $('f2bIp')?.value || '';
+            const action = $('f2bAction')?.value || '';
+            const agent = $('f2bAgent')?.value || '';
+            const time = $('f2bTime')?.value || '7d';
+            let url = `/api/agents/fail2ban/grouped?time_range=${time}&limit=30&offset=${(pg - 1) * 30}&_t=${Date.now()}`;
+            if (ip) url += `&ip=${encodeURIComponent(ip)}`;
+            if (action) url += `&action=${action}`;
+            if (agent) url += `&agent_id=${agent}`;
+
+            const r = await fetch(url);
+            const d = await r.json();
+            $('f2bLoad').style.display = 'none';
+
+            if (d.success && d.groups?.length) {
+                this.rowData = d.groups.map(g => ({ ...g, _type: 'f2b' }));
+                $('f2bBody').innerHTML = d.groups.map((g, i) => this.renderF2BRow(g, i)).join('');
+                $('f2bTbl').style.display = 'table';
+                if (d.pagination) {
+                    $('f2bInfo').textContent = `${d.pagination.offset + 1}-${Math.min(d.pagination.offset + d.groups.length, d.pagination.total)} of ${d.pagination.total}`;
+                    $('f2bPg').querySelectorAll('button')[0].disabled = d.pagination.offset === 0;
+                    $('f2bPg').querySelectorAll('button')[1].disabled = !d.pagination.has_more;
+                    $('f2bPg').style.display = 'flex';
+                }
+            } else {
+                $('f2bNone').style.display = 'block';
+            }
+        } catch (e) {
+            console.error('F2B load error:', e);
+            $('f2bLoad').style.display = 'none';
+            $('f2bErr').style.display = 'block';
+        }
+    },
+
+    renderF2BRow(g, idx) {
+        const loc = g.location || {};
+        const flag = this.getFlag(loc.country_code);
+        const risk = g.max_risk_score || 0;
+        const cls = this.getRiskClass(risk);
+        const tags = this.getTags(loc);
+        const blocked = this.blockedIPs.has(g.ip_address);
+
+        return `<tr>
+            <td>${this.fmtTime(g.latest_timestamp)}</td>
+            <td><div class="c-ip">${this.esc(g.ip_address)}</div>${tags}</td>
+            <td class="c-loc"><div>${flag} ${loc.city || ''} ${loc.country_code || ''}</div>${loc.isp ? `<div class="isp">${this.esc(loc.isp)}</div>` : ''}</td>
+            <td><div class="c-att"><span class="b">${g.ban_count || 0} ban</span><span class="u">${g.unban_count || 0} unban</span></div></td>
+            <td><span class="c-users">${g.total_failures || 0}</span></td>
+            <td>${this.renderRisk(risk, cls)}</td>
+            <td><button class="c-detail" onclick="EV.openModal(${idx})">Details</button>${blocked ? '<span class="c-status">Blocked</span>' : ''}</td>
+        </tr>`;
+    },
+
+    // ==================== BLOCKED TAB ====================
+    blockPg: 1,
+    blockTotal: 0,
+    blockFilterTimer: null,
+
+    debounceBlockFilter() {
+        clearTimeout(this.blockFilterTimer);
+        this.blockFilterTimer = setTimeout(() => this.loadBlocked(), 400);
+    },
+
+    async loadBlocked(page = 1) {
+        this.blockPg = page;
+        const box = document.getElementById('blockedBox');
+        const pgEl = document.getElementById('blockPg');
+        box.innerHTML = '<div class="ev-msg">Loading...</div>';
+        if (pgEl) pgEl.style.display = 'none';
+
+        // Get filter values
+        const ip = document.getElementById('blockIp')?.value?.trim() || '';
+        const status = document.getElementById('blockStatus')?.value || '';
+        const source = document.getElementById('blockSource')?.value || '';
+        const agent = document.getElementById('blockAgent')?.value || '';
+        const time = document.getElementById('blockTime')?.value || '7d';
+
+        // Build query params
+        const params = new URLSearchParams({
+            page_size: 50,
+            page: page,
+            time_range: time,
+            _t: Date.now()
+        });
+        if (ip) params.append('ip_filter', ip);
+        if (status) params.append('event_type', status);
+        if (source) params.append('block_source', source);
+        if (agent) params.append('agent_id', agent);
+
+        try {
+            const r = await fetch(`/api/dashboard/block-events/list?${params.toString()}`);
+            const d = await r.json();
+            if (d.success && d.events?.length) {
+                this.blockTotal = d.total || d.events.length;
+                const totalPages = Math.ceil(this.blockTotal / 50);
+
+                box.innerHTML = `<div class="ev-tbl-wrap"><table class="ev-tbl"><thead><tr>
+                    <th>Last Activity</th><th>IP Address</th><th>Status</th><th>Source</th><th>Agent</th><th>Reason</th>
+                </tr></thead><tbody>${d.events.map(e => {
+                    const src = (e.block_source || '').toLowerCase();
+                    const srcClass = src.includes('rule') ? 'rule_based' : src.includes('ml') ? 'ml' : src;
+                    const srcLabel = e.block_source ? e.block_source.replace(/_/g, ' ').replace('based', '').trim() : '-';
+                    const evType = (e.event_type || '').toLowerCase();
+                    const isBlocked = evType === 'blocked' || evType === 'block' || evType === 'escalate';
+                    const isEscalated = evType === 'escalate';
+                    const statClass = isEscalated ? 'escalated' : (isBlocked ? 'active' : 'inactive');
+                    const statLabel = isEscalated ? 'Escalated' : (isBlocked ? 'Blocked' : 'Unblocked');
+                    return `<tr style="cursor:pointer" onclick="EV.showBlockDetail('${this.esc(e.ip_address)}', ${e.block_id || 'null'})">
+                    <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${this.fmtTime(e.created_at || e.blocked_at)}</td>
+                    <td class="c-ip" style="font-weight:600">${this.esc(e.ip_address)}</td>
+                    <td><span class="c-stat ${statClass}">${statLabel}</span></td>
+                    <td><span class="c-source ${srcClass}">${this.esc(srcLabel)}</span></td>
+                    <td><span class="c-agent">${this.esc(e.agent_hostname || e.agent_name || '-')}</span></td>
+                    <td><div class="c-reason" title="${this.esc(e.reason || '')}">${this.esc(e.reason || 'No reason specified')}</div></td>
+                </tr>`;
+                }).join('')}</tbody></table></div>`;
+
+                // Show pagination
+                if (pgEl) {
+                    document.getElementById('blockInfo').textContent = `Page ${page} of ${totalPages} (${this.blockTotal} total)`;
+                    pgEl.style.display = 'flex';
+                    pgEl.querySelectorAll('button')[0].disabled = page <= 1;
+                    pgEl.querySelectorAll('button')[1].disabled = page >= totalPages;
+                }
+            } else {
+                box.innerHTML = '<div class="ev-msg">No block events found</div>';
+            }
+        } catch (e) {
+            console.error('Error loading blocked:', e);
+            box.innerHTML = '<div class="ev-msg err">Failed to load block events</div>';
+        }
+    },
+
+    // Show block detail modal
+    showBlockDetail(ip, blockId) {
+        // Simple alert for now - can be expanded to full modal
+        if (typeof showRealBlockDetail === 'function') {
+            showRealBlockDetail(ip, 'unknown', null, null);
+        } else {
+            alert(`IP: ${ip}\nBlock ID: ${blockId || 'N/A'}`);
+        }
+    },
+
+    // ==================== SHARED MODAL ====================
+    openModal(idx) {
+        const g = this.rowData[idx];
+        if (!g) return;
+        this.mIP = g.ip_address;
+        this.mData = g;
+        this.mType = g._type || 'ssh';
+        this.mPg = 1;
+        document.getElementById('modalTitle').textContent = `IP: ${g.ip_address}`;
+        document.getElementById('modalAgent').textContent = g.agent?.hostname ? `Agent: ${g.agent.hostname}` : '';
+        document.getElementById('evModal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        this.modalTab('analysis');
+    },
+
+    closeModal() {
+        document.getElementById('evModal').style.display = 'none';
+        document.body.style.overflow = '';
+        this.mIP = '';
+        this.mData = null;
+    },
+
+    handleKey(e) {
+        if (e.key === 'Escape' && document.getElementById('evModal').style.display === 'flex') {
+            this.closeModal();
+        }
+    },
+
+    modalTab(t) {
+        document.querySelectorAll('.ev-modal-tabs button').forEach((b, i) => b.classList.toggle('active', t === 'analysis' ? i === 0 : i === 1));
+        document.querySelectorAll('.ev-modal-pane').forEach(p => p.classList.remove('active'));
+        const pane = document.getElementById(t === 'analysis' ? 'mAnalysis' : 'mHistory');
+        pane.classList.add('active');
+        if (t === 'analysis') {
+            this.renderAnalysis();
+        } else {
+            pane.innerHTML = '<div class="h-load">Loading history...</div>';
+            this.loadHistory(1);
+        }
+    },
+
+    // ==================== SHARED ANALYSIS RENDERER ====================
+    renderAnalysis() {
+        const d = this.mData;
+        if (!d) return;
+        const loc = d.location || {};
+        const threat = d.threat || {};
+        const risk = d.max_risk_score || 0;
+        const rc = this.getRiskColor(risk);
+        const flag = this.getFlag(loc.country_code);
+        const days = this.daysSince(d.first_timestamp);
+        const tagsHtml = this.getTagsHtml(loc);
+        const blocked = this.blockedIPs.has(this.mIP);
+        const isF2B = this.mType === 'f2b';
+
+        // Stats row - different for SSH vs F2B
+        const stats = isF2B ? `
+            <div class="m-stat"><div class="m-stat-val red">${d.ban_count || 0}</div><div class="m-stat-lbl">Bans</div></div>
+            <div class="m-stat"><div class="m-stat-val green">${d.unban_count || 0}</div><div class="m-stat-lbl">Unbans</div></div>
+            <div class="m-stat"><div class="m-stat-val">${d.event_count || 0}</div><div class="m-stat-lbl">Events</div></div>
+            <div class="m-stat"><div class="m-stat-val blue">${d.total_failures || 0}</div><div class="m-stat-lbl">Failures</div></div>
+            <div class="m-stat"><div class="m-stat-val" style="color:${rc}">${Math.round(risk)}</div><div class="m-stat-lbl">Risk</div></div>
+            <div class="m-stat"><div class="m-stat-val">${days}</div><div class="m-stat-lbl">Days</div></div>
+        ` : `
+            <div class="m-stat"><div class="m-stat-val red">${d.failed_count || 0}</div><div class="m-stat-lbl">Failed</div></div>
+            <div class="m-stat"><div class="m-stat-val green">${d.success_count || 0}</div><div class="m-stat-lbl">Success</div></div>
+            <div class="m-stat"><div class="m-stat-val">${d.event_count || 0}</div><div class="m-stat-lbl">Total</div></div>
+            <div class="m-stat"><div class="m-stat-val blue">${d.unique_users || 0}</div><div class="m-stat-lbl">Users</div></div>
+            <div class="m-stat"><div class="m-stat-val" style="color:${rc}">${Math.round(risk)}</div><div class="m-stat-lbl">Risk</div></div>
+            <div class="m-stat"><div class="m-stat-val">${days}</div><div class="m-stat-lbl">Days</div></div>
+        `;
+
+        // Extra info for F2B
+        const extraInfo = isF2B ? `
+            <div class="m-row"><span class="l">Jails</span><span class="v">${d.jails || 'sshd'}</span></div>
+            <div class="m-row"><span class="l">Max Bantime</span><span class="v">${this.fmtDur(d.max_bantime)}</span></div>
+        ` : `
+            <div class="m-row"><span class="l">First Seen</span><span class="v">${this.fmtDateTime(d.first_timestamp)}</span></div>
+        `;
+
+        document.getElementById('mAnalysis').innerHTML = `
+            <div class="m-stats">${stats}</div>
+            <div class="m-cards">
+                <div class="m-card"><h4>Location</h4>
+                    <div class="m-row"><span class="l">Country</span><span class="v">${flag} ${loc.country_name || 'Unknown'}</span></div>
+                    <div class="m-row"><span class="l">City</span><span class="v">${loc.city || 'Unknown'}</span></div>
+                    <div class="m-row"><span class="l">ISP</span><span class="v">${loc.isp || 'Unknown'}</span></div>
+                </div>
+                <div class="m-card"><h4>Network</h4>
+                    <div class="m-row"><span class="l">IP</span><span class="v">${this.mIP}</span></div>
+                    <div class="m-row"><span class="l">Type</span><span class="v">${tagsHtml || 'Regular'}</span></div>
+                    <div class="m-row"><span class="l">Status</span><span class="v">${blocked ? '<span class="c-status">Blocked</span>' : 'Active'}</span></div>
+                    ${extraInfo}
+                </div>
+            </div>
+            <div class="m-sec"><h4>Risk Analysis</h4>
+                <div class="m-meter"><div class="m-meter-bar"><div class="m-meter-fill" style="width:${risk}%;background:${rc}"></div></div><div class="m-meter-val" style="color:${rc}">${Math.round(risk)}</div></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div class="m-row"><span class="l">Level</span><span class="v" style="color:${rc}">${this.getRiskLevel(risk)}</span></div>
+                    <div class="m-row"><span class="l">Threat</span><span class="v">${this.detectThreat(d)}</span></div>
+                    <div class="m-row"><span class="l">Pattern</span><span class="v">${this.detectPattern(d)}</span></div>
+                    <div class="m-row"><span class="l">Confidence</span><span class="v">${risk > 0 ? Math.min(95, 50 + risk * 0.45).toFixed(0) + '%' : 'N/A'}</span></div>
+                </div>
+            </div>
+            <div class="m-sec"><h4>Threat Intel</h4>
+                <div class="m-intel">
+                    <div class="m-intel-item"><div class="src">AbuseIPDB</div><div class="score" style="color:${(threat.abuseipdb_score || 0) > 50 ? '#dc2626' : '#16a34a'}">${threat.abuseipdb_score || 0}%</div><div class="det">${threat.abuseipdb_reports || 0} reports</div></div>
+                    <div class="m-intel-item"><div class="src">Risk</div><div class="score" style="color:${this.threatColor(threat.level)}">${threat.level || 'Unknown'}</div><div class="det">Overall</div></div>
+                    <div class="m-intel-item"><div class="src">ML</div><div class="score" style="color:${risk > 60 ? '#dc2626' : '#16a34a'}">${Math.round(risk)}</div><div class="det">Behavior</div></div>
+                </div>
+            </div>
+            <div class="m-sec"><h4>Recommendations</h4><div class="m-recs">${this.genRecs(d)}</div></div>`;
+    },
+
+    // ==================== SHARED HISTORY LOADER ====================
+    async loadHistory(pg = 1) {
+        this.mPg = pg;
+        const c = document.getElementById('mHistory');
+        c.innerHTML = '<div class="h-load">Loading...</div>';
+
+        try {
+            // Use different API based on type
+            const url = this.mType === 'f2b'
+                ? `/api/agents/fail2ban/by-ip?ip=${encodeURIComponent(this.mIP)}&page=${pg}&page_size=100&time_range=30d&_t=${Date.now()}`
+                : `/api/dashboard/events/by-ip?ip=${encodeURIComponent(this.mIP)}&page=${pg}&page_size=100&time_range=30d&_t=${Date.now()}`;
+
+            const r = await fetch(url);
+            const d = await r.json();
+
+            if (d.success && d.events?.length) {
+                this.renderHistory(d.events, d.pagination);
+            } else {
+                c.innerHTML = '<div class="h-load">No events found</div>';
+            }
+        } catch (e) {
+            c.innerHTML = '<div class="h-load">Error loading</div>';
+        }
+    },
+
+    renderHistory(events, pg) {
+        const isF2B = this.mType === 'f2b';
+
+        // Calculate stats based on type
+        let stat1, stat2, stat1Label, stat2Label;
+        if (isF2B) {
+            stat1 = events.filter(e => e.event_type === 'ban').length;
+            stat2 = events.filter(e => e.event_type === 'unban').length;
+            stat1Label = 'Bans';
+            stat2Label = 'Unbans';
+        } else {
+            stat1 = events.filter(e => e.event_type === 'failed').length;
+            stat2 = events.filter(e => e.event_type === 'successful').length;
+            stat1Label = 'Failed';
+            stat2Label = 'Success';
+        }
+        const agents = [...new Set(events.map(e => e.agent_hostname).filter(Boolean))].length;
+
+        // Group by date
+        const grouped = {};
+        events.forEach(e => {
+            const date = this.getDateInTz(e.timestamp);
+            if (!date) return;
+            if (!grouped[date]) grouped[date] = { events: [], s1: 0, s2: 0 };
+            grouped[date].events.push(e);
+            if (isF2B) {
+                if (e.event_type === 'ban') grouped[date].s1++;
+                if (e.event_type === 'unban') grouped[date].s2++;
+            } else {
+                if (e.event_type === 'failed') grouped[date].s1++;
+                if (e.event_type === 'successful') grouped[date].s2++;
+            }
+        });
+        const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+        // Sort events within each date group by processed_at (newest first)
+        dates.forEach(date => {
+            grouped[date].events.sort((a, b) => new Date(b.processed_at || b.created_at || b.timestamp) - new Date(a.processed_at || a.created_at || a.timestamp));
+        });
+
+        // Render different table headers based on type
+        // Column 1: Processed At (when record was processed) - sorted DESC
+        // Column 2: Auth.log Time (timestamp from log file)
+        const tableHeaders = isF2B
+            ? '<th>Processed At</th><th>Log Time</th><th>IP</th><th>Jail</th><th>Action</th><th>Failures</th>'
+            : '<th>Processed At</th><th>Auth.log Time</th><th>IP</th><th>User</th><th>Status</th><th>Auth</th>';
+
+        const renderRow = isF2B
+            ? e => `<tr>
+                <td>${this.fmtFullDateTime(e.processed_at || e.created_at)}</td>
+                <td>${this.fmtFullDateTime(e.timestamp)}</td>
+                <td class="ip-cell">${this.esc(e.source_ip || e.ip || '-')}</td>
+                <td>${this.esc(e.jail_name || 'sshd')}</td>
+                <td><span class="c-badge ${e.event_type}">${e.event_type}</span></td>
+                <td>${e.failures || 0}</td>
+            </tr>`
+            : e => `<tr>
+                <td>${this.fmtFullDateTime(e.processed_at || e.created_at)}</td>
+                <td class="time-cell${this.isUnusualTime(e.timestamp) ? ' unusual' : ''}">${this.fmtFullDateTime(e.timestamp)}</td>
+                <td class="ip-cell">${this.esc(e.ip || e.source_ip || e.source_ip_text || '-')}</td>
+                <td>${this.esc(e.username)}</td>
+                <td><span class="c-badge ${e.event_type}">${e.event_type === 'failed' ? 'F' : 'S'}</span></td>
+                <td>${this.esc(e.auth_method || '-')}</td>
+            </tr>`;
+
+        document.getElementById('mHistory').innerHTML = `
+            <div class="h-over">
+                <div class="h-stat"><div class="h-stat-val">${events.length}</div><div class="h-stat-lbl">Total</div></div>
+                <div class="h-stat"><div class="h-stat-val red">${stat1}</div><div class="h-stat-lbl">${stat1Label}</div></div>
+                <div class="h-stat"><div class="h-stat-val green">${stat2}</div><div class="h-stat-lbl">${stat2Label}</div></div>
+                <div class="h-stat"><div class="h-stat-val">${agents}</div><div class="h-stat-lbl">Agents</div></div>
+                <div class="h-stat"><div class="h-stat-val">${dates.length}</div><div class="h-stat-lbl">Days</div></div>
+            </div>
+            <div class="h-filters">
+                <input type="date" id="hDate" onchange="EV.applyHistFilter()">
+                <select id="hType" onchange="EV.applyHistFilter()">
+                    <option value="">All</option>
+                    <option value="s1">${stat1Label}</option>
+                    <option value="s2">${stat2Label}</option>
+                </select>
+                <button class="clear" onclick="EV.clearHistFilter()">Clear</button>
+            </div>
+            <div class="h-wrap">${dates.map((date, idx) => {
+                const g = grouped[date];
+                const isExpanded = idx === 0;  // Auto-expand first date
+                return `<div class="h-date${isExpanded ? ' expanded' : ''}" id="hd-${date}">
+                    <div class="h-date-hdr" onclick="EV.toggleDate('${date}')">
+                        <div class="h-date-title"><span class="arrow">${isExpanded ? '▼' : '▶'}</span>${this.fmtDateFull(date)}</div>
+                        <div class="h-date-stats"><span class="f">${g.s1}${isF2B ? 'B' : 'F'}</span><span class="s">${g.s2}${isF2B ? 'U' : 'S'}</span><span class="t">(${g.events.length})</span></div>
+                    </div>
+                    <div class="h-date-body"><table class="h-tbl"><thead><tr>${tableHeaders}</tr></thead><tbody>${g.events.map(renderRow).join('')}</tbody></table></div>
+                </div>`;
+            }).join('')}</div>
+            ${pg ? `<div class="ev-pg" style="margin-top:10px"><span>Page ${pg.page}/${pg.total_pages}</span><div><button ${!pg.has_prev ? 'disabled' : ''} onclick="EV.loadHistory(${this.mPg - 1})">←</button><button ${!pg.has_next ? 'disabled' : ''} onclick="EV.loadHistory(${this.mPg + 1})">→</button></div></div>` : ''}`;
+    },
+
+    applyHistFilter() {
+        const dateF = document.getElementById('hDate')?.value || '';
+        const typeF = document.getElementById('hType')?.value || '';
+        const isF2B = this.mType === 'f2b';
+
+        document.querySelectorAll('.h-date').forEach(el => {
+            const date = el.id.replace('hd-', '');
+            const rows = el.querySelectorAll('.h-tbl tbody tr');
+            let visCount = 0;
+            rows.forEach(row => {
+                let typeMatch = true;
+                if (typeF) {
+                    const badge = row.cells[2]?.textContent || '';
+                    if (isF2B) {
+                        typeMatch = (typeF === 's1' && badge === 'ban') || (typeF === 's2' && badge === 'unban');
+                    } else {
+                        typeMatch = (typeF === 's1' && badge === 'F') || (typeF === 's2' && badge === 'S');
+                    }
+                }
+                const show = (!dateF || date === dateF) && typeMatch;
+                row.style.display = show ? '' : 'none';
+                if (show) visCount++;
+            });
+            el.style.display = (!dateF || date === dateF) && visCount > 0 ? '' : 'none';
+        });
+    },
+
+    clearHistFilter() {
+        ['hDate', 'hType'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+        document.querySelectorAll('.h-date').forEach(el => { el.style.display = ''; el.querySelectorAll('tr').forEach(r => r.style.display = ''); });
+    },
+
+    toggleDate(d) {
+        const el = document.getElementById('hd-' + d);
+        if (el) {
+            el.classList.toggle('expanded');
+            const arrow = el.querySelector('.arrow');
+            if (arrow) arrow.textContent = el.classList.contains('expanded') ? '▼' : '▶';
+        }
+    },
+
+    // ==================== SHARED HELPERS ====================
+    esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; },
+
+    getFlag(cc) { return cc ? String.fromCodePoint(...cc.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))) : ''; },
+
+    getRiskClass(r) { return r >= 80 ? 'crit' : r >= 60 ? 'high' : r >= 40 ? 'med' : 'low'; },
+
+    getRiskColor(r) { return r >= 80 ? '#991b1b' : r >= 60 ? '#dc2626' : r >= 40 ? '#d97706' : '#16a34a'; },
+
+    getRiskLevel(r) { return r >= 80 ? 'CRITICAL' : r >= 60 ? 'HIGH' : r >= 40 ? 'MEDIUM' : 'LOW'; },
+
+    renderRisk(r, cls) { return `<div class="c-risk"><span>${Math.round(r)}</span><div class="c-risk-bar"><div class="c-risk-fill ${cls}" style="width:${r}%"></div></div></div>`; },
+
+    getTags(loc) {
+        const t = [loc.is_tor && 'tor', loc.is_vpn && 'vpn', loc.is_proxy && 'proxy'].filter(Boolean);
+        return t.length ? `<div class="c-tags">${t.map(x => `<span class="c-tag ${x}">${x.toUpperCase()}</span>`).join('')}</div>` : '';
+    },
+
+    getTagsHtml(loc) {
+        const t = [loc.is_tor && '<span class="c-tag tor">TOR</span>', loc.is_vpn && '<span class="c-tag vpn">VPN</span>', loc.is_proxy && '<span class="c-tag proxy">PROXY</span>'].filter(Boolean);
+        return t.join(' ');
+    },
+
+    fmtTime(t) {
+        if (!t) return '-';
+        if (window.TimeSettings?.isLoaded()) return window.TimeSettings.formatFull(t);
+        // Fallback: browser's native timezone
+        let ts = String(t).replace(' ', 'T');
+        if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return t;
+        return d.toLocaleString();
+    },
+
+    fmtDateTime(t) { return this.fmtTime(t); },
+
+    fmtTimeOnly(t) {
+        if (!t) return '-';
+        if (window.TimeSettings?.isLoaded()) return window.TimeSettings.format(t, 'time');
+        // Fallback: browser's native timezone
+        let ts = String(t).replace(' ', 'T');
+        if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return t;
+        return d.toLocaleTimeString();
+    },
+
+    fmtFullDateTime(t) {
+        if (!t) return '-';
+        if (window.TimeSettings?.isLoaded()) return window.TimeSettings.format(t, 'full');
+        // Fallback: browser's native timezone
+        let ts = String(t).replace(' ', 'T');
+        if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return t;
+        return d.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+        });
+    },
+
+    isUnusualTime(t) {
+        if (!t) return false;
+        let ts = String(t).replace(' ', 'T');
+        if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return false;
+        // Get hour in user's timezone (browser timezone)
+        const hour = d.getHours();
+        // Unusual = before 7am or after 10pm
+        return hour < 7 || hour >= 22;
+    },
+
+    fmtDateFull(d) { if (!d) return ''; const dt = new Date(d + 'T12:00:00'); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getDay()] + ', ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()] + ' ' + dt.getDate(); },
+
+    getDateInTz(t) {
+        if (!t) return null;
+        let ts = String(t).replace(' ', 'T');
+        if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return null;
+        return d.toLocaleDateString('en-CA');
+    },
+
+    fmtDur(s) { if (!s) return '-'; if (s < 60) return s + 's'; if (s < 3600) return Math.floor(s / 60) + 'm'; if (s < 86400) return Math.floor(s / 3600) + 'h'; return Math.floor(s / 86400) + 'd'; },
+
+    daysSince(t) { if (!t) return 1; return Math.max(1, Math.ceil((new Date() - new Date(t)) / 86400000)); },
+
+    detectThreat(d) {
+        const isF2B = this.mType === 'f2b';
+        if (isF2B) {
+            if ((d.ban_count || 0) >= 5) return 'Repeat Offender';
+            if ((d.total_failures || 0) > 50) return 'Brute Force';
+            return (d.ban_count || 0) > 0 ? 'Blocked' : 'Unknown';
+        }
+        if (d.failed_count > 50 && d.unique_users > 10) return 'Brute Force';
+        if (d.unique_users > 20) return 'Credential Stuffing';
+        if (d.failed_count > 0 && d.success_count > 0) return 'Mixed';
+        if (d.failed_count > 10) return 'Password Guess';
+        return d.success_count > 0 ? 'Legitimate' : 'Recon';
+    },
+
+    detectPattern(d) {
+        const r = d.event_count / Math.max(1, this.daysSince(d.first_timestamp));
+        if (r > 50) return 'High Velocity';
+        if (r > 10) return 'Moderate';
+        if (d.unique_users > 5) return 'User Enum';
+        return 'Low & Slow';
+    },
+
+    threatColor(l) { return { critical: '#991b1b', high: '#dc2626', medium: '#d97706', low: '#16a34a', clean: '#16a34a' }[l?.toLowerCase()] || '#6b7280'; },
+
+    genRecs(d) {
+        const r = [], risk = d.max_risk_score || 0, loc = d.location || {};
+        const isF2B = this.mType === 'f2b';
+        if (risk >= 70) r.push({ t: 'crit', i: '🚨', m: 'Block immediately' });
+        if (isF2B && (d.ban_count || 0) >= 3) r.push({ t: 'crit', i: '🔒', m: 'Repeat offender - permanent block' });
+        if (!isF2B && d.failed_count > 50) r.push({ t: 'crit', i: '🔒', m: 'Brute force - Rate limit' });
+        if (loc.is_tor || loc.is_vpn || loc.is_proxy) r.push({ t: 'warn', i: '⚠️', m: 'Anonymous network - Monitor' });
+        if (!isF2B && d.unique_users > 10) r.push({ t: 'warn', i: '👥', m: 'Multi-user attack' });
+        if (!isF2B && d.success_count > 0 && d.failed_count > 0) r.push({ t: 'warn', i: '🔍', m: 'Verify successful logins' });
+        if (!r.length) r.push({ t: 'info', i: '✅', m: 'No immediate threats' });
+        return r.map(x => `<div class="m-rec ${x.t}"><span>${x.i}</span><span>${x.m}</span></div>`).join('');
     }
-})();
+};
+
+window.loadEventsLivePage = () => EV.init();
+window.EV = EV;
 </script>
