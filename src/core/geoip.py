@@ -367,3 +367,70 @@ def lookup_ip(ip_address):
 def enrich_event(event_id, ip_address):
     """Convenience function for event enrichment"""
     return GeoIPLookup.enrich_event_with_geoip(event_id, ip_address)
+
+
+# ============== Shared Geo Utilities ==============
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate great-circle distance between two points on Earth.
+
+    This is the SHARED implementation - use this instead of duplicating!
+    Import: from geoip import haversine_distance
+
+    Args:
+        lat1, lon1: Coordinates of first point (decimal degrees)
+        lat2, lon2: Coordinates of second point (decimal degrees)
+
+    Returns:
+        Distance in kilometers
+    """
+    from math import radians, sin, cos, sqrt, atan2
+
+    R = 6371  # Earth's radius in km
+
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+
+    return R * c
+
+
+def calculate_travel_speed(lat1: float, lon1: float, lat2: float, lon2: float, hours: float) -> float:
+    """
+    Calculate travel speed between two points.
+
+    Args:
+        lat1, lon1: Coordinates of first point
+        lat2, lon2: Coordinates of second point
+        hours: Time difference in hours
+
+    Returns:
+        Speed in km/h, or float('inf') if hours <= 0
+    """
+    if hours <= 0:
+        return float('inf')
+    distance = haversine_distance(lat1, lon1, lat2, lon2)
+    return distance / hours
+
+
+def is_impossible_travel(lat1: float, lon1: float, lat2: float, lon2: float,
+                         hours: float, max_speed_kmh: float = 1000) -> bool:
+    """
+    Check if travel between two points is physically impossible.
+
+    Args:
+        lat1, lon1: Coordinates of first point
+        lat2, lon2: Coordinates of second point
+        hours: Time difference in hours
+        max_speed_kmh: Maximum reasonable travel speed (default 1000 km/h for airplane)
+
+    Returns:
+        True if travel is impossible (speed exceeds max)
+    """
+    speed = calculate_travel_speed(lat1, lon1, lat2, lon2, hours)
+    return speed > max_speed_kmh

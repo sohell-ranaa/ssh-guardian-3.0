@@ -1,48 +1,53 @@
-/* SSH Guardian v3.0 - Toggle Switch */
+/* SSH Guardian v3.0 - Toggle Switch Components */
 
+/* ========================
+   Base Toggle Switch
+   ======================== */
 .toggle-switch {
     position: relative;
-    display: inline-block;
-    width: 40px;
-    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
 }
 
 .toggle-switch input {
     opacity: 0;
     width: 0;
     height: 0;
+    position: absolute;
 }
 
 .toggle-slider {
-    position: absolute;
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--border);
+    border-radius: 12px;
+    transition: background var(--transition-normal);
     cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #C8C6C4;
-    transition: 0.3s;
-    border-radius: 22px;
+    flex-shrink: 0;
 }
 
-.toggle-slider:before {
-    position: absolute;
+.toggle-slider::before {
     content: "";
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.3s;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
     border-radius: 50%;
+    transition: transform var(--transition-normal);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background-color: #0078D4;
+    background: var(--azure-blue);
 }
 
-.toggle-switch input:checked + .toggle-slider:before {
-    transform: translateX(18px);
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
 }
 
 .toggle-switch input:disabled + .toggle-slider {
@@ -50,7 +55,17 @@
     cursor: not-allowed;
 }
 
-/* Toggle with label */
+.toggle-switch:hover .toggle-slider {
+    background: var(--text-hint);
+}
+
+.toggle-switch input:checked:hover + .toggle-slider {
+    background: var(--azure-hover);
+}
+
+/* ========================
+   Toggle with Label
+   ======================== */
 .toggle-with-label {
     display: flex;
     align-items: center;
@@ -58,7 +73,77 @@
 }
 
 .toggle-label {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-primary);
+    font-weight: 500;
     cursor: pointer;
+}
+
+/* ========================
+   Inline Toggle (for forms)
+   ======================== */
+.toggle-switch-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-switch-inline input {
+    display: none;
+}
+
+.toggle-track {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--border);
+    border-radius: 12px;
+    transition: background var(--transition-normal);
+    flex-shrink: 0;
+}
+
+.toggle-track::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    transition: transform var(--transition-normal);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch-inline input:checked + .toggle-track {
+    background: var(--color-success-light);
+}
+
+.toggle-switch-inline input:checked + .toggle-track::after {
+    transform: translateX(20px);
+}
+
+.toggle-switch-inline:hover .toggle-track {
+    background: var(--text-hint);
+}
+
+.toggle-switch-inline input:checked:hover + .toggle-track {
+    background: var(--color-success);
+}
+
+.toggle-status {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* ========================
+   Toggle Field (in forms)
+   ======================== */
+.toggle-field {
+    height: 40px;
+    display: flex;
+    align-items: center;
 }

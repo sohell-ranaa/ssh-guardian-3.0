@@ -560,11 +560,12 @@ def cleanup_simulation(ip_address):
         ufw_commands_created = 0
 
         for agent in agents:
+            ufw_cmd = f"ufw delete deny from {ip_address}"
             cursor.execute("""
                 INSERT INTO agent_ufw_commands
-                (agent_id, command_uuid, command_type, params_json, status, created_at)
-                VALUES (%s, %s, 'delete_deny_from', %s, 'pending', NOW())
-            """, (agent[0], str(uuid.uuid4()), json.dumps({'ip': ip_address})))
+                (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at)
+                VALUES (%s, %s, 'delete_deny_from', %s, %s, 'pending', NOW())
+            """, (agent[0], str(uuid.uuid4()), json.dumps({'ip': ip_address}), ufw_cmd))
             ufw_commands_created += 1
 
         conn.commit()

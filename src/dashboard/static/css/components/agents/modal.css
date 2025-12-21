@@ -1,0 +1,429 @@
+/* ========================================
+   AGENT DETAILS MODAL
+   ======================================== */
+
+#agent-details-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#agent-details-modal.active {
+    display: flex;
+}
+
+.agent-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.agent-modal-container {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: agentModalIn 0.2s ease-out;
+}
+
+@keyframes agentModalIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.agent-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+    border-radius: 12px 12px 0 0;
+}
+
+.agent-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.agent-modal-close:hover {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+.agent-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Modal loading state */
+.agent-modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    gap: 16px;
+    color: var(--text-secondary);
+}
+
+.agent-modal-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--azure-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Modal error state */
+.agent-modal-error {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.agent-modal-error-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 16px;
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.agent-modal-error-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.agent-modal-error-msg {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Agent detail header */
+.agent-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+}
+
+.agent-detail-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.agent-detail-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 600;
+    color: white;
+}
+
+.agent-detail-avatar.online { background: linear-gradient(135deg, var(--color-success-light), var(--color-success-dark)); }
+.agent-detail-avatar.offline { background: linear-gradient(135deg, var(--color-muted-light), var(--text-secondary)); }
+
+.agent-detail-name {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.agent-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.agent-detail-meta .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.agent-detail-meta .status-dot.online {
+    background: var(--color-success);
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.agent-detail-meta .status-dot.offline {
+    background: var(--text-hint);
+}
+
+.agent-detail-meta .sep {
+    color: var(--border);
+}
+
+.agent-detail-badges {
+    display: flex;
+    gap: 8px;
+}
+
+/* Metrics grid */
+.agent-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.agent-metric-card {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.agent-metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.agent-metric-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.agent-metric-icon.cpu { background: rgba(0, 120, 212, 0.1); color: var(--azure-blue); }
+.agent-metric-icon.memory { background: rgba(139, 92, 246, 0.1); color: var(--color-purple); }
+.agent-metric-icon.disk { background: rgba(16, 185, 129, 0.1); color: var(--color-success-light); }
+.agent-metric-icon.heartbeat { background: rgba(209, 52, 56, 0.1); color: var(--color-danger); }
+
+.agent-metric-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.agent-metric-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+/* Info sections */
+.agent-section {
+    margin-bottom: 24px;
+}
+
+.agent-section:last-child {
+    margin-bottom: 0;
+}
+
+.agent-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.agent-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.agent-info-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.agent-info-item {
+    background: var(--background);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.agent-info-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.agent-info-value {
+    display: block;
+    font-size: 13px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.agent-info-value.mono {
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px;
+}
+
+/* API Key box */
+.agent-apikey-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.agent-apikey-box code {
+    flex: 1;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.agent-apikey-box .btn {
+    flex-shrink: 0;
+}
+
+/* Data tables in modal */
+.agent-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.agent-data-table th {
+    background: var(--background);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.agent-data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.agent-data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.agent-data-table tbody tr:hover {
+    background: var(--background);
+}
+
+.agent-data-table .status-ok { color: var(--color-success); }
+.agent-data-table .status-warn { color: var(--color-olive-dark); }
+.agent-data-table .status-error { color: var(--color-danger); }
+
+.agent-table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+/* Empty state */
+.agent-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}
+
+.agent-empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.agent-empty-state-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.agent-empty-state-desc {
+    font-size: 13px;
+}
+
+/* Danger zone */
+.agent-danger-zone {
+    border: 1px solid rgba(209, 52, 56, 0.3);
+    border-radius: 8px;
+    background: rgba(209, 52, 56, 0.03);
+    padding: 16px;
+}
+
+.agent-danger-zone .agent-section-title {
+    color: var(--color-danger);
+}
+
+.agent-danger-zone p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+}
+

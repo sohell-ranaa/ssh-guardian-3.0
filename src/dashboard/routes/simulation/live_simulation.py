@@ -45,49 +45,101 @@ def is_local_target(ip_address: str) -> bool:
     return ip_address in local_ips
 
 
-def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log_file: str = '/var/log/auth.log') -> dict:
+def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log_file: str = '/var/log/auth.log', override_ip: str = None, action_type: str = 'attack', override_username: str = None, auth_type: str = 'password', auth_result: str = 'Failed') -> dict:
     """
     Inject attack simulation directly to local auth.log file.
     Used when dashboard and agent are on the same machine.
+
+    Args:
+        override_ip: If provided, use this IP instead of scenario's default IP
+        override_username: If provided, use this username instead of scenario's default
+        auth_type: password, publickey, keyboard-interactive
+        auth_result: Accepted or Failed
+        action_type: 'baseline' (create normal profile), 'normal' (test normal login), 'attack' (run attack)
     """
     scenario = DEMO_SCENARIOS.get(scenario_id)
     if not scenario:
         return {'success': False, 'error': f'Unknown scenario: {scenario_id}'}
 
-    # Select IP
-    if use_alternate_ip and scenario.get('alternate_ips'):
+    # Select IP - prefer override_ip (from frontend card), then alternate, then scenario default
+    if override_ip:
+        ip = override_ip
+    elif use_alternate_ip and scenario.get('alternate_ips'):
         ip = random.choice(scenario['alternate_ips'])
     else:
         ip = scenario['ip']
 
-    template = scenario.get('log_template', 'sshd[{pid}]: Failed password for root from {ip} port {port} ssh2')
     hostname = socket.gethostname()
     entries = []
-
     now = datetime.now()
     month = now.strftime('%b')
     day = now.day
 
-    for i in range(event_count):
-        # Generate timestamp with small offsets
-        time_offset = i * random.randint(1, 3)
-        event_time = datetime.fromtimestamp(now.timestamp() + time_offset)
-        time_str = event_time.strftime('%H:%M:%S')
+    # Get username - prefer override from frontend, fallback to scenario default
+    username = override_username if override_username else scenario.get('username', 'root')
 
-        # For credential stuffing, rotate usernames
-        username = USERNAMES[i % len(USERNAMES)] if scenario.get('rotate_usernames') else 'root'
+    if action_type == 'baseline':
+        # BASELINE: Generate 15 normal successful logins during business hours (9am-5pm)
+        # This builds the behavioral profile for the user
+        event_count = 15
+        baseline_ip = '10.0.0.50'  # Internal/trusted IP for baseline
 
-        # Format the log entry
-        entry = f"{month} {day:2d} {time_str} {hostname} " + template.format(
-            pid=random.randint(10000, 99999),
-            ip=ip,
-            port=random.randint(40000, 65000),
-            username=username,
-            day=day,
-            time=time_str,
-            hostname=hostname
-        )
-        entries.append(entry)
+        for i in range(event_count):
+            # Business hours: 9am to 5pm, spread over past days
+            base_hour = 9 + (i % 8)  # 9, 10, 11, 12, 13, 14, 15, 16
+            base_minute = random.randint(0, 59)
+            base_second = random.randint(0, 59)
+            time_str = f"{base_hour:02d}:{base_minute:02d}:{base_second:02d}"
+
+            # Spread events over past few days
+            days_ago = i // 3
+            event_day = max(1, day - days_ago)
+
+            entry = f"{month} {event_day:2d} {time_str} {hostname} sshd[{random.randint(10000, 99999)}]: Accepted password for {username} from {baseline_ip} port {random.randint(40000, 65000)} ssh2"
+            entries.append(entry)
+
+    elif action_type == 'normal':
+        # NORMAL: Generate 1-2 normal successful logins (matching baseline pattern)
+        event_count = 2
+        baseline_ip = '10.0.0.50'  # Same trusted IP as baseline
+
+        for i in range(event_count):
+            # Current business hours
+            current_hour = now.hour
+            if current_hour < 9:
+                current_hour = 9
+            elif current_hour > 17:
+                current_hour = 14
+            time_str = f"{current_hour:02d}:{random.randint(0, 59):02d}:{random.randint(0, 59):02d}"
+
+            entry = f"{month} {day:2d} {time_str} {hostname} sshd[{random.randint(10000, 99999)}]: Accepted password for {username} from {baseline_ip} port {random.randint(40000, 65000)} ssh2"
+            entries.append(entry)
+
+    else:
+        # ATTACK: Use user-provided auth_type and auth_result to build log entry
+        # Build template dynamically based on user selections
+        log_template = f"sshd[{{pid}}]: {auth_result} {auth_type} for {{username}} from {{ip}} port {{port}} ssh2"
+
+        for i in range(event_count):
+            # Generate timestamp with small offsets
+            time_offset = i * random.randint(1, 3)
+            event_time = datetime.fromtimestamp(now.timestamp() + time_offset)
+            time_str = event_time.strftime('%H:%M:%S')
+
+            # For credential stuffing, rotate usernames
+            attack_username = USERNAMES[i % len(USERNAMES)] if scenario.get('rotate_usernames') else username
+
+            # Format the log entry
+            entry = f"{month} {day:2d} {time_str} {hostname} " + log_template.format(
+                pid=random.randint(10000, 99999),
+                ip=ip,
+                port=random.randint(40000, 65000),
+                username=attack_username,
+                day=day,
+                time=time_str,
+                hostname=hostname
+            )
+            entries.append(entry)
 
     # Write to auth.log
     try:
@@ -97,11 +149,12 @@ def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log
 
         return {
             'success': True,
-            'ip_used': ip,
+            'ip_used': ip if action_type == 'attack' else '10.0.0.50',
             'lines_written': len(entries),
             'log_file': log_file,
             'injected_at': datetime.now().isoformat(),
-            'local': True
+            'local': True,
+            'action_type': action_type
         }
     except PermissionError:
         return {'success': False, 'error': f'Permission denied writing to {log_file}. Run dashboard with sudo or check permissions.'}
@@ -149,8 +202,12 @@ def run_live_simulation():
         data = request.get_json() or {}
         target_id = data.get('target_id')
         scenario_id = data.get('scenario_id')
-        event_count = data.get('event_count', 15)
+        source_ip = data.get('source_ip')  # IP passed from frontend (from scenario card)
+        username_override = data.get('username')  # Username override from frontend
+        auth_type = data.get('auth_type', 'password')  # password, publickey, keyboard-interactive
+        auth_result = data.get('auth_result', 'Failed')  # Accepted or Failed
         use_alternate_ip = data.get('use_alternate_ip', False)
+        action_type = data.get('action_type', 'attack')  # 'baseline', 'normal', or 'attack'
 
         if not target_id:
             return jsonify({'success': False, 'error': 'target_id is required'}), 400
@@ -162,12 +219,19 @@ def run_live_simulation():
         if not scenario:
             return jsonify({'success': False, 'error': f'Unknown scenario: {scenario_id}'}), 400
 
+        # Use scenario's event_count if frontend doesn't provide one, fallback to 15
+        event_count = data.get('event_count') or scenario.get('event_count', 15)
+
+        # Use the IP passed from frontend (exact IP shown on card), fallback to scenario default
+        if not source_ip:
+            source_ip = scenario.get('ip')
+
         # Get target server details
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT id, name, ip_address, port, api_key, is_active
+            SELECT id, name, ip_address, port, api_key, is_active, agent_id
             FROM simulation_targets
             WHERE id = %s
         """, (target_id,))
@@ -185,12 +249,14 @@ def run_live_simulation():
             return jsonify({'success': False, 'error': 'Target is not active'}), 400
 
         # Create simulation run record
-        source_ip = scenario['ip']  # Will be updated with actual IP from injection
+        import uuid as uuid_module
+        run_uuid = str(uuid_module.uuid4())
+        # source_ip is already set from request or scenario fallback
         cursor.execute("""
             INSERT INTO live_simulation_runs
-            (target_id, scenario_id, scenario_name, source_ip, event_count, status)
-            VALUES (%s, %s, %s, %s, %s, 'pending')
-        """, (target_id, scenario_id, scenario['name'], source_ip, event_count))
+            (run_uuid, target_id, scenario_id, scenario_name, source_ip, event_count, status, agent_id)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s)
+        """, (run_uuid, target_id, scenario_id, scenario['name'], source_ip, event_count, target.get('agent_id', 0)))
 
         run_id = cursor.lastrowid
         conn.commit()
@@ -199,9 +265,9 @@ def run_live_simulation():
         is_local = is_local_target(target['ip_address'])
 
         if is_local:
-            # LOCAL: Write directly to auth.log
-            print(f"[LiveSim] Local target detected ({target['ip_address']}), writing directly to auth.log")
-            result = inject_local(scenario_id, event_count, use_alternate_ip)
+            # LOCAL: Write directly to auth.log with the exact IP and username from frontend
+            print(f"[LiveSim] Local target detected ({target['ip_address']}), action={action_type}, injecting IP {source_ip}, user {username_override or 'default'}, auth={auth_type}/{auth_result} to auth.log")
+            result = inject_local(scenario_id, event_count, use_alternate_ip, override_ip=source_ip, action_type=action_type, override_username=username_override, auth_type=auth_type, auth_result=auth_result)
 
             if result.get('success'):
                 cursor.execute("""
@@ -251,7 +317,8 @@ def run_live_simulation():
                 json={
                     'scenario_id': scenario_id,
                     'event_count': event_count,
-                    'use_alternate_ip': use_alternate_ip
+                    'use_alternate_ip': use_alternate_ip,
+                    'action_type': action_type
                 },
                 timeout=30
             )
@@ -400,7 +467,7 @@ def get_simulation_status(run_id):
             SELECT id, created_at
             FROM fail2ban_events
             WHERE ip_address = %s
-            AND action = 'ban'
+            AND event_type = 'ban'
             AND created_at >= %s
             ORDER BY created_at DESC
             LIMIT 1

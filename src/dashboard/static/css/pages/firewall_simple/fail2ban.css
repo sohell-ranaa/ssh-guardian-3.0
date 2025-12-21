@@ -1,0 +1,388 @@
+/**
+ * SSH Guardian v3.0 - Fail2ban Styles
+ * Ban cards, stats, history, threat cards
+ */
+
+/* Fail2ban ban card styles */
+.f2b-ban-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.f2b-ban-card:hover {
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.f2b-ban-icon {
+    font-size: 18px;
+}
+
+.f2b-ban-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.f2b-ban-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-danger);
+}
+
+.f2b-ban-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Fail2ban timing display */
+.f2b-ban-timing {
+    margin-top: 6px;
+}
+
+.f2b-remaining {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.f2b-time-safe {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success-light);
+}
+
+.f2b-time-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning-light);
+}
+
+.f2b-time-critical {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-danger);
+    animation: pulse-critical 1s ease-in-out infinite;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.f2b-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.f2b-unban-btn {
+    padding: 5px 12px;
+    background: var(--color-success);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.f2b-unban-btn:hover {
+    background: var(--color-success-dark);
+}
+
+/* Fail2ban Stats */
+.f2b-stat-card {
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.f2b-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.f2b-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* Fail2ban Sub-tabs */
+.f2b-subtab {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.f2b-subtab:hover {
+    color: var(--text-primary);
+}
+
+.f2b-subtab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* Ban Duration Badge */
+.f2b-duration {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-danger);
+}
+
+.f2b-duration.expiring-soon {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning);
+}
+
+/* History Item */
+.f2b-history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.f2b-history-item.ban {
+    border-left: 3px solid var(--color-danger);
+}
+
+.f2b-history-item.unban {
+    border-left: 3px solid var(--color-success-light);
+}
+
+.f2b-history-icon {
+    font-size: 16px;
+}
+
+.f2b-history-details {
+    flex: 1;
+}
+
+.f2b-history-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.f2b-history-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.f2b-history-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+/* Threat Card */
+.f2b-threat-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.f2b-threat-card.critical {
+    border-left: 3px solid var(--color-danger-light);
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.f2b-threat-card.high {
+    border-left: 3px solid var(--color-warning-light);
+    background: rgba(245, 158, 11, 0.05);
+}
+
+.f2b-threat-card.medium {
+    border-left: 3px solid var(--azure-blue);
+}
+
+.f2b-threat-score {
+    min-width: 44px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.f2b-threat-score.critical {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--color-danger);
+}
+
+.f2b-threat-score.high {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning);
+}
+
+.f2b-threat-score.medium {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--color-blue-bright);
+}
+
+.f2b-threat-details {
+    flex: 1;
+}
+
+.f2b-threat-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.f2b-threat-factors {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+
+.f2b-escalate-btn {
+    padding: 6px 10px;
+    background: var(--color-danger-light);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.f2b-escalate-btn:hover {
+    background: var(--color-red-700);
+}
+
+/* Fail2ban IP Detail Modal Styles */
+.f2b-risk-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.f2b-risk-badge.critical {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(220, 38, 38, 0.05));
+    border-color: rgba(220, 38, 38, 0.3);
+    color: var(--color-danger-light);
+}
+
+.f2b-risk-badge.high {
+    background: linear-gradient(135deg, rgba(234, 88, 12, 0.15), rgba(234, 88, 12, 0.05));
+    border-color: rgba(234, 88, 12, 0.3);
+    color: var(--color-orange-600);
+}
+
+.f2b-risk-badge.moderate {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+    border-color: rgba(245, 158, 11, 0.3);
+    color: var(--color-warning-light);
+}
+
+.f2b-risk-badge.low {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--color-success-light);
+}
+
+/* Stat boxes */
+.f2b-stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+}
+
+/* Threat tags */
+.f2b-threat-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.f2b-threat-tag.tor {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--color-purple);
+}
+
+.f2b-threat-tag.vpn {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--azure-blue);
+}
+
+.f2b-threat-tag.datacenter {
+    background: rgba(107, 114, 128, 0.15);
+    color: var(--color-muted-light);
+}
+
+.f2b-threat-tag.repeat {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--color-danger-light);
+}
+
+.f2b-threat-tag.abuse {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning-light);
+}
+
+.f2b-threat-tag.clean {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success-light);
+}
+
+/* Clickable IP styling */
+.f2b-ban-ip.clickable-ip,
+.f2b-history-ip.clickable-ip {
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.f2b-ban-ip.clickable-ip:hover,
+.f2b-history-ip.clickable-ip:hover {
+    color: var(--azure-blue);
+    text-decoration: underline;
+}
+
+.f2b-ban-ip.clickable-ip:hover .ip-details-hint,
+.f2b-history-ip.clickable-ip:hover .ip-details-hint {
+    opacity: 1;
+}

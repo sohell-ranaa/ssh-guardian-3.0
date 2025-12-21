@@ -1,0 +1,252 @@
+<!-- SSH Guardian v3.0 - Blocked IPs Page (Standalone) -->
+<div id="page-blocked-ips" class="page-content" style="display: none;">
+    <div class="ev-header">
+        <div>
+            <h1>Blocked IPs</h1>
+            <p>View and manage blocked IP addresses</p>
+        </div>
+        <button class="refresh-btn" onclick="BLK.refresh()">
+            <span class="refresh-icon">↻</span> Refresh
+        </button>
+    </div>
+
+    <div class="ev-filters">
+        <input type="text" id="blkIp" placeholder="Filter IP..." onkeyup="BLK.debounceFilter()">
+        <select id="blkStatus" onchange="BLK.load()"><option value="">All Status</option><option value="blocked">Blocked</option><option value="escalate">Escalated</option><option value="unblocked">Unblocked</option></select>
+        <select id="blkSource" onchange="BLK.load()"><option value="">All Sources</option><option value="rule">Rule Based</option><option value="manual">Manual</option><option value="ml">ML</option><option value="fail2ban">Fail2ban</option><option value="ufw">UFW</option></select>
+        <select id="blkAgent" onchange="BLK.load()"><option value="">All Agents</option></select>
+        <select id="blkTime" onchange="BLK.load()"><option value="24h">24 Hours</option><option value="7d" selected>7 Days</option><option value="30d">30 Days</option><option value="90d">90 Days</option></select>
+    </div>
+
+    <div id="blkBox" class="ev-card"><div class="ev-msg">Loading...</div></div>
+
+    <div id="blkPg" class="ev-pg" style="display:none">
+        <span id="blkInfo"></span>
+        <div><button onclick="BLK.load(BLK.pg-1)">← Prev</button><button onclick="BLK.load(BLK.pg+1)">Next →</button></div>
+    </div>
+</div>
+
+<style>
+/* Blocked IPs Page - Uses shared CSS components:
+   - events-table.css (.ev-* classes)
+   - cell-badges.css (.c-* classes)
+   Page-specific overrides only below */
+
+/* Table minimum width override */
+#page-blocked-ips .ev-tbl{min-width:800px}
+
+/* IP cell font-weight override */
+#page-blocked-ips .c-ip{font-weight:600}
+
+/* Action buttons */
+.blk-action-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.blk-action-btn.unblock {
+    background: var(--color-success, #10b981);
+    color: white;
+}
+.blk-action-btn.unblock:hover {
+    background: var(--color-success-dark, #059669);
+}
+.blk-action-btn.reblock {
+    background: var(--color-warning, #f59e0b);
+    color: #1a1a1a;
+}
+.blk-action-btn.reblock:hover {
+    background: var(--color-warning-dark, #d97706);
+}
+</style>
+
+<script>
+const BLK = {
+    pg: 1,
+    total: 0,
+    filterTimer: null,
+
+    async init() {
+        await this.loadAgents();
+        this.load(1);
+    },
+
+    async loadAgents() {
+        try {
+            const r = await fetch('/api/agents/list');
+            const d = await r.json();
+            if (d.success && d.agents) {
+                const s = document.getElementById('blkAgent');
+                d.agents.forEach(a => s.add(new Option(a.hostname || a.agent_id, a.id)));
+            }
+        } catch (e) {}
+    },
+
+    refresh() { this.load(1); },
+
+    debounceFilter() {
+        clearTimeout(this.filterTimer);
+        this.filterTimer = setTimeout(() => this.load(), 400);
+    },
+
+    async load(page = 1) {
+        this.pg = page;
+        const box = document.getElementById('blkBox');
+        const pgEl = document.getElementById('blkPg');
+        box.innerHTML = '<div class="ev-msg">Loading...</div>';
+        if (pgEl) pgEl.style.display = 'none';
+
+        const ip = document.getElementById('blkIp')?.value?.trim() || '';
+        const status = document.getElementById('blkStatus')?.value || '';
+        const source = document.getElementById('blkSource')?.value || '';
+        const agent = document.getElementById('blkAgent')?.value || '';
+        const time = document.getElementById('blkTime')?.value || '7d';
+
+        const params = new URLSearchParams({
+            page_size: 50,
+            page: page,
+            time_range: time,
+            _t: Date.now()
+        });
+        if (ip) params.append('ip_filter', ip);
+        if (status) params.append('event_type', status);
+        if (source) params.append('block_source', source);
+        if (agent) params.append('agent_id', agent);
+
+        try {
+            const r = await fetch(`/api/dashboard/block-events/list?${params.toString()}`);
+            const d = await r.json();
+
+            if (d.success && d.events?.length) {
+                this.total = d.total || d.events.length;
+                const totalPages = Math.ceil(this.total / 50);
+
+                box.innerHTML = `<div class="ev-tbl-wrap"><table class="ev-tbl"><thead><tr>
+                    <th>Last Activity</th><th>IP Address</th><th>Status</th><th>Source</th><th>Agent</th><th>Reason</th><th style="width:80px">Actions</th>
+                </tr></thead><tbody>${d.events.map(e => {
+                    const src = (e.block_source || '').toLowerCase();
+                    const srcClass = src.includes('rule') ? 'rule_based' : src.includes('ml') ? 'ml' : src;
+                    const srcLabel = e.block_source ? e.block_source.replace(/_/g, ' ').replace('based', '').trim() : '-';
+                    const evType = (e.event_type || '').toLowerCase();
+                    const isBlocked = evType === 'blocked' || evType === 'block' || evType === 'escalate';
+                    const isEscalated = evType === 'escalate';
+                    const statClass = isEscalated ? 'escalated' : (isBlocked ? 'active' : 'inactive');
+                    const statLabel = isEscalated ? 'Escalated' : (isBlocked ? 'Blocked' : 'Unblocked');
+                    const actionBtn = isBlocked
+                        ? `<button class="blk-action-btn unblock" onclick="event.stopPropagation(); BLK.unblock('${this.esc(e.ip_address)}')" title="Unblock this IP">Unblock</button>`
+                        : `<button class="blk-action-btn reblock" onclick="event.stopPropagation(); BLK.reblock('${this.esc(e.ip_address)}')" title="Re-block this IP">Re-block</button>`;
+                    return `<tr onclick="BLK.showDetail('${this.esc(e.ip_address)}')">
+                    <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${this.fmtTime(e.created_at || e.blocked_at)}</td>
+                    <td class="c-ip">${this.esc(e.ip_address)}</td>
+                    <td><span class="c-stat ${statClass}">${statLabel}</span></td>
+                    <td><span class="c-source ${srcClass}">${this.esc(srcLabel)}</span></td>
+                    <td><span class="c-agent">${this.esc(e.agent_hostname || e.agent_name || 'System')}</span></td>
+                    <td><div class="c-reason" title="${this.esc(e.reason || '')}">${this.esc(e.reason || 'No reason specified')}</div></td>
+                    <td>${actionBtn}</td>
+                </tr>`;
+                }).join('')}</tbody></table></div>`;
+
+                if (pgEl) {
+                    document.getElementById('blkInfo').textContent = `Page ${page} of ${totalPages} (${this.total} total)`;
+                    pgEl.style.display = 'flex';
+                    pgEl.querySelectorAll('button')[0].disabled = page <= 1;
+                    pgEl.querySelectorAll('button')[1].disabled = page >= totalPages;
+                }
+            } else {
+                box.innerHTML = '<div class="ev-msg">No block events found</div>';
+            }
+        } catch (e) {
+            console.error('Error loading blocked:', e);
+            box.innerHTML = '<div class="ev-msg err">Failed to load block events</div>';
+        }
+    },
+
+    showDetail(ip) {
+        // Try BlockedIPs.Modal first (from blocked_ips_page.js)
+        if (window.BlockedIPs?.Modal?.showDetails) {
+            window.BlockedIPs.Modal.showDetails(ip);
+        }
+        // Fallback to firewall detail modal
+        else if (typeof showRealBlockDetail === 'function') {
+            showRealBlockDetail(ip, 'unknown', null, null);
+        }
+        // Final fallback - show basic alert
+        else {
+            alert(`IP: ${ip}\n\nDetails modal not available.`);
+        }
+    },
+
+    async unblock(ip) {
+        if (!confirm(`Unblock IP: ${ip}?`)) return;
+        try {
+            const r = await fetch('/api/dashboard/blocking/blocks/unblock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip_address: ip, reason: 'Manual unblock from Blocked IPs page' })
+            });
+            const d = await r.json();
+            if (d.success) {
+                if (window.showToast) window.showToast(`IP ${ip} unblocked successfully`, 'success');
+                else alert(`IP ${ip} unblocked successfully`);
+                this.load(this.pg);
+            } else {
+                if (window.showToast) window.showToast(`Failed to unblock: ${d.error || d.message}`, 'error');
+                else alert(`Failed to unblock: ${d.error || d.message}`);
+            }
+        } catch (e) {
+            console.error('Unblock error:', e);
+            if (window.showToast) window.showToast(`Error: ${e.message}`, 'error');
+            else alert(`Error: ${e.message}`);
+        }
+    },
+
+    async reblock(ip) {
+        if (!confirm(`Re-block IP: ${ip}?`)) return;
+        try {
+            // Get selected agent from dropdown
+            const agentId = document.getElementById('blkAgent')?.value || null;
+            const payload = {
+                ip_address: ip,
+                reason: 'Re-blocked from Blocked IPs page',
+                duration_hours: 24
+            };
+            if (agentId) payload.agent_id = parseInt(agentId);
+
+            const r = await fetch('/api/dashboard/blocking/blocks/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const d = await r.json();
+            if (d.success) {
+                if (window.showToast) window.showToast(`IP ${ip} blocked for 24 hours`, 'success');
+                else alert(`IP ${ip} blocked for 24 hours`);
+                this.load(this.pg);
+            } else {
+                if (window.showToast) window.showToast(`Failed to block: ${d.error || d.message}`, 'error');
+                else alert(`Failed to block: ${d.error || d.message}`);
+            }
+        } catch (e) {
+            console.error('Block error:', e);
+            if (window.showToast) window.showToast(`Error: ${e.message}`, 'error');
+            else alert(`Error: ${e.message}`);
+        }
+    },
+
+    esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; },
+
+    fmtTime(t) {
+        if (!t) return '-';
+        if (window.TimeSettings?.isLoaded()) return window.TimeSettings.formatFull(t);
+        const d = new Date(t);
+        return d.toLocaleString();
+    }
+};
+
+window.initBlockedIpsPage = () => BLK.init();
+window.BLK = BLK;
+</script>

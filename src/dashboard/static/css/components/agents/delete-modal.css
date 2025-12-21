@@ -1,0 +1,201 @@
+/* ========================================
+   DELETE CONFIRMATION MODAL
+   ======================================== */
+
+.agent-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 60px 20px 20px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    overflow-y: auto;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.agent-delete-content {
+    background: var(--surface);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 480px;
+    width: 100%;
+    animation: slideIn 0.25s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.agent-delete-header {
+    padding: 16px 20px;
+    border-radius: 10px 10px 0 0;
+    background: linear-gradient(135deg, var(--color-danger), var(--color-danger-dark));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.agent-delete-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-delete-header .agent-modal-close {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.agent-delete-header .agent-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.agent-delete-body {
+    padding: 20px;
+}
+
+.agent-delete-name {
+    background: var(--background);
+    padding: 14px;
+    border-radius: 8px;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+}
+
+.agent-delete-warning {
+    background: rgba(209, 52, 56, 0.08);
+    border: 1px solid rgba(209, 52, 56, 0.2);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.agent-delete-warning p {
+    margin: 0 0 8px 0;
+    color: var(--color-danger-dark);
+    font-size: 13px;
+}
+
+.agent-delete-warning ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+    color: var(--color-danger-dark);
+    font-size: 12px;
+}
+
+.agent-delete-warning ul li {
+    margin-bottom: 4px;
+}
+
+.agent-delete-confirm-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.agent-delete-input {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    transition: all 0.2s;
+}
+
+.agent-delete-input:focus {
+    outline: none;
+    border-color: var(--azure-blue);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+}
+
+.agent-delete-input.error {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px rgba(209, 52, 56, 0.1);
+}
+
+.agent-delete-input.success {
+    border-color: var(--color-success);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.agent-delete-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: var(--background);
+    border-radius: 0 0 10px 10px;
+}
+
+/* ========================================
+   TOAST NOTIFICATIONS
+   ======================================== */
+
+.agent-toast {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 14px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    z-index: 10001;
+    animation: toastIn 0.3s ease-out;
+}
+
+.agent-toast.success { background: var(--color-success); }
+.agent-toast.error { background: var(--color-danger); }
+.agent-toast.info { background: var(--azure-blue); }
+.agent-toast.warning { background: var(--color-warning); }
+
+@keyframes toastIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes toastOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+

@@ -55,10 +55,11 @@ def list_agents():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # v3.1: ip_address instead of ip_address_primary
         cursor.execute("""
             SELECT
                 id, agent_id, agent_uuid, hostname, display_name,
-                agent_type, ip_address_primary, environment,
+                agent_type, ip_address, ip_address_internal, environment,
                 status, health_status, last_heartbeat,
                 version, is_active, is_approved,
                 total_events_sent, created_at, updated_at,
@@ -275,6 +276,8 @@ def deactivate_agent(agent_id):
 @agent_routes.route('/agents/<int:agent_id>', methods=['GET'])
 def get_agent_details(agent_id):
     """Get detailed agent information with caching"""
+    conn = None
+    cursor = None
     try:
         cache = get_cache()
         cache_k = cache_key('agents', 'details', str(agent_id))
@@ -319,19 +322,16 @@ def get_agent_details(agent_id):
 
         heartbeats = cursor.fetchall()
 
-        # Get recent batches
+        # Get recent batches - v3.1: use created_at instead of received_at
         cursor.execute("""
             SELECT *
             FROM agent_log_batches
             WHERE agent_id = %s
-            ORDER BY received_at DESC
+            ORDER BY created_at DESC
             LIMIT 20
         """, (agent_id,))
 
         batches = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
 
         # Format timestamps
         if agent['last_heartbeat']:
@@ -347,17 +347,26 @@ def get_agent_details(agent_id):
             agent['total_events_sent'] = int(agent['total_events_sent'])
 
         for hb in heartbeats:
-            if hb['heartbeat_timestamp']:
+            if hb.get('heartbeat_timestamp'):
                 hb['heartbeat_timestamp'] = hb['heartbeat_timestamp'].isoformat()
-            # Convert Decimal fields
-            for field in ['cpu_percent', 'memory_percent', 'disk_percent']:
+            # v3.1: Convert Decimal fields (renamed from *_percent to *_usage)
+            for field in ['cpu_usage', 'memory_usage', 'disk_usage']:
                 if field in hb and hb[field] is not None:
                     hb[field] = float(hb[field])
+            # Backwards compatibility: also provide *_percent keys
+            if hb.get('cpu_usage') is not None:
+                hb['cpu_percent'] = hb['cpu_usage']
+            if hb.get('memory_usage') is not None:
+                hb['memory_percent'] = hb['memory_usage']
+            if hb.get('disk_usage') is not None:
+                hb['disk_percent'] = hb['disk_usage']
 
         for batch in batches:
-            if batch['received_at']:
-                batch['received_at'] = batch['received_at'].isoformat()
-            if batch['processing_completed_at']:
+            # v3.1: created_at is the primary timestamp
+            if batch.get('created_at'):
+                batch['created_at'] = batch['created_at'].isoformat()
+                batch['received_at'] = batch['created_at']  # Backwards compatibility
+            if batch.get('processing_completed_at'):
                 batch['processing_completed_at'] = batch['processing_completed_at'].isoformat()
 
         # Cache the result
@@ -381,6 +390,18 @@ def get_agent_details(agent_id):
             'success': False,
             'error': f'Failed to get agent details: {str(e)}'
         }), 500
+    finally:
+        # Always close cursor and connection to prevent pool exhaustion
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 
 @agent_routes.route('/agents/<int:agent_id>/regenerate-key', methods=['POST'])
@@ -497,7 +518,7 @@ def delete_agent(agent_id):
         hostname = agent['hostname']
         agent_uuid = agent['agent_id']
 
-        # Delete related data (cascaded by FK, but explicitly for clarity)
+        # v3.1: Delete related data from simplified schema
         # Delete agent heartbeats
         cursor.execute("DELETE FROM agent_heartbeats WHERE agent_id = %s", (agent_id,))
         heartbeats_deleted = cursor.rowcount
@@ -506,35 +527,14 @@ def delete_agent(agent_id):
         cursor.execute("DELETE FROM agent_log_batches WHERE agent_id = %s", (agent_id,))
         batches_deleted = cursor.rowcount
 
-        # Delete agent firewall state
-        cursor.execute("DELETE FROM agent_firewall_state WHERE agent_id = %s", (agent_id,))
+        # v3.1: Delete UFW-related data
+        cursor.execute("DELETE FROM agent_ufw_commands WHERE agent_id = %s", (agent_id,))
+        cursor.execute("DELETE FROM agent_ufw_rules WHERE agent_id = %s", (agent_id,))
+        cursor.execute("DELETE FROM agent_ufw_state WHERE agent_id = %s", (agent_id,))
 
-        # Delete agent firewall rules
-        cursor.execute("DELETE FROM agent_firewall_rules WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent firewall port forwards
-        cursor.execute("DELETE FROM agent_port_forwards WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent firewall commands
-        cursor.execute("DELETE FROM agent_firewall_commands WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent listening ports
-        cursor.execute("DELETE FROM agent_listening_ports WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent system users
-        cursor.execute("DELETE FROM agent_system_users WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent active connections
-        cursor.execute("DELETE FROM agent_active_connections WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent command history
-        cursor.execute("DELETE FROM agent_command_history WHERE agent_id = %s", (agent_id,))
-
-        # Delete firewall suggestions
-        cursor.execute("DELETE FROM firewall_suggestions WHERE agent_id = %s", (agent_id,))
-
-        # Delete agent protected ports
-        cursor.execute("DELETE FROM agent_protected_ports WHERE agent_id = %s", (agent_id,))
+        # Delete fail2ban data
+        cursor.execute("DELETE FROM fail2ban_events WHERE agent_id = %s", (agent_id,))
+        cursor.execute("DELETE FROM fail2ban_state WHERE agent_id = %s", (agent_id,))
 
         # Finally, delete the agent itself
         cursor.execute("DELETE FROM agents WHERE id = %s", (agent_id,))

@@ -1,0 +1,661 @@
+/* SSH Guardian v3.1 - Notification History Page Styles */
+
+/* Compact Page Header */
+.page-header-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+}
+
+.page-header-left {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.page-title-sm {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.header-stats-inline {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-stat {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.header-stat strong {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.page-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* History Category Tabs */
+.history-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-radius: 8px 8px 0 0;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.history-tab {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.history-tab:hover {
+    background: var(--surface-alt);
+    color: var(--text-primary);
+}
+
+.history-tab.active {
+    background: var(--surface-alt);
+    color: var(--text-primary);
+    border-color: var(--border);
+    font-weight: 600;
+}
+
+.history-tab .tab-count {
+    background: var(--background);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+}
+
+.history-tab.active .tab-count {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+/* History Filters */
+.history-filters {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 1px solid var(--border-light);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.history-filters .form-control-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--background);
+    color: var(--text-primary);
+    min-width: 100px;
+}
+
+.history-filters .form-control-sm:focus {
+    outline: none;
+    border-color: var(--azure-blue);
+    box-shadow: 0 0 0 2px var(--info-bg);
+}
+
+.history-filters input[type="date"] {
+    min-width: 130px;
+}
+
+/* History Table Container */
+.history-table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+}
+
+/* Compact History Table */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.history-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.history-table th {
+    background: var(--surface-alt);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.history-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.history-table tbody tr:hover {
+    background: rgba(0, 0, 0, 0.015);
+}
+
+.history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Table cell utilities */
+.history-table .time-cell {
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.history-table .time-cell .time-relative {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.history-table .time-cell .time-absolute {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    display: block;
+    margin-top: 2px;
+}
+
+.history-table .channel-badge,
+.channel-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.history-table .subject-cell {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-table .ip-cell {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.history-table .status-badge,
+.status-badge {
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: capitalize;
+    color: var(--text-secondary);
+}
+
+.history-table .actions-cell {
+    display: flex;
+    gap: 4px;
+}
+
+.history-table .actions-cell .btn {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+/* Compact Pagination */
+.pagination-compact {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    margin-top: -1px;
+}
+
+.pagination-compact .page-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-right: 12px;
+}
+
+.pagination-compact .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    min-width: auto;
+}
+
+/* Empty State */
+.history-empty {
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.history-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.history-empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.history-empty-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* Loading Placeholder */
+.loading-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--azure-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Notification Detail Modal - Improved Design */
+.notif-detail-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+}
+
+.notif-detail-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    width: 560px;
+    max-width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+}
+
+.notif-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.notif-detail-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notif-detail-header .close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.notif-detail-header .close-btn:hover {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+.notif-detail-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.notif-detail-section {
+    margin-bottom: 20px;
+}
+
+.notif-detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.notif-detail-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-hint);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.notif-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.notif-detail-field {
+    margin-bottom: 12px;
+}
+
+.notif-detail-field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.notif-detail-field .value {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.notif-detail-field .value.mono {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+}
+
+.notif-detail-message {
+    background: var(--background);
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+}
+
+.notif-detail-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+/* Row styles - no colors */
+.history-table tr.has-category {
+    /* No special styling */
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .page-header-compact {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .page-header-left {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .header-stats-inline {
+        flex-wrap: wrap;
+    }
+
+    .history-filters {
+        flex-wrap: wrap;
+    }
+
+    .history-table-container {
+        max-height: calc(100vh - 380px);
+    }
+}
+
+@media (max-width: 768px) {
+    .history-tabs {
+        flex-wrap: wrap;
+    }
+
+    .history-table {
+        font-size: 12px;
+    }
+
+    .history-table th,
+    .history-table td {
+        padding: 6px 8px;
+    }
+
+    .notif-detail-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================================
+   Alert Rules Page - Compact Styles
+   ============================================================================ */
+
+.info-banner-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--info-bg);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.info-banner-compact a {
+    color: var(--azure-blue);
+    text-decoration: none;
+}
+
+.info-banner-compact a:hover {
+    text-decoration: underline;
+}
+
+/* Alert Rules List */
+.alert-rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.alert-rule-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.alert-rule-row:hover {
+    border-color: var(--azure-blue);
+}
+
+.alert-rule-row.disabled {
+    opacity: 0.6;
+}
+
+.rule-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.rule-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.rule-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.rule-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rule-status {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--surface-alt);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+}
+
+.rule-status.active {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-success-light);
+}
+
+.rule-system-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--azure-blue);
+}
+
+.rule-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.rule-channels {
+    font-size: 14px;
+}
+
+.rule-stat {
+    white-space: nowrap;
+}
+
+.rule-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* Extra small buttons for compact design */
+.btn-xs {
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+    .alert-rule-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .rule-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}

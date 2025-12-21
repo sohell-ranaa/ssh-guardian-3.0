@@ -25,6 +25,7 @@
         </div>
         <div class="nav-submenu" id="submenu-events">
             <a href="#events-live" class="nav-subitem" data-page="events-live">Live Events</a>
+            <!-- Blocked IPs is now a tab inside Live Events page -->
             <a href="#events-timeline" class="nav-subitem" data-page="events-timeline">Timeline</a>
         </div>
 
@@ -38,45 +39,34 @@
     <div class="nav-section">
         <div class="nav-section-title">Security</div>
 
-        <div class="nav-item" data-submenu="ip">
-            <span class="nav-item-icon">🌐</span>
-            <span class="nav-item-text">IP Intelligence</span>
+        <div class="nav-item" data-submenu="security">
+            <span class="nav-item-icon">🛡️</span>
+            <span class="nav-item-text">Protection</span>
             <span class="nav-item-arrow">▶</span>
         </div>
-        <div class="nav-submenu" id="submenu-ip">
-            <a href="#ip-geo" class="nav-subitem" data-page="ip-geo">GeoIP Lookup</a>
-            <a href="#ip-threat" class="nav-subitem" data-page="ip-threat">Threat Intelligence</a>
-            <!-- Hidden: Blocked IPs now in Firewall & Blocking page
-            <a href="#ip-blocks" class="nav-subitem" data-page="ip-blocks">Blocked IPs</a>
-            -->
+        <div class="nav-submenu" id="submenu-security">
+            <a href="#ip-intel" class="nav-subitem" data-page="ip-intel">IP Intelligence</a>
+            <a href="#firewall" class="nav-subitem" data-page="firewall">Firewall & Blocking</a>
+            <a href="#fail2ban" class="nav-subitem" data-page="fail2ban">Fail2ban</a>
+            <a href="#blocked-ips" class="nav-subitem" data-page="blocked-ips">Blocked IPs</a>
+            <a href="#trusted-ips" class="nav-subitem" data-page="trusted-ips">Trusted IPs</a>
         </div>
-
-        <!-- Hidden: Blocking Rules now in Firewall & Blocking page
-        <a href="#rules" class="nav-item" data-page="rules">
-            <span class="nav-item-icon">🚫</span>
-            <span class="nav-item-text">Blocking Rules</span>
-        </a>
-        -->
-
-        <a href="#firewall" class="nav-item" data-page="firewall">
-            <span class="nav-item-icon">🔥</span>
-            <span class="nav-item-text">Firewall & Blocking</span>
-        </a>
     </div>
 
     <!-- Notifications -->
     <div class="nav-section">
         <div class="nav-section-title">Notifications</div>
 
-        <div class="nav-item" data-submenu="notifications">
+        <a href="#notif-history" class="nav-item nav-item-expandable" data-page="notif-history" data-submenu="notifications">
             <span class="nav-item-icon">📢</span>
             <span class="nav-item-text">Notifications</span>
             <span class="nav-item-arrow">▶</span>
-        </div>
+        </a>
         <div class="nav-submenu" id="submenu-notifications">
-            <a href="#notif-rules" class="nav-subitem" data-page="notif-rules">Rules</a>
             <a href="#notif-history" class="nav-subitem" data-page="notif-history">History</a>
+            <a href="#notif-rules" class="nav-subitem" data-page="notif-rules">Alert Rules</a>
             <a href="#notif-channels" class="nav-subitem" data-page="notif-channels">Channels</a>
+            <a href="#email-routing" class="nav-subitem" data-page="email-routing">Email Routing</a>
         </div>
     </div>
 
@@ -135,7 +125,6 @@
         </div>
         <div class="nav-submenu" id="submenu-settings">
             <a href="#settings-general" class="nav-subitem" data-page="settings-general">General</a>
-            <a href="#cache-settings" class="nav-subitem" data-page="cache-settings">Cache Settings</a>
             <a href="#settings-integrations" class="nav-subitem" data-page="settings-integrations">Integrations</a>
             <a href="#settings-api" class="nav-subitem" data-page="settings-api">API Keys</a>
         </div>

@@ -1,0 +1,768 @@
+<!-- SSH Guardian v3.0 - Trusted IPs Page -->
+<div id="page-trusted-ips" class="page-content" style="display: none;">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Trusted IPs</h1>
+            <p class="page-subtitle">Manage trusted IP addresses and networks that bypass blocking rules</p>
+        </div>
+        <div class="page-header-actions">
+            <button class="tip-btn tip-btn-primary" onclick="TrustedIPs.showAddModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                Add Trusted IP
+            </button>
+            <button class="tip-btn tip-btn-secondary" onclick="TrustedIPs.refresh()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="tip-stats-row">
+        <div class="tip-stat-card tip-stat-green">
+            <div class="tip-stat-icon">✅</div>
+            <div class="tip-stat-content">
+                <span class="tip-stat-value" id="tip-stat-total">-</span>
+                <span class="tip-stat-label">Total Trusted</span>
+            </div>
+        </div>
+        <div class="tip-stat-card tip-stat-blue">
+            <div class="tip-stat-icon">🤖</div>
+            <div class="tip-stat-content">
+                <span class="tip-stat-value" id="tip-stat-auto">-</span>
+                <span class="tip-stat-label">Auto-Trusted</span>
+            </div>
+        </div>
+        <div class="tip-stat-card tip-stat-purple">
+            <div class="tip-stat-icon">👤</div>
+            <div class="tip-stat-content">
+                <span class="tip-stat-value" id="tip-stat-manual">-</span>
+                <span class="tip-stat-label">Manually Added</span>
+            </div>
+        </div>
+        <div class="tip-stat-card tip-stat-orange">
+            <div class="tip-stat-icon">🌐</div>
+            <div class="tip-stat-content">
+                <span class="tip-stat-value" id="tip-stat-networks">-</span>
+                <span class="tip-stat-label">Networks</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trusted IPs Table -->
+    <div class="tip-card">
+        <div class="tip-card-header">
+            <div class="tip-card-title">
+                <span class="tip-card-icon">📋</span>
+                Trusted Sources
+            </div>
+            <div class="tip-card-actions">
+                <select id="tip-filter-type" onchange="TrustedIPs.applyFilters()">
+                    <option value="">All Types</option>
+                    <option value="ip">IPs Only</option>
+                    <option value="network">Networks Only</option>
+                </select>
+                <select id="tip-filter-source" onchange="TrustedIPs.applyFilters()">
+                    <option value="">All Sources</option>
+                    <option value="auto">Auto-Trusted</option>
+                    <option value="manual">Manually Added</option>
+                </select>
+                <div class="tip-search-box">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" id="tip-search" placeholder="Search IP or reason..." oninput="TrustedIPs.applyFilters()">
+                </div>
+            </div>
+        </div>
+        <div class="tip-table-wrap" id="tip-table-container">
+            <table class="tip-table" id="tip-table">
+                <thead>
+                    <tr>
+                        <th>IP / Network</th>
+                        <th>Type</th>
+                        <th>Trust Score</th>
+                        <th>Logins</th>
+                        <th>Source</th>
+                        <th>Reason</th>
+                        <th>Trusted Since</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tip-table-body">
+                    <tr><td colspan="9" class="tip-loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="tip-empty" id="tip-empty" style="display:none;">
+            <div class="tip-empty-icon">✅</div>
+            <div class="tip-empty-text">No Trusted IPs</div>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-top: 8px;">Add your first trusted IP or let the system auto-learn from successful logins</p>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="tip-modal-overlay" id="tip-modal" style="display:none;" onclick="if(event.target===this)TrustedIPs.closeModal()">
+    <div class="tip-modal">
+        <div class="tip-modal-header">
+            <div class="tip-modal-header-content">
+                <div class="tip-modal-icon">✅</div>
+                <div>
+                    <h3 id="tip-modal-title">Add Trusted IP</h3>
+                    <p class="tip-modal-subtitle">This IP will bypass all blocking rules</p>
+                </div>
+            </div>
+            <button class="tip-modal-close" onclick="TrustedIPs.closeModal()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="tip-modal-body">
+            <div class="tip-form-group">
+                <label>Type</label>
+                <div class="tip-type-toggle">
+                    <button type="button" class="tip-type-btn active" data-type="ip" onclick="TrustedIPs.setType('ip')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        Single IP
+                    </button>
+                    <button type="button" class="tip-type-btn" data-type="network" onclick="TrustedIPs.setType('network')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        Network (CIDR)
+                    </button>
+                </div>
+                <input type="hidden" id="tip-form-type" value="ip">
+            </div>
+            <div class="tip-form-group" id="tip-form-ip-group">
+                <label>IP Address <span class="tip-required">*</span></label>
+                <div class="tip-input-wrapper">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    <input type="text" id="tip-form-ip" placeholder="192.168.1.100" oninput="TrustedIPs.validateIPInput(this)">
+                </div>
+                <div class="tip-input-hint" id="tip-ip-hint">Enter a valid IPv4 address</div>
+                <div class="tip-input-error" id="tip-ip-error" style="display:none;"></div>
+            </div>
+            <div class="tip-form-group" id="tip-form-network-group" style="display:none;">
+                <label>Network CIDR <span class="tip-required">*</span></label>
+                <div class="tip-input-wrapper">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    <input type="text" id="tip-form-network" placeholder="192.168.1.0/24" oninput="TrustedIPs.validateCIDRInput(this)">
+                </div>
+                <div class="tip-input-hint" id="tip-network-hint">Enter network in CIDR notation (e.g., 10.0.0.0/8)</div>
+                <div class="tip-input-error" id="tip-network-error" style="display:none;"></div>
+            </div>
+            <div class="tip-form-group">
+                <label>Reason <span class="tip-optional">(optional)</span></label>
+                <div class="tip-input-wrapper">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                    <input type="text" id="tip-form-reason" placeholder="Office network, VPN server, etc.">
+                </div>
+            </div>
+        </div>
+        <div class="tip-modal-footer">
+            <button class="tip-btn tip-btn-secondary" onclick="TrustedIPs.closeModal()">Cancel</button>
+            <button class="tip-btn tip-btn-primary" id="tip-save-btn" onclick="TrustedIPs.saveEntry()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+                Add to Trusted
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Trusted IPs Page Styles - Following Dashboard Theme */
+#page-trusted-ips {
+    --tip-green: #10b981;
+    --tip-blue: #0078D4;
+    --tip-purple: #8b5cf6;
+    --tip-orange: #f97316;
+    --tip-red: #ef4444;
+}
+
+/* Stats Row */
+#page-trusted-ips .tip-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1100px) {
+    #page-trusted-ips .tip-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    #page-trusted-ips .tip-stats-row { grid-template-columns: 1fr; }
+}
+
+#page-trusted-ips .tip-stat-card {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#page-trusted-ips .tip-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+#page-trusted-ips .tip-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+}
+
+#page-trusted-ips .tip-stat-green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+#page-trusted-ips .tip-stat-blue::before { background: linear-gradient(90deg, #0078D4, #00a2ff); }
+#page-trusted-ips .tip-stat-purple::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+#page-trusted-ips .tip-stat-orange::before { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+#page-trusted-ips .tip-stat-icon {
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: var(--background);
+    flex-shrink: 0;
+}
+
+#page-trusted-ips .tip-stat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+#page-trusted-ips .tip-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+#page-trusted-ips .tip-stat-green .tip-stat-value { color: var(--tip-green); }
+#page-trusted-ips .tip-stat-blue .tip-stat-value { color: var(--tip-blue); }
+#page-trusted-ips .tip-stat-purple .tip-stat-value { color: var(--tip-purple); }
+#page-trusted-ips .tip-stat-orange .tip-stat-value { color: var(--tip-orange); }
+
+#page-trusted-ips .tip-stat-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Cards */
+#page-trusted-ips .tip-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#page-trusted-ips .tip-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: linear-gradient(to bottom, var(--surface), var(--background));
+}
+
+#page-trusted-ips .tip-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#page-trusted-ips .tip-card-icon { font-size: 18px; }
+
+#page-trusted-ips .tip-card-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#page-trusted-ips .tip-card-actions select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+#page-trusted-ips .tip-search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+#page-trusted-ips .tip-search-box svg {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+#page-trusted-ips .tip-search-box input {
+    border: none;
+    background: none;
+    font-size: 13px;
+    width: 160px;
+    outline: none;
+    color: var(--text-primary);
+}
+
+/* Buttons */
+#page-trusted-ips .tip-btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+}
+
+#page-trusted-ips .tip-btn-primary {
+    background: var(--tip-blue);
+    color: white;
+}
+
+#page-trusted-ips .tip-btn-primary:hover {
+    background: #106ebe;
+    transform: translateY(-1px);
+}
+
+#page-trusted-ips .tip-btn-secondary {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+#page-trusted-ips .tip-btn-secondary:hover {
+    background: var(--background);
+}
+
+#page-trusted-ips .tip-btn-danger {
+    background: transparent;
+    color: var(--tip-red);
+    border: 1px solid var(--tip-red);
+    padding: 6px 12px;
+}
+
+#page-trusted-ips .tip-btn-danger:hover {
+    background: var(--tip-red);
+    color: white;
+}
+
+/* Table */
+#page-trusted-ips .tip-table-wrap { overflow-x: auto; }
+
+#page-trusted-ips .tip-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#page-trusted-ips .tip-table th {
+    text-align: left;
+    padding: 14px 16px;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    background: var(--background);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+
+#page-trusted-ips .tip-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+#page-trusted-ips .tip-table tbody tr {
+    transition: background 0.15s;
+}
+
+#page-trusted-ips .tip-table tbody tr:hover {
+    background: var(--background);
+}
+
+#page-trusted-ips .tip-table .ip-cell {
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-weight: 600;
+    color: var(--tip-blue);
+}
+
+/* Tags */
+#page-trusted-ips .tip-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+#page-trusted-ips .tip-tag-ip { background: #dbeafe; color: #1d4ed8; }
+#page-trusted-ips .tip-tag-network { background: #fef3c7; color: #b45309; }
+#page-trusted-ips .tip-tag-auto { background: #d1fae5; color: #065f46; }
+#page-trusted-ips .tip-tag-manual { background: #e0e7ff; color: #4338ca; }
+
+/* Score */
+#page-trusted-ips .tip-score {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#page-trusted-ips .tip-score-value {
+    font-weight: 600;
+    min-width: 28px;
+}
+
+#page-trusted-ips .tip-score-bar {
+    width: 60px;
+    height: 6px;
+    background: var(--background);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#page-trusted-ips .tip-score-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+#page-trusted-ips .tip-score-high { background: linear-gradient(90deg, #10b981, #34d399); }
+#page-trusted-ips .tip-score-medium { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+#page-trusted-ips .tip-score-low { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+/* Logins cell */
+#page-trusted-ips .tip-logins {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+#page-trusted-ips .tip-logins-success {
+    color: var(--tip-green);
+    font-weight: 600;
+}
+
+#page-trusted-ips .tip-logins-failed {
+    color: var(--tip-red);
+    font-weight: 600;
+}
+
+/* Loading & Empty States */
+#page-trusted-ips .tip-loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+#page-trusted-ips .tip-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+#page-trusted-ips .tip-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+#page-trusted-ips .tip-empty-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Modal */
+#page-trusted-ips ~ .tip-modal-overlay,
+.tip-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: tipFadeIn 0.2s ease;
+}
+
+@keyframes tipFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes tipSlideIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.tip-modal {
+    background: var(--surface);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    animation: tipSlideIn 0.25s ease;
+}
+
+.tip-modal-header {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: linear-gradient(135deg, rgba(16,185,129,0.08), transparent);
+    border-radius: 16px 16px 0 0;
+}
+
+.tip-modal-header-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.tip-modal-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #10b981, #34d399);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.tip-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.tip-modal-subtitle {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.tip-modal-close {
+    background: var(--background);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--text-secondary);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.tip-modal-close:hover {
+    background: var(--tip-red);
+    border-color: var(--tip-red);
+    color: white;
+}
+
+.tip-modal-body {
+    padding: 24px;
+}
+
+.tip-modal-footer {
+    padding: 18px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: var(--background);
+    border-radius: 0 0 16px 16px;
+}
+
+/* Type Toggle */
+.tip-type-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.tip-type-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 16px;
+    border: 2px solid var(--border);
+    background: var(--background);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tip-type-btn:hover {
+    border-color: var(--tip-blue);
+    color: var(--text-primary);
+}
+
+.tip-type-btn.active {
+    border-color: var(--tip-blue);
+    background: rgba(0,120,212,0.1);
+    color: var(--tip-blue);
+}
+
+.tip-type-btn svg {
+    flex-shrink: 0;
+}
+
+/* Form Groups */
+.tip-form-group {
+    margin-bottom: 20px;
+}
+
+.tip-form-group:last-child {
+    margin-bottom: 0;
+}
+
+.tip-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.tip-required {
+    color: var(--tip-red);
+}
+
+.tip-optional {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.tip-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.tip-input-wrapper svg {
+    position: absolute;
+    left: 14px;
+    color: var(--text-secondary);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.tip-input-wrapper input {
+    width: 100%;
+    padding: 14px 14px 14px 42px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--background);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    transition: all 0.2s;
+}
+
+.tip-input-wrapper input:focus {
+    outline: none;
+    border-color: var(--tip-blue);
+    background: var(--surface);
+}
+
+.tip-input-wrapper input.valid {
+    border-color: var(--tip-green);
+}
+
+.tip-input-wrapper input.invalid {
+    border-color: var(--tip-red);
+}
+
+.tip-input-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.tip-input-error {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--tip-red);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Modal footer buttons */
+.tip-modal-footer .tip-btn {
+    padding: 12px 20px;
+}
+
+.tip-modal-footer .tip-btn-primary {
+    background: linear-gradient(135deg, var(--tip-green), #059669);
+}
+
+.tip-modal-footer .tip-btn-primary:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #page-trusted-ips .tip-card-actions {
+        width: 100%;
+    }
+
+    #page-trusted-ips .tip-search-box {
+        flex: 1;
+    }
+
+    #page-trusted-ips .tip-search-box input {
+        width: 100%;
+    }
+
+    .tip-modal {
+        margin: 16px;
+        max-width: calc(100% - 32px);
+    }
+}
+</style>

@@ -1,7 +1,7 @@
 """
 SSH Guardian v3.0 - Redis Cache Module
 High-performance caching for dashboard queries
-With configurable TTL from database
+TTL values configured via .env file
 """
 
 import redis
@@ -17,49 +17,52 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "dbs"))
 
-# Redis configuration from environment or defaults
+# Redis configuration from environment
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 
-# Cache TTL defaults (in seconds) - OPTIMIZED FOR FRESHNESS
-# Short TTLs for real-time data visibility
-# These are fallback defaults; actual TTLs are loaded from database
+# Cache TTL values from environment (in seconds)
+# Defaults provided if not set in .env
 CACHE_TTL = {
-    # Real-time data - very short TTL (15-30 seconds)
-    'events_list': 15,           # 15 seconds - events list (near real-time)
-    'events_count': 30,          # 30 seconds - total count
-    'dashboard_summary': 30,     # 30 seconds - dashboard home stats
-    'events_analysis': 30,       # 30 seconds - events analysis
-    'events_timeline': 30,       # 30 seconds - timeline data
+    # Real-time data - very short TTL
+    'events_list': int(os.getenv('CACHE_TTL_EVENTS_LIST', 15)),
+    'events_count': int(os.getenv('CACHE_TTL_EVENTS_COUNT', 15)),
+    'dashboard_summary': int(os.getenv('CACHE_TTL_DASHBOARD_SUMMARY', 15)),
+    'events_analysis': int(os.getenv('CACHE_TTL_EVENTS_ANALYSIS', 15)),
+    'events_timeline': int(os.getenv('CACHE_TTL_EVENTS_TIMELINE', 30)),
 
-    # Frequently changing data - 1-2 minutes
-    'events_stats': 60,          # 1 minute - stats summary
-    'ip_history': 60,            # 1 minute - IP history
-    'ml_predictions': 180,       # 3 minutes - ML results
-    'blocking': 60,              # 1 minute - block list
-    'audit': 120,                # 2 minutes - audit logs
-    'notifications': 60,         # 1 minute - notification history
+    # Frequently changing data
+    'events_stats': int(os.getenv('CACHE_TTL_EVENTS_STATS', 30)),
+    'ip_history': int(os.getenv('CACHE_TTL_IP_HISTORY', 30)),
+    'ml_predictions': int(os.getenv('CACHE_TTL_ML_PREDICTIONS', 60)),
+    'blocking': int(os.getenv('CACHE_TTL_BLOCKING', 30)),
+    'audit': int(os.getenv('CACHE_TTL_AUDIT', 60)),
+    'notifications': int(os.getenv('CACHE_TTL_NOTIFICATIONS', 30)),
 
-    # Semi-static data - 5-10 minutes
-    'threat_intel': 600,         # 10 minutes - threat intel (external API data)
-    'geoip': 600,                # 10 minutes - GeoIP data
-    'trends': 300,               # 5 minutes - historical trends
-    'daily_reports': 900,        # 15 minutes - daily reports
-    'ml_models': 300,            # 5 minutes - ML model info
-    'settings': 60,              # 1 minute - settings/config
+    # Semi-static data
+    'threat_intel': int(os.getenv('CACHE_TTL_THREAT_INTEL', 300)),
+    'geoip': int(os.getenv('CACHE_TTL_GEOIP', 300)),
+    'trends': int(os.getenv('CACHE_TTL_TRENDS', 120)),
+    'daily_reports': int(os.getenv('CACHE_TTL_DAILY_REPORTS', 300)),
+    'ml_models': int(os.getenv('CACHE_TTL_ML_MODELS', 120)),
+    'settings': int(os.getenv('CACHE_TTL_SETTINGS', 30)),
 }
 
-# TTL settings loaded from database (refreshed periodically)
-_db_ttl_settings = {}
-_db_enabled_settings = {}  # Track which endpoints have caching enabled
-_ttl_last_loaded = None
-_ttl_reload_interval = 60  # Reload TTL settings every 1 minute for faster updates
-_ttl_settings_version = 0  # Local version tracker
+# GLOBAL CACHE ENABLE/DISABLE TOGGLE from environment
+# When False, ALL caching is bypassed - useful for debugging
+_GLOBAL_CACHE_ENABLED = os.getenv('CACHE_ENABLED', '1') == '1'
 
-# Redis key for TTL settings version (used for immediate reload signaling)
-TTL_VERSION_KEY = "sshg:ttl_settings:version"
+def set_global_cache_enabled(enabled: bool):
+    """Enable or disable ALL caching globally"""
+    global _GLOBAL_CACHE_ENABLED
+    _GLOBAL_CACHE_ENABLED = enabled
+    print(f"[Cache] Global caching {'ENABLED' if enabled else 'DISABLED'}")
+
+def is_global_cache_enabled() -> bool:
+    """Check if global caching is enabled"""
+    return _GLOBAL_CACHE_ENABLED
 
 # Cacheable endpoints - ONLY these get cached (slow/expensive queries)
 CACHEABLE_ENDPOINTS = {
@@ -76,83 +79,29 @@ CACHEABLE_ENDPOINTS = {
 }
 
 
-def increment_ttl_version():
-    """
-    Signal that TTL settings changed - forces immediate reload.
-    Call this after updating cache_settings in database.
-    """
-    try:
-        client = get_redis_client()
-        if client:
-            client.incr(TTL_VERSION_KEY)
-    except Exception as e:
-        print(f"[Cache] Failed to increment TTL version: {e}")
-
-
-def _check_ttl_version_changed() -> bool:
-    """Check if TTL settings version changed in Redis"""
-    global _ttl_settings_version
-    try:
-        client = get_redis_client()
-        if client:
-            redis_version = client.get(TTL_VERSION_KEY)
-            if redis_version:
-                redis_version = int(redis_version)
-                if redis_version != _ttl_settings_version:
-                    _ttl_settings_version = redis_version
-                    return True
-    except Exception:
-        pass
-    return False
-
-
 def should_cache(endpoint_key: str) -> bool:
     """
     Check if an endpoint should be cached.
-    Only cache if:
-    1. Endpoint is in CACHEABLE_ENDPOINTS (slow/expensive)
-    2. Caching is enabled for this endpoint in database
+    Returns True if endpoint is in CACHEABLE_ENDPOINTS and global cache is enabled.
     """
-    global _ttl_last_loaded
-
-    # Not a cacheable endpoint type
-    if endpoint_key not in CACHEABLE_ENDPOINTS:
+    if not _GLOBAL_CACHE_ENABLED:
         return False
-
-    # Reload settings if needed
-    if _ttl_last_loaded is None or _check_ttl_version_changed():
-        _load_ttl_from_database()
-    elif (datetime.now() - _ttl_last_loaded).total_seconds() > _ttl_reload_interval:
-        _load_ttl_from_database()
-
-    # Check if enabled in database
-    return _db_enabled_settings.get(endpoint_key, False)
+    return endpoint_key in CACHEABLE_ENDPOINTS
 
 
-def _load_ttl_from_database():
-    """Load TTL settings from cache_settings table"""
-    global _db_ttl_settings, _db_enabled_settings, _ttl_last_loaded
+def get_ttl(cache_type: str = None, endpoint_key: str = None) -> int:
+    """
+    Get TTL for a cache type.
 
-    try:
-        from connection import get_connection
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        # Load ALL settings, not just enabled ones (we need to know enabled status)
-        cursor.execute("""
-            SELECT endpoint_key, ttl_seconds, is_enabled
-            FROM cache_settings
-        """)
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
+    Args:
+        cache_type: Cache type key (e.g., 'events_list', 'threat_intel')
+        endpoint_key: Endpoint key (maps to cache_type for backwards compatibility)
 
-        # Build TTL map for enabled endpoints
-        _db_ttl_settings = {row['endpoint_key']: row['ttl_seconds'] for row in rows if row['is_enabled']}
-        # Build enabled status map (for should_cache() checks)
-        _db_enabled_settings = {row['endpoint_key']: bool(row['is_enabled']) for row in rows}
-        _ttl_last_loaded = datetime.now()
-
-        # Map endpoint_key to CACHE_TTL keys
+    Returns:
+        TTL in seconds
+    """
+    # Map endpoint_key to cache_type if provided
+    if endpoint_key:
         key_mapping = {
             'events_list': 'events_list',
             'events_count': 'events_count',
@@ -175,41 +124,8 @@ def _load_ttl_from_database():
             'trends_daily': 'trends',
             'daily_reports': 'daily_reports',
         }
+        cache_type = key_mapping.get(endpoint_key, cache_type)
 
-        # Update CACHE_TTL with database values
-        for endpoint_key, ttl in _db_ttl_settings.items():
-            cache_key_name = key_mapping.get(endpoint_key, endpoint_key)
-            if cache_key_name in CACHE_TTL:
-                CACHE_TTL[cache_key_name] = ttl
-
-    except Exception as e:
-        print(f"[Cache] Failed to load TTL from database: {e}")
-
-
-def get_ttl(cache_type: str = None, endpoint_key: str = None) -> int:
-    """
-    Get TTL for a cache type or endpoint_key, loading from DB if needed.
-
-    Args:
-        cache_type: Legacy cache type key (e.g., 'events_list', 'threat_intel')
-        endpoint_key: Database endpoint_key (e.g., 'threat_intel_lookup')
-
-    Returns:
-        TTL in seconds
-    """
-    global _ttl_last_loaded
-
-    # Reload if version changed (immediate effect) or periodic reload
-    if _ttl_last_loaded is None or _check_ttl_version_changed():
-        _load_ttl_from_database()
-    elif (datetime.now() - _ttl_last_loaded).total_seconds() > _ttl_reload_interval:
-        _load_ttl_from_database()
-
-    # If endpoint_key provided, try database settings first
-    if endpoint_key and endpoint_key in _db_ttl_settings:
-        return _db_ttl_settings[endpoint_key]
-
-    # Fall back to legacy CACHE_TTL
     if cache_type:
         return CACHE_TTL.get(cache_type, 300)
 
@@ -271,46 +187,40 @@ def cache_key_hash(*args, **kwargs) -> str:
 class CacheManager:
     """Centralized cache management for SSH Guardian"""
 
-    # Buffered hit/miss tracking (flush to database periodically)
-    _hit_counts = {}
-    _miss_counts = {}
-    _last_stats_flush = None
-    _stats_flush_interval = 30  # Flush to database every 30 seconds
-
     def __init__(self):
         self.client = get_redis_client()
         self.enabled = self.client is not None
 
     def get(self, key: str, endpoint_key: str = None) -> Optional[Any]:
         """
-        Get value from cache with hit/miss tracking.
+        Get value from cache.
 
         Args:
             key: The cache key
-            endpoint_key: Optional endpoint_key for statistics tracking
+            endpoint_key: Optional endpoint_key (kept for backwards compatibility)
         """
+        # Check global cache toggle first
+        if not _GLOBAL_CACHE_ENABLED:
+            return None
+
         if not self.enabled:
-            if endpoint_key:
-                self._track_miss(endpoint_key)
             return None
 
         try:
             value = self.client.get(key)
             if value:
-                if endpoint_key:
-                    self._track_hit(endpoint_key)
                 return json.loads(value)
-            if endpoint_key:
-                self._track_miss(endpoint_key)
             return None
         except Exception as e:
             print(f"[Cache] Get error for {key}: {e}")
-            if endpoint_key:
-                self._track_miss(endpoint_key)
             return None
 
     def set(self, key: str, value: Any, ttl: int = 60) -> bool:
         """Set value in cache with TTL"""
+        # Check global cache toggle first
+        if not _GLOBAL_CACHE_ENABLED:
+            return False
+
         if not self.enabled:
             return False
 
@@ -321,63 +231,6 @@ class CacheManager:
         except Exception as e:
             print(f"[Cache] Set error for {key}: {e}")
             return False
-
-    def _track_hit(self, endpoint_key: str):
-        """Track a cache hit for an endpoint"""
-        CacheManager._hit_counts[endpoint_key] = CacheManager._hit_counts.get(endpoint_key, 0) + 1
-        self._maybe_flush_stats()
-
-    def _track_miss(self, endpoint_key: str):
-        """Track a cache miss for an endpoint"""
-        CacheManager._miss_counts[endpoint_key] = CacheManager._miss_counts.get(endpoint_key, 0) + 1
-        self._maybe_flush_stats()
-
-    def _maybe_flush_stats(self):
-        """Flush stats to database if interval has passed"""
-        now = datetime.now()
-        if CacheManager._last_stats_flush is None:
-            CacheManager._last_stats_flush = now
-            return
-
-        if (now - CacheManager._last_stats_flush).total_seconds() >= CacheManager._stats_flush_interval:
-            self._flush_stats_to_db()
-            CacheManager._last_stats_flush = now
-
-    def _flush_stats_to_db(self):
-        """Flush accumulated hit/miss counts to database"""
-        if not CacheManager._hit_counts and not CacheManager._miss_counts:
-            return
-
-        try:
-            from connection import get_connection
-            conn = get_connection()
-            cursor = conn.cursor()
-
-            # Update hits
-            for endpoint_key, count in CacheManager._hit_counts.items():
-                cursor.execute("""
-                    UPDATE cache_settings
-                    SET hit_count = hit_count + %s, updated_at = NOW()
-                    WHERE endpoint_key = %s
-                """, (count, endpoint_key))
-
-            # Update misses
-            for endpoint_key, count in CacheManager._miss_counts.items():
-                cursor.execute("""
-                    UPDATE cache_settings
-                    SET miss_count = miss_count + %s, updated_at = NOW()
-                    WHERE endpoint_key = %s
-                """, (count, endpoint_key))
-
-            conn.commit()
-            cursor.close()
-            conn.close()
-
-            # Clear buffers
-            CacheManager._hit_counts = {}
-            CacheManager._miss_counts = {}
-        except Exception as e:
-            print(f"[Cache] Failed to flush stats: {e}")
 
     def delete(self, key: str) -> bool:
         """Delete a key from cache"""
@@ -413,7 +266,62 @@ class CacheManager:
     def invalidate_ip(self, ip_address: str):
         """Invalidate all caches for a specific IP"""
         self.delete_pattern(f'ip:{ip_address}')
+        self.delete_pattern('geoip')
+        self.delete_pattern('threat')
         self.delete_pattern('events')  # Events may contain this IP
+
+    def invalidate_blocking(self):
+        """Invalidate blocking-related caches"""
+        self.delete_pattern('blocking')
+        self.delete_pattern('ip_blocks')
+        self.delete_pattern('firewall')
+
+    def invalidate_agents(self):
+        """Invalidate agent-related caches"""
+        self.delete_pattern('agents')
+        self.delete_pattern('agent')
+
+    def invalidate_settings(self):
+        """Invalidate settings-related caches"""
+        self.delete_pattern('settings')
+        self.delete_pattern('config')
+
+    def invalidate_notifications(self):
+        """Invalidate notification-related caches"""
+        self.delete_pattern('notif')
+        self.delete_pattern('notification')
+
+    def invalidate_users(self):
+        """Invalidate user-related caches"""
+        self.delete_pattern('users')
+        self.delete_pattern('user')
+        self.delete_pattern('roles')
+
+    def invalidate_ml(self):
+        """Invalidate ML-related caches"""
+        self.delete_pattern('ml')
+        self.delete_pattern('model')
+        self.delete_pattern('prediction')
+
+    def invalidate_reports(self):
+        """Invalidate reports-related caches"""
+        self.delete_pattern('reports')
+        self.delete_pattern('trends')
+        self.delete_pattern('daily')
+
+    def invalidate_audit(self):
+        """Invalidate audit-related caches"""
+        self.delete_pattern('audit')
+
+    def invalidate_geoip(self):
+        """Invalidate GeoIP-related caches"""
+        self.delete_pattern('geoip')
+        self.delete_pattern('geo')
+
+    def invalidate_threat_intel(self):
+        """Invalidate threat intelligence caches"""
+        self.delete_pattern('threat')
+        self.delete_pattern('intel')
 
     def get_or_set(self, key: str, func: callable, ttl: int = 60) -> Any:
         """Get from cache or compute and set"""
@@ -451,20 +359,6 @@ class CacheManager:
             }
         except Exception as e:
             return {'enabled': True, 'connected': False, 'error': str(e)}
-
-    def get_live_hit_stats(self) -> dict:
-        """Get current hit/miss counts in memory (before DB flush)"""
-        return {
-            'hits': dict(CacheManager._hit_counts),
-            'misses': dict(CacheManager._miss_counts),
-            'total_hits': sum(CacheManager._hit_counts.values()),
-            'total_misses': sum(CacheManager._miss_counts.values()),
-        }
-
-    def force_flush_stats(self):
-        """Force flush stats to database immediately"""
-        self._flush_stats_to_db()
-        CacheManager._last_stats_flush = datetime.now()
 
 
 # Global cache manager instance
@@ -526,6 +420,53 @@ def invalidate_on_new_event():
     cache.invalidate_events()
 
 
+def invalidate_on_block_change():
+    """Call this when IP blocks are added/removed"""
+    cache = get_cache()
+    cache.invalidate_blocking()
+    cache.invalidate_events()  # Events list may show blocked status
+
+
+def invalidate_on_agent_change():
+    """Call this when agents are added/updated/removed"""
+    cache = get_cache()
+    cache.invalidate_agents()
+
+
+def invalidate_on_settings_change():
+    """Call this when settings are updated"""
+    cache = get_cache()
+    cache.invalidate_settings()
+
+
+def invalidate_on_notification_change():
+    """Call this when notification rules/history changes"""
+    cache = get_cache()
+    cache.invalidate_notifications()
+
+
+def invalidate_on_user_change():
+    """Call this when users/roles are modified"""
+    cache = get_cache()
+    cache.invalidate_users()
+
+
+def invalidate_on_ml_change():
+    """Call this when ML models/predictions change"""
+    cache = get_cache()
+    cache.invalidate_ml()
+
+
+def invalidate_on_ip_data_change(ip_address: str = None):
+    """Call this when IP geo/threat data changes"""
+    cache = get_cache()
+    if ip_address:
+        cache.invalidate_ip(ip_address)
+    else:
+        cache.invalidate_geoip()
+        cache.invalidate_threat_intel()
+
+
 def clear_all_caches():
     """
     Clear ALL Redis cache keys
@@ -533,6 +474,164 @@ def clear_all_caches():
     """
     cache = get_cache()
     return cache.delete_pattern('')
+
+
+# ============================================================================
+# AUTO-INVALIDATION DECORATORS & HELPERS
+# ============================================================================
+# Use these decorators on Flask route functions to automatically invalidate
+# cache after database modifications
+
+from functools import wraps
+
+def auto_invalidate(*cache_types):
+    """
+    Decorator to automatically invalidate cache after a successful operation.
+
+    Usage:
+        @auto_invalidate('events', 'blocking')
+        def my_route():
+            # ... do database operations
+            return jsonify({'success': True})
+
+    Available cache_types:
+        'events', 'blocking', 'agents', 'settings', 'notifications',
+        'users', 'ml', 'reports', 'audit', 'geoip', 'threat_intel', 'all'
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            result = f(*args, **kwargs)
+
+            # Check if operation was successful (tuple means (response, status_code))
+            if isinstance(result, tuple):
+                response, status_code = result[0], result[1] if len(result) > 1 else 200
+            else:
+                response = result
+                status_code = 200
+
+            # Only invalidate on success (2xx status codes)
+            if 200 <= status_code < 300:
+                cache = get_cache()
+                for cache_type in cache_types:
+                    if cache_type == 'events':
+                        cache.invalidate_events()
+                    elif cache_type == 'blocking':
+                        cache.invalidate_blocking()
+                    elif cache_type == 'agents':
+                        cache.invalidate_agents()
+                    elif cache_type == 'settings':
+                        cache.invalidate_settings()
+                    elif cache_type == 'notifications':
+                        cache.invalidate_notifications()
+                    elif cache_type == 'users':
+                        cache.invalidate_users()
+                    elif cache_type == 'ml':
+                        cache.invalidate_ml()
+                    elif cache_type == 'reports':
+                        cache.invalidate_reports()
+                    elif cache_type == 'audit':
+                        cache.invalidate_audit()
+                    elif cache_type == 'geoip':
+                        cache.invalidate_geoip()
+                    elif cache_type == 'threat_intel':
+                        cache.invalidate_threat_intel()
+                    elif cache_type == 'all':
+                        cache.delete_pattern('')
+
+            return result
+        return decorated_function
+    return decorator
+
+
+# Map table names to cache invalidation types
+TABLE_CACHE_MAP = {
+    # Events
+    'auth_events': ['events'],
+    'auth_events_ml': ['events', 'ml'],
+    'auth_events_daily': ['events', 'reports'],
+
+    # Blocking
+    'ip_blocks': ['blocking', 'events'],
+    'blocking_rules': ['blocking'],
+    'blocking_actions': ['blocking', 'events'],
+
+    # Agents
+    'agents': ['agents'],
+    'agent_heartbeats': ['agents'],
+    'agent_ufw_state': ['agents'],
+    'agent_ufw_rules': ['agents'],
+    'agent_ufw_commands': ['agents'],
+
+    # IP Intelligence
+    'ip_geolocation': ['geoip', 'threat_intel', 'events'],
+
+    # Fail2ban
+    'fail2ban_state': ['blocking', 'agents'],
+    'fail2ban_events': ['blocking', 'agents'],
+
+    # ML
+    'ml_models': ['ml'],
+    'ml_training_runs': ['ml'],
+
+    # Notifications
+    'notification_rules': ['notifications'],
+    'notifications': ['notifications'],
+
+    # Users
+    'users': ['users'],
+    'roles': ['users'],
+    'user_sessions': ['users'],
+
+    # Settings
+    'system_settings': ['settings'],
+    'integrations': ['settings'],
+
+    # Audit
+    'audit_logs': ['audit'],
+    'ufw_audit_log': ['audit', 'agents'],
+
+    # Reports
+    'reports': ['reports'],
+}
+
+
+def invalidate_for_table(table_name: str):
+    """
+    Invalidate cache for a specific table.
+    Call this after any INSERT/UPDATE/DELETE on a table.
+
+    Usage:
+        cursor.execute("INSERT INTO ip_blocks ...")
+        conn.commit()
+        invalidate_for_table('ip_blocks')
+    """
+    cache_types = TABLE_CACHE_MAP.get(table_name, [])
+    if cache_types:
+        cache = get_cache()
+        for cache_type in cache_types:
+            if cache_type == 'events':
+                cache.invalidate_events()
+            elif cache_type == 'blocking':
+                cache.invalidate_blocking()
+            elif cache_type == 'agents':
+                cache.invalidate_agents()
+            elif cache_type == 'settings':
+                cache.invalidate_settings()
+            elif cache_type == 'notifications':
+                cache.invalidate_notifications()
+            elif cache_type == 'users':
+                cache.invalidate_users()
+            elif cache_type == 'ml':
+                cache.invalidate_ml()
+            elif cache_type == 'reports':
+                cache.invalidate_reports()
+            elif cache_type == 'audit':
+                cache.invalidate_audit()
+            elif cache_type == 'geoip':
+                cache.invalidate_geoip()
+            elif cache_type == 'threat_intel':
+                cache.invalidate_threat_intel()
 
 
 def get_cache_buster_timestamp():

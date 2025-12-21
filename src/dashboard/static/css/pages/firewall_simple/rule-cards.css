@@ -1,0 +1,245 @@
+/**
+ * SSH Guardian v3.0 - Rule Card Styles
+ * Simple rule cards and rule categories
+ */
+
+/* Rule card styles */
+.simple-rule-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    transition: border-color 0.15s;
+}
+
+.simple-rule-card:hover {
+    border-color: var(--azure-blue);
+}
+
+.rule-icon {
+    font-size: 18px;
+    width: 28px;
+    text-align: center;
+}
+
+.rule-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.rule-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.rule-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.rule-badge {
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.rule-badge.allow {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.rule-badge.block, .rule-badge.deny {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
+.rule-delete-btn {
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.rule-delete-btn:hover {
+    background: var(--color-danger-bg);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+/* Rule Category Card */
+.rule-category-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.rule-category-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.rule-category-header:hover {
+    background: var(--background);
+}
+
+.rule-category-icon {
+    font-size: 20px;
+}
+
+.rule-category-info {
+    flex: 1;
+}
+
+.rule-category-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rule-category-info p {
+    margin: 2px 0 0 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.rule-category-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+.rule-category-toggle {
+    color: var(--text-secondary);
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+.rule-category-card.expanded .rule-category-toggle {
+    transform: rotate(180deg);
+}
+
+.rule-category-content {
+    border-top: 1px solid var(--border);
+    padding: 8px;
+    background: var(--background);
+}
+
+/* Rule Item */
+.rule-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.rule-item:last-child {
+    margin-bottom: 0;
+}
+
+.rule-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.rule-status.active {
+    background: var(--color-success-light);
+}
+
+.rule-status.inactive {
+    background: var(--color-gray-cool);
+}
+
+.rule-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rule-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.rule-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.rule-action {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-purple);
+    background: rgba(99, 102, 241, 0.1);
+    padding: 3px 8px;
+    border-radius: 3px;
+}
+
+/* Rule name tooltip styles */
+.rule-tooltip-container {
+    position: fixed;
+    z-index: 10000;
+    max-width: 420px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, var(--terminal-bg-dark) 0%, #16213e 100%);
+    color: var(--color-gray-light);
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.rule-tooltip-container.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.rule-tooltip-container::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 20px;
+    width: 12px;
+    height: 12px;
+    background: var(--terminal-bg-dark);
+    transform: rotate(45deg);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rule-name-tooltip {
+    position: relative;
+}
+
+.rule-name-tooltip:hover {
+    color: var(--azure-blue);
+}

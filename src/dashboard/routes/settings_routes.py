@@ -1,6 +1,7 @@
 """
-Settings Routes - API endpoints for system settings management
-With Redis caching for improved performance
+SSH Guardian v3.1 - Settings Routes
+API endpoints for system settings management
+Simplified and optimized for new database schema
 """
 import sys
 from pathlib import Path
@@ -12,10 +13,13 @@ sys.path.append(str(PROJECT_ROOT / "dbs"))
 sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
-from cache import get_cache, cache_key, cache_key_hash
+from cache import get_cache, cache_key, cache_key_hash, invalidate_on_settings_change
 from auth import AuditLogger
 
 settings_routes = Blueprint('settings', __name__)
+
+# Cache TTL from environment (falls back to cache module defaults)
+SETTINGS_CACHE_TTL = 300  # 5 minutes
 
 
 def get_current_user_id():
@@ -25,16 +29,9 @@ def get_current_user_id():
     return None
 
 
-# Cache TTLs - OPTIMIZED FOR PERFORMANCE
-SETTINGS_LIST_TTL = 1800      # 30 minutes for settings list
-SETTINGS_DETAIL_TTL = 1800    # 30 minutes for single setting detail
-
-
-def invalidate_settings_cache():
-    """Invalidate all settings caches"""
-    cache = get_cache()
-    cache.delete_pattern('settings')
-
+# =============================================================================
+# SETTINGS LIST API
+# =============================================================================
 
 @settings_routes.route('/list', methods=['GET'])
 def get_settings():
@@ -48,167 +45,105 @@ def get_settings():
 
         # Try cache first
         cache = get_cache()
-        cache_params = {'category': category}
-        cache_k = cache_key_hash('settings', 'list', cache_params)
+        cache_k = cache_key_hash('settings', 'list', category=category)
         cached = cache.get(cache_k)
         if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
+            return jsonify({'success': True, 'data': cached, 'from_cache': True})
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         if category:
             cursor.execute("""
-                SELECT id, setting_key, setting_value, setting_type, category, description, is_sensitive
+                SELECT id, setting_key, setting_value, value_type, category,
+                       description, is_sensitive
                 FROM system_settings
                 WHERE category = %s
                 ORDER BY category, setting_key
             """, (category,))
         else:
             cursor.execute("""
-                SELECT id, setting_key, setting_value, setting_type, category, description, is_sensitive
+                SELECT id, setting_key, setting_value, value_type, category,
+                       description, is_sensitive
                 FROM system_settings
                 ORDER BY category, setting_key
             """)
 
         settings = cursor.fetchall()
+        cursor.close()
+        conn.close()
 
         # Group by category
-        grouped_settings = {}
+        grouped = {}
         for setting in settings:
             cat = setting['category']
-            if cat not in grouped_settings:
-                grouped_settings[cat] = []
-            grouped_settings[cat].append(setting)
+            if cat not in grouped:
+                grouped[cat] = []
+            # Map value_type to setting_type for frontend compatibility
+            setting['setting_type'] = setting.pop('value_type', 'string')
+            grouped[cat].append(setting)
 
-        cursor.close()
-        conn.close()
+        result = {'settings': settings, 'grouped': grouped}
+        cache.set(cache_k, result, SETTINGS_CACHE_TTL)
 
-        result_data = {
-            'settings': settings,
-            'grouped': grouped_settings
-        }
-
-        # Cache the result
-        cache.set(cache_k, result_data, SETTINGS_LIST_TTL)
-
-        return jsonify({
-            'success': True,
-            'data': result_data,
-            'from_cache': False
-        })
+        return jsonify({'success': True, 'data': result, 'from_cache': False})
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@settings_routes.route('/<int:setting_id>', methods=['GET'])
-def get_setting(setting_id):
-    """
-    Get a specific setting by ID
-    """
-    try:
-        # Try cache first
-        cache = get_cache()
-        cache_k = cache_key('settings', 'detail', str(setting_id))
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
-
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("""
-            SELECT id, setting_key, setting_value, setting_type, category, description, is_sensitive
-            FROM system_settings
-            WHERE id = %s
-        """, (setting_id,))
-
-        setting = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if not setting:
-            return jsonify({
-                'success': False,
-                'error': 'Setting not found'
-            }), 404
-
-        # Cache the result
-        cache.set(cache_k, setting, SETTINGS_DETAIL_TTL)
-
-        return jsonify({
-            'success': True,
-            'data': setting,
-            'from_cache': False
-        })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
+# =============================================================================
+# UPDATE SETTINGS APIs
+# =============================================================================
 
 @settings_routes.route('/<int:setting_id>', methods=['PUT'])
 def update_setting(setting_id):
     """
-    Update a setting value
-    Body params:
-    - setting_value: New value for the setting
+    Update a setting value by ID
+    Body: { "setting_value": "new_value" }
     """
     try:
         data = request.get_json()
         setting_value = data.get('setting_value')
 
         if setting_value is None:
-            return jsonify({
-                'success': False,
-                'error': 'setting_value is required'
-            }), 400
+            return jsonify({'success': False, 'error': 'setting_value is required'}), 400
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         # Update the setting
+        user_id = get_current_user_id()
         cursor.execute("""
             UPDATE system_settings
-            SET setting_value = %s, updated_at = NOW()
+            SET setting_value = %s, updated_by_user_id = %s, updated_at = NOW()
             WHERE id = %s
-        """, (str(setting_value), setting_id))
+        """, (str(setting_value), user_id, setting_id))
+
+        if cursor.rowcount == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Setting not found'}), 404
 
         conn.commit()
 
-        # Get the updated setting
+        # Get updated setting for response
         cursor.execute("""
-            SELECT id, setting_key, setting_value, setting_type, category, description
-            FROM system_settings
-            WHERE id = %s
+            SELECT id, setting_key, setting_value, value_type as setting_type,
+                   category, description
+            FROM system_settings WHERE id = %s
         """, (setting_id,))
-
         setting = cursor.fetchone()
 
         cursor.close()
         conn.close()
 
-        # Invalidate cache after update
-        invalidate_settings_cache()
+        # Invalidate cache
+        invalidate_on_settings_change()
 
         # Audit log
         AuditLogger.log_action(
-            user_id=get_current_user_id(),
+            user_id=user_id,
             action='setting_updated',
             resource_type='setting',
             resource_id=str(setting_id),
@@ -217,40 +152,30 @@ def update_setting(setting_id):
             user_agent=request.headers.get('User-Agent')
         )
 
-        return jsonify({
-            'success': True,
-            'message': 'Setting updated successfully',
-            'data': setting
-        })
+        return jsonify({'success': True, 'message': 'Setting updated', 'data': setting})
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @settings_routes.route('/bulk-update', methods=['POST'])
 def bulk_update_settings():
     """
     Update multiple settings at once
-    Body params:
-    - settings: Array of {id, setting_value} objects
+    Body: { "settings": [{ "id": 1, "setting_value": "value" }, ...] }
     """
     try:
         data = request.get_json()
         settings = data.get('settings', [])
 
         if not settings:
-            return jsonify({
-                'success': False,
-                'error': 'settings array is required'
-            }), 400
+            return jsonify({'success': False, 'error': 'settings array is required'}), 400
 
         conn = get_connection()
         cursor = conn.cursor()
+        user_id = get_current_user_id()
+        updated_count = 0
 
-        # Update each setting
         for setting in settings:
             setting_id = setting.get('id')
             setting_value = setting.get('setting_value')
@@ -258,177 +183,56 @@ def bulk_update_settings():
             if setting_id and setting_value is not None:
                 cursor.execute("""
                     UPDATE system_settings
-                    SET setting_value = %s, updated_at = NOW()
+                    SET setting_value = %s, updated_by_user_id = %s, updated_at = NOW()
                     WHERE id = %s
-                """, (str(setting_value), setting_id))
+                """, (str(setting_value), user_id, setting_id))
+                updated_count += cursor.rowcount
 
         conn.commit()
         cursor.close()
         conn.close()
 
-        # Invalidate cache after bulk update
-        invalidate_settings_cache()
+        # Invalidate cache
+        invalidate_on_settings_change()
 
         # Audit log
         AuditLogger.log_action(
-            user_id=get_current_user_id(),
+            user_id=user_id,
             action='settings_bulk_updated',
             resource_type='setting',
             resource_id='bulk',
-            details={'settings_count': len(settings), 'setting_ids': [s.get('id') for s in settings]},
+            details={'count': updated_count, 'setting_ids': [s.get('id') for s in settings]},
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
 
-        return jsonify({
-            'success': True,
-            'message': f'{len(settings)} settings updated successfully'
-        })
+        return jsonify({'success': True, 'message': f'{updated_count} settings updated'})
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@settings_routes.route('/key/<setting_key>', methods=['GET'])
-def get_setting_by_key(setting_key):
-    """
-    Get a setting by its key name
-    """
-    try:
-        cache = get_cache()
-        cache_k = cache_key('settings', 'key', setting_key)
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
+# =============================================================================
+# NAVIGATION SETTINGS
+# =============================================================================
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("""
-            SELECT id, setting_key, setting_value, setting_type, category, description
-            FROM system_settings
-            WHERE setting_key = %s
-        """, (setting_key,))
-
-        setting = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        if not setting:
-            return jsonify({
-                'success': False,
-                'error': f'Setting "{setting_key}" not found'
-            }), 404
-
-        cache.set(cache_k, setting, SETTINGS_DETAIL_TTL)
-
-        return jsonify({
-            'success': True,
-            'data': setting,
-            'from_cache': False
-        })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@settings_routes.route('/key/<setting_key>', methods=['PUT'])
-def update_setting_by_key(setting_key):
-    """
-    Update a setting by its key name
-    Body params:
-    - setting_value: New value for the setting
-    """
-    try:
-        data = request.get_json()
-        setting_value = data.get('setting_value')
-
-        if setting_value is None:
-            return jsonify({
-                'success': False,
-                'error': 'setting_value is required'
-            }), 400
-
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("""
-            UPDATE system_settings
-            SET setting_value = %s, updated_at = NOW()
-            WHERE setting_key = %s
-        """, (str(setting_value), setting_key))
-
-        if cursor.rowcount == 0:
-            cursor.close()
-            conn.close()
-            return jsonify({
-                'success': False,
-                'error': f'Setting "{setting_key}" not found'
-            }), 404
-
-        conn.commit()
-
-        cursor.execute("""
-            SELECT id, setting_key, setting_value, setting_type, category, description
-            FROM system_settings
-            WHERE setting_key = %s
-        """, (setting_key,))
-
-        setting = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        invalidate_settings_cache()
-
-        # Audit log
-        AuditLogger.log_action(
-            user_id=get_current_user_id(),
-            action='setting_updated',
-            resource_type='setting',
-            resource_id=setting_key,
-            details={'setting_key': setting_key, 'new_value': setting_value},
-            ip_address=request.remote_addr,
-            user_agent=request.headers.get('User-Agent')
-        )
-
-        return jsonify({
-            'success': True,
-            'message': f'Setting "{setting_key}" updated successfully',
-            'data': setting
-        })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# Available landing pages - defined once
+AVAILABLE_LANDING_PAGES = [
+    {'value': 'overview', 'label': 'Overview (User Guide & Research)'},
+    {'value': 'dashboard', 'label': 'Dashboard (Analytics)'},
+    {'value': 'events-live', 'label': 'Live Events'}
+]
 
 
 @settings_routes.route('/navigation', methods=['GET'])
 def get_navigation_settings():
-    """
-    Get navigation settings (default landing page, etc.)
-    """
+    """Get navigation settings (default landing page)"""
     try:
         cache = get_cache()
-        cache_k = cache_key('settings', 'navigation', 'all')
+        cache_k = cache_key('settings', 'navigation')
         cached = cache.get(cache_k)
         if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
+            return jsonify({'success': True, 'data': cached, 'from_cache': True})
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -436,127 +240,126 @@ def get_navigation_settings():
         cursor.execute("""
             SELECT setting_key, setting_value
             FROM system_settings
-            WHERE setting_key IN ('default_landing_page')
+            WHERE setting_key = 'default_landing_page'
         """)
-
-        rows = cursor.fetchall()
+        row = cursor.fetchone()
         cursor.close()
         conn.close()
 
-        # Convert to dictionary with defaults
-        nav_settings = {row['setting_key']: row['setting_value'] for row in rows}
+        result = {
+            'default_landing_page': row['setting_value'] if row else 'overview',
+            'available_landing_pages': AVAILABLE_LANDING_PAGES
+        }
 
-        # Set defaults if not in database
-        if 'default_landing_page' not in nav_settings:
-            nav_settings['default_landing_page'] = 'overview'
-
-        nav_settings['available_landing_pages'] = [
-            {'value': 'overview', 'label': 'Overview (User Guide & Research)'},
-            {'value': 'dashboard', 'label': 'Dashboard (Analytics)'},
-            {'value': 'events-live', 'label': 'Live Events'}
-        ]
-
-        cache.set(cache_k, nav_settings, 3600)  # 1 hour cache
-
-        return jsonify({
-            'success': True,
-            'data': nav_settings,
-            'from_cache': False
-        })
+        cache.set(cache_k, result, SETTINGS_CACHE_TTL)
+        return jsonify({'success': True, 'data': result, 'from_cache': False})
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @settings_routes.route('/navigation', methods=['PUT'])
 def update_navigation_settings():
     """
     Update navigation settings
-    Body params:
-    - default_landing_page: 'overview', 'dashboard', or 'events-live'
+    Body: { "default_landing_page": "overview" }
     """
     try:
         data = request.get_json()
-
         if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        new_page = data.get('default_landing_page')
+        valid_pages = [p['value'] for p in AVAILABLE_LANDING_PAGES]
+
+        if new_page and new_page not in valid_pages:
             return jsonify({
                 'success': False,
-                'error': 'No data provided'
+                'error': f'Invalid landing page. Must be one of: {", ".join(valid_pages)}'
             }), 400
 
         conn = get_connection()
         cursor = conn.cursor()
+        user_id = get_current_user_id()
 
-        valid_pages = ['overview', 'dashboard', 'events-live']
-        updated = []
-
-        if 'default_landing_page' in data:
-            new_value = data['default_landing_page']
-            if new_value not in valid_pages:
-                cursor.close()
-                conn.close()
-                return jsonify({
-                    'success': False,
-                    'error': f'Invalid landing page. Must be one of: {", ".join(valid_pages)}'
-                }), 400
-
-            # Try to update, if not exists, insert
-            cursor.execute("""
-                INSERT INTO system_settings (setting_key, setting_value, setting_type, category, description)
-                VALUES (%s, %s, 'string', 'navigation', 'Default page shown after login')
-                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()
-            """, ('default_landing_page', new_value))
-            updated.append('default_landing_page')
+        # Upsert the setting
+        cursor.execute("""
+            INSERT INTO system_settings (setting_key, setting_value, value_type, category, description, updated_by_user_id)
+            VALUES ('default_landing_page', %s, 'string', 'navigation', 'Default page shown after login', %s)
+            ON DUPLICATE KEY UPDATE
+                setting_value = VALUES(setting_value),
+                updated_by_user_id = VALUES(updated_by_user_id),
+                updated_at = NOW()
+        """, (new_page, user_id))
 
         conn.commit()
         cursor.close()
         conn.close()
 
-        invalidate_settings_cache()
+        # Invalidate cache
+        invalidate_on_settings_change()
 
         # Audit log
-        if updated:
-            AuditLogger.log_action(
-                user_id=get_current_user_id(),
-                action='navigation_settings_updated',
-                resource_type='setting',
-                resource_id='navigation',
-                details={'updated_keys': updated, 'new_values': {k: data.get(k) for k in updated}},
-                ip_address=request.remote_addr,
-                user_agent=request.headers.get('User-Agent')
-            )
+        AuditLogger.log_action(
+            user_id=user_id,
+            action='navigation_settings_updated',
+            resource_type='setting',
+            resource_id='navigation',
+            details={'default_landing_page': new_page},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
 
-        return jsonify({
-            'success': True,
-            'message': f'Navigation settings updated: {", ".join(updated)}',
-            'updated': updated
-        })
+        return jsonify({'success': True, 'message': 'Navigation settings updated'})
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# TIME SETTINGS
+# =============================================================================
+
+# Available options - defined once
+AVAILABLE_TIMEZONES = [
+    'Local', 'UTC',
+    # Americas
+    'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+    'America/Phoenix', 'America/Anchorage', 'America/Toronto', 'America/Vancouver',
+    'America/Mexico_City', 'America/Bogota', 'America/Lima', 'America/Santiago',
+    'America/Sao_Paulo', 'America/Buenos_Aires', 'America/Caracas',
+    # Europe
+    'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome',
+    'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Vienna',
+    'Europe/Warsaw', 'Europe/Prague', 'Europe/Stockholm', 'Europe/Oslo',
+    'Europe/Helsinki', 'Europe/Athens', 'Europe/Moscow', 'Europe/Istanbul',
+    # Asia
+    'Asia/Dubai', 'Asia/Riyadh', 'Asia/Tehran', 'Asia/Karachi', 'Asia/Kolkata',
+    'Asia/Dhaka', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Ho_Chi_Minh',
+    'Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai',
+    'Asia/Taipei', 'Asia/Seoul', 'Asia/Tokyo', 'Asia/Manila',
+    # Africa
+    'Africa/Cairo', 'Africa/Lagos', 'Africa/Johannesburg', 'Africa/Nairobi',
+    # Australia & Pacific
+    'Australia/Perth', 'Australia/Adelaide', 'Australia/Sydney', 'Australia/Brisbane',
+    'Australia/Melbourne', 'Pacific/Auckland', 'Pacific/Fiji', 'Pacific/Honolulu'
+]
+
+AVAILABLE_TIME_FORMATS = ['12h', '24h']
+AVAILABLE_DATE_FORMATS = ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY']
+
+TIME_SETTING_KEYS = ['time_format', 'date_format', 'timezone', 'datetime_format']
 
 
 @settings_routes.route('/time', methods=['GET'])
 def get_time_settings():
-    """
-    Get all time-related settings (timezone, format, etc.)
-    """
+    """Get time-related settings (timezone, format)"""
     try:
         cache = get_cache()
-        cache_k = cache_key('settings', 'time', 'all')
+        cache_k = cache_key('settings', 'time')
         cached = cache.get(cache_k)
         if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached,
-                'from_cache': True
-            })
+            return jsonify({'success': True, 'data': cached, 'from_cache': True})
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -566,92 +369,48 @@ def get_time_settings():
             FROM system_settings
             WHERE setting_key IN ('time_format', 'date_format', 'timezone', 'datetime_format')
         """)
-
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
 
-        # Convert to dictionary
-        time_settings = {row['setting_key']: row['setting_value'] for row in rows}
+        # Convert to dictionary with defaults
+        result = {row['setting_key']: row['setting_value'] for row in rows}
 
-        # Add comprehensive timezone list for frontend
-        time_settings['available_timezones'] = [
-            # Browser local timezone (auto-detect from user's browser)
-            'Local',
-            # UTC
-            'UTC',
-            # Americas
-            'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-            'America/Phoenix', 'America/Anchorage', 'America/Toronto', 'America/Vancouver',
-            'America/Mexico_City', 'America/Bogota', 'America/Lima', 'America/Santiago',
-            'America/Sao_Paulo', 'America/Buenos_Aires', 'America/Caracas',
-            # Europe
-            'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome',
-            'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Vienna',
-            'Europe/Warsaw', 'Europe/Prague', 'Europe/Stockholm', 'Europe/Oslo',
-            'Europe/Helsinki', 'Europe/Athens', 'Europe/Moscow', 'Europe/Istanbul',
-            # Asia
-            'Asia/Dubai', 'Asia/Riyadh', 'Asia/Tehran', 'Asia/Karachi', 'Asia/Kolkata',
-            'Asia/Dhaka', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Ho_Chi_Minh',
-            'Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai',
-            'Asia/Taipei', 'Asia/Seoul', 'Asia/Tokyo', 'Asia/Manila',
-            # Africa
-            'Africa/Cairo', 'Africa/Lagos', 'Africa/Johannesburg', 'Africa/Nairobi',
-            # Australia & Pacific
-            'Australia/Perth', 'Australia/Adelaide', 'Australia/Sydney', 'Australia/Brisbane',
-            'Australia/Melbourne', 'Pacific/Auckland', 'Pacific/Fiji', 'Pacific/Honolulu'
-        ]
+        # Add available options for frontend
+        result['available_timezones'] = AVAILABLE_TIMEZONES
+        result['available_time_formats'] = AVAILABLE_TIME_FORMATS
+        result['available_date_formats'] = AVAILABLE_DATE_FORMATS
 
-        time_settings['available_time_formats'] = ['12h', '24h']
-        time_settings['available_date_formats'] = ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY']
-
-        cache.set(cache_k, time_settings, SETTINGS_DETAIL_TTL)
-
-        return jsonify({
-            'success': True,
-            'data': time_settings,
-            'from_cache': False
-        })
+        cache.set(cache_k, result, SETTINGS_CACHE_TTL)
+        return jsonify({'success': True, 'data': result, 'from_cache': False})
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @settings_routes.route('/time', methods=['PUT'])
 def update_time_settings():
     """
     Update time-related settings
-    Body params:
-    - time_format: '12h' or '24h'
-    - date_format: 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY'
-    - timezone: Timezone string
-    - datetime_format: Full datetime format string
+    Body: { "time_format": "24h", "date_format": "YYYY-MM-DD", "timezone": "UTC" }
     """
     try:
         data = request.get_json()
-
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
 
         conn = get_connection()
         cursor = conn.cursor()
-
-        valid_keys = ['time_format', 'date_format', 'timezone', 'datetime_format']
+        user_id = get_current_user_id()
         updated = []
 
-        for key in valid_keys:
+        for key in TIME_SETTING_KEYS:
             if key in data and data[key] is not None:
                 cursor.execute("""
                     UPDATE system_settings
-                    SET setting_value = %s, updated_at = NOW()
+                    SET setting_value = %s, updated_by_user_id = %s, updated_at = NOW()
                     WHERE setting_key = %s
-                """, (str(data[key]), key))
+                """, (str(data[key]), user_id, key))
                 if cursor.rowcount > 0:
                     updated.append(key)
 
@@ -659,28 +418,26 @@ def update_time_settings():
         cursor.close()
         conn.close()
 
-        invalidate_settings_cache()
+        # Invalidate cache
+        invalidate_on_settings_change()
 
         # Audit log
         if updated:
             AuditLogger.log_action(
-                user_id=get_current_user_id(),
+                user_id=user_id,
                 action='time_settings_updated',
                 resource_type='setting',
                 resource_id='time',
-                details={'updated_keys': updated, 'new_values': {k: data.get(k) for k in updated}},
+                details={'updated': updated, 'values': {k: data.get(k) for k in updated}},
                 ip_address=request.remote_addr,
                 user_agent=request.headers.get('User-Agent')
             )
 
         return jsonify({
             'success': True,
-            'message': f'Time settings updated: {", ".join(updated)}',
+            'message': f'Time settings updated: {", ".join(updated)}' if updated else 'No changes',
             'updated': updated
         })
 
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500

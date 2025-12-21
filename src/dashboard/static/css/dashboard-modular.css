@@ -2,6 +2,7 @@
 /* This file imports all component stylesheets */
 
 @import url('components/variables.css');
+@import url('components/logo.css');
 @import url('components/topbar.css');
 @import url('components/sidebar.css');
 @import url('components/layout.css');
@@ -18,10 +19,18 @@
 @import url('components/toggle.css');
 @import url('components/modals.css');
 @import url('components/agents.css');
-@import url('components/agent_search.css');
-@import url('components/agent_details_modal.css');
 @import url('components/ip_analysis_modal.css');
-@import url('components/dashboard_home.css');
-@import url('components/overview.css');
+
+/* Overview page - modular components */
+@import url('components/section-header.css');
+@import url('components/overview-tabs.css');
+@import url('components/overview-hero.css');
+@import url('components/overview-actions.css');
+@import url('components/overview-wizard.css');
+@import url('components/overview-thesis.css');
+@import url('components/overview-responsive.css');
+
 @import url('components/notification_pane.css');
+@import url('components/notification_history.css');
+@import url('components/footer.css');
 @import url('components/responsive.css');

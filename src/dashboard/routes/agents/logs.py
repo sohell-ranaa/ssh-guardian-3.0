@@ -47,25 +47,18 @@ def submit_logs():
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
+        batch_id = None
 
         try:
             # Create batch record
             cursor.execute("""
                 INSERT INTO agent_log_batches (
-                    batch_uuid, agent_id, batch_size,
-                    processing_status, source_filename, upload_ip
-                ) VALUES (%s, %s, %s, 'processing', %s, %s)
-            """, (batch_uuid, agent['id'], batch_size, source_filename, request.remote_addr))
+                    batch_uuid, agent_id, log_source, events_count,
+                    status, processing_started_at
+                ) VALUES (%s, %s, %s, %s, 'processing', NOW())
+            """, (batch_uuid, agent['id'], source_filename, batch_size))
 
             batch_id = cursor.lastrowid
-
-            # Update batch processing start time
-            cursor.execute("""
-                UPDATE agent_log_batches
-                SET processing_started_at = NOW()
-                WHERE id = %s
-            """, (batch_id,))
-
             conn.commit()
 
             # Process log lines
@@ -102,16 +95,13 @@ def submit_logs():
             # Update batch record with results
             cursor.execute("""
                 UPDATE agent_log_batches
-                SET events_created = %s,
+                SET events_processed = %s,
                     events_failed = %s,
-                    failed_log_lines = %s,
-                    processing_status = 'completed',
+                    status = 'completed',
                     processing_completed_at = NOW(),
                     processing_duration_ms = TIMESTAMPDIFF(MICROSECOND, processing_started_at, NOW()) / 1000
                 WHERE id = %s
-            """, (events_created, events_failed,
-                 json.dumps(failed_lines[:10]) if failed_lines else None,  # Store only first 10 failed lines
-                 batch_id))
+            """, (events_created, events_failed, batch_id))
 
             # Update agent statistics
             cursor.execute("""
@@ -135,14 +125,15 @@ def submit_logs():
 
         except Exception as e:
             # Mark batch as failed
-            cursor.execute("""
-                UPDATE agent_log_batches
-                SET processing_status = 'failed',
-                    error_message = %s,
-                    processing_completed_at = NOW()
-                WHERE id = %s
-            """, (str(e), batch_id))
-            conn.commit()
+            if batch_id:
+                cursor.execute("""
+                    UPDATE agent_log_batches
+                    SET status = 'failed',
+                        error_message = %s,
+                        processing_completed_at = NOW()
+                    WHERE id = %s
+                """, (str(e), batch_id))
+                conn.commit()
             raise
 
         finally:

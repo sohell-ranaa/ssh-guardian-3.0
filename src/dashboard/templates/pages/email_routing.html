@@ -1,0 +1,79 @@
+<!-- SSH Guardian v3.1 - Email Routing Page -->
+<div id="page-email-routing" class="page-content" style="display: none;">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">Email Routing</h2>
+            <p class="page-subtitle">Route notifications from specific agents and rule types to designated email addresses</p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="email-routing-create-btn" class="btn btn-primary">+ Create Rule</button>
+            <button class="refresh-btn" onclick="loadEmailRoutingPage()">
+                <span class="refresh-icon">↻</span> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #0078D4, #005A9E);">
+                <span>📧</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Routing Rules</div>
+                <div class="stat-value" id="stat-routing-rules">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                <span>✓</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Active</div>
+                <div class="stat-value" id="stat-active-routing">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                <span>📬</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Unique Emails</div>
+                <div class="stat-value" id="stat-unique-emails">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <span>🖥️</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Agents Covered</div>
+                <div class="stat-value" id="stat-agents-covered">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="info-banner" style="margin-bottom: 20px;">
+        <span class="info-banner-icon">💡</span>
+        <div class="info-banner-text">
+            <strong>Email Routing</strong> allows you to send different types of alerts to different email addresses.
+            For example, send brute force alerts to the security team and system alerts to the ops team.
+            Make sure <a href="#notif-channels" style="color: var(--azure-blue);">SMTP is configured</a> first.
+        </div>
+    </div>
+
+    <!-- Routing Rules Container -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Routing Rules</h3>
+        </div>
+        <div id="email-routing-container" class="card-body">
+            <div class="loading-placeholder">
+                <div class="loading-spinner"></div>
+                <span>Loading routing rules...</span>
+            </div>
+        </div>
+    </div>
+</div>

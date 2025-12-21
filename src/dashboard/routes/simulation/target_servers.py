@@ -488,7 +488,7 @@ def get_agents_for_targets():
                 a.id as agent_id,
                 a.hostname,
                 a.display_name,
-                a.ip_address_primary,
+                a.ip_address,
                 a.status as agent_status,
                 a.is_active as agent_active,
                 a.last_heartbeat,
@@ -515,7 +515,7 @@ def get_agents_for_targets():
             # Mark if simulation is enabled
             agent['sim_enabled'] = agent.get('sim_target_id') is not None
             # Mark if this is a local agent (same machine as dashboard)
-            agent['is_local'] = is_local_ip(agent.get('ip_address_primary', ''))
+            agent['is_local'] = is_local_ip(agent.get('ip_address', ''))
 
         cursor.close()
         conn.close()
@@ -545,7 +545,7 @@ def enable_simulation_for_agent(agent_id):
 
         # Get agent details
         cursor.execute("""
-            SELECT id, hostname, display_name, ip_address_primary
+            SELECT id, hostname, display_name, ip_address
             FROM agents WHERE id = %s AND is_active = TRUE
         """, (agent_id,))
 
@@ -563,7 +563,7 @@ def enable_simulation_for_agent(agent_id):
             return jsonify({'success': False, 'error': 'Simulation already enabled for this agent'}), 400
 
         # Use custom IP if provided, otherwise use agent's registered IP
-        ip_address = custom_ip if custom_ip else agent['ip_address_primary']
+        ip_address = custom_ip if custom_ip else agent['ip_address']
 
         if not ip_address:
             cursor.close()
@@ -662,7 +662,7 @@ def update_agent_simulation_config(agent_id):
 
         # Get current simulation target for this agent
         cursor.execute("""
-            SELECT st.*, a.ip_address_primary
+            SELECT st.*, a.ip_address as agent_ip_address
             FROM simulation_targets st
             JOIN agents a ON st.agent_id = a.id
             WHERE st.agent_id = %s

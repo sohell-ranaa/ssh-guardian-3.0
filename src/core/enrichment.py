@@ -102,6 +102,8 @@ class EventEnricher:
         self._threat_intel_module = None
         self._ml_manager = None
         self._notification_module = None
+        self._behavioral_scorer = None
+        self._behavioral_learner = None
 
     def _log(self, message: str):
         """Print message if verbose mode enabled"""
@@ -148,19 +150,36 @@ class EventEnricher:
         """Lazy load Notification Dispatcher"""
         if self._notification_module is None:
             try:
-                from core.notification_dispatcher import notify_high_risk, notify_anomaly, notify_new_location
+                from core.notification_dispatcher import notify_high_risk, notify_anomaly
                 self._notification_module = {
                     'high_risk': notify_high_risk,
-                    'anomaly': notify_anomaly,
-                    'new_location': notify_new_location
+                    'anomaly': notify_anomaly
                 }
-            except ImportError:
-                self._log("⚠️  Notification module not available")
+            except ImportError as e:
+                self._log(f"⚠️  Notification module not available: {e}")
                 self._notification_module = False
             except Exception as e:
                 self._log(f"⚠️  Notification module error: {e}")
                 self._notification_module = False
         return self._notification_module
+
+    def _get_behavioral_modules(self):
+        """Lazy load ML Behavioral Scorer and Learner"""
+        if self._behavioral_scorer is None:
+            try:
+                from core.ml_anomaly_scorer import MLAnomalyScorer
+                from core.ml_behavioral_learner import MLBehavioralLearner
+                self._behavioral_scorer = MLAnomalyScorer(verbose=self.verbose)
+                self._behavioral_learner = MLBehavioralLearner(verbose=self.verbose)
+            except ImportError as e:
+                self._log(f"⚠️  Behavioral ML modules not available: {e}")
+                self._behavioral_scorer = False
+                self._behavioral_learner = False
+            except Exception as e:
+                self._log(f"⚠️  Behavioral ML module error: {e}")
+                self._behavioral_scorer = False
+                self._behavioral_learner = False
+        return self._behavioral_scorer, self._behavioral_learner
 
     def _check_new_location(self, username: str, geo_data: Dict, source_ip: str) -> Tuple[bool, Optional[Dict]]:
         """
@@ -256,7 +275,8 @@ class EventEnricher:
                      skip_geoip: bool = False,
                      skip_ml: bool = False,
                      skip_threat_intel: bool = False,
-                     skip_blocking: bool = False) -> Dict:
+                     skip_blocking: bool = False,
+                     skip_learning: bool = False) -> Dict:
         """
         Full enrichment pipeline for a single event.
 
@@ -273,6 +293,7 @@ class EventEnricher:
             skip_ml: Skip ML prediction
             skip_threat_intel: Skip threat intelligence
             skip_blocking: Skip auto-blocking (analysis only mode)
+            skip_learning: Skip behavioral profile learning (for simulation)
 
         Returns:
             Dict with enrichment results
@@ -504,6 +525,118 @@ class EventEnricher:
                 self._log(f"❌ {error_msg}")
                 result['errors'].append(error_msg)
 
+        # Step 3.5: ML Behavioral Analysis (alert-only, no blocking)
+        # Detects unusual login patterns based on learned user behavior
+        try:
+            behavioral_scorer, behavioral_learner = self._get_behavioral_modules()
+            target_username = event_data.get('target_username')
+            event_type = event_data.get('event_type', 'unknown')
+            event_timestamp = event_data.get('timestamp', datetime.now())
+
+            if behavioral_scorer and behavioral_learner and target_username:
+                self._log(f"🧠 ML Behavioral analysis for {target_username}...")
+
+                # Build login data for behavioral scoring
+                login_data = {
+                    'username': target_username,
+                    'hour': event_timestamp.hour if hasattr(event_timestamp, 'hour') else datetime.now().hour,
+                    'day_of_week': event_timestamp.weekday() if hasattr(event_timestamp, 'weekday') else datetime.now().weekday(),
+                    'ip_address': source_ip,
+                    'country': geo_data.get('country_code', '') if geo_data else '',
+                    'city': geo_data.get('city', '') if geo_data else '',
+                    'timestamp': event_timestamp if isinstance(event_timestamp, datetime) else datetime.now()
+                }
+
+                # Score the login for anomalies
+                behavioral_result = behavioral_scorer.score_login(login_data)
+                result['behavioral_ml'] = behavioral_result
+
+                if behavioral_result.get('is_anomaly'):
+                    anomaly_score = behavioral_result.get('anomaly_score', 0)
+                    factors = behavioral_result.get('factors', [])
+                    anomaly_type = behavioral_scorer.get_anomaly_type(factors)
+
+                    self._log(f"🚨 Behavioral anomaly detected: score={anomaly_score}, type={anomaly_type}, factors={factors}")
+
+                    # Send notification for behavioral anomaly (ALERT ONLY - no blocking)
+                    notif_module = self._get_notification_module()
+                    if notif_module and 'anomaly' in notif_module:
+                        try:
+                            notif_module['anomaly'](
+                                event_id=event_id,
+                                ip_address=source_ip,
+                                risk_score=anomaly_score,
+                                threat_type=anomaly_type,
+                                confidence=behavioral_result.get('details', {}).get('profile_confidence', 0),
+                                geo_data=geo_data,
+                                username=target_username,
+                                anomaly_factors=factors,
+                                anomaly_details=behavioral_result.get('factor_details', []),
+                                verbose=self.verbose
+                            )
+                            self._log(f"✅ Behavioral anomaly notification sent")
+                        except Exception as e:
+                            self._log(f"❌ Behavioral anomaly notification error: {e}")
+                else:
+                    self._log(f"✅ Behavioral analysis: normal (score={behavioral_result.get('anomaly_score', 0)})")
+
+                # Update user profile with successful logins (learning)
+                # Skip learning during simulation to prevent profile contamination
+                if event_type == 'successful' and not skip_learning:
+                    login_learn_data = {
+                        'hour': login_data['hour'],
+                        'day_of_week': login_data['day_of_week'],
+                        'ip_address': source_ip,
+                        'country': login_data['country'],
+                        'city': login_data['city'],
+                        'is_successful': True,
+                        'timestamp': login_data['timestamp']
+                    }
+                    behavioral_learner.learn_from_login(target_username, login_learn_data)
+                    self._log(f"📚 Updated behavioral profile for {target_username}")
+                elif skip_learning:
+                    self._log(f"⏭️  Skipping profile learning (simulation mode)")
+
+        except Exception as e:
+            self._log(f"⚠️  Behavioral ML error: {e}")
+            result['errors'].append(f"Behavioral ML error: {str(e)}")
+
+        # Step 4: Rule-based blocking (runs even when ML is not available)
+        # This ensures threat intel and pattern-based rules can trigger blocks
+        if not skip_blocking and 'blocking' not in result:
+            try:
+                from core.blocking.rule_coordinator import check_and_block_ip
+
+                # Build ML result from available data if ML didn't run
+                ml_result_for_blocking = result.get('ml', {})
+                if not ml_result_for_blocking:
+                    ml_result_for_blocking = {
+                        'risk_score': 0,
+                        'threat_type': None,
+                        'is_anomaly': False,
+                        'confidence': 0
+                    }
+
+                event_type = event_data.get('event_type', 'unknown')
+                target_username = event_data.get('target_username')
+
+                blocking_result = check_and_block_ip(
+                    ip_address=source_ip,
+                    ml_result=ml_result_for_blocking,
+                    event_id=event_id,
+                    event_type=event_type,
+                    username=target_username
+                )
+                result['blocking'] = blocking_result
+
+                if blocking_result.get('blocked'):
+                    self._log(f"🚫 IP {source_ip} blocked by rules: {blocking_result.get('triggered_rules')}")
+                elif blocking_result.get('already_blocked'):
+                    self._log(f"⚠️  IP {source_ip} already blocked")
+            except Exception as e:
+                self._log(f"⚠️  Rule-based blocking error: {e}")
+                result['errors'].append(f"Rule-based blocking error: {str(e)}")
+
         # Final: Mark as completed
         self._update_processing_status(event_id, 'completed')
         self._log(f"✅ Enrichment complete for event {event_id}")
@@ -662,7 +795,7 @@ def get_enricher(verbose: bool = True) -> EventEnricher:
 
 
 def enrich_event(event_id: int, source_ip: str, verbose: bool = True,
-                 skip_blocking: bool = False) -> Dict:
+                 skip_blocking: bool = False, skip_learning: bool = False) -> Dict:
     """
     Convenience function to enrich a single event.
 
@@ -671,12 +804,13 @@ def enrich_event(event_id: int, source_ip: str, verbose: bool = True,
         source_ip: IP address
         verbose: Print progress
         skip_blocking: Skip auto-blocking (analysis only mode)
+        skip_learning: Skip behavioral profile learning (for simulation)
 
     Returns:
         Enrichment result dict
     """
     enricher = get_enricher(verbose=verbose)
-    return enricher.enrich_event(event_id, source_ip, skip_blocking=skip_blocking)
+    return enricher.enrich_event(event_id, source_ip, skip_blocking=skip_blocking, skip_learning=skip_learning)
 
 
 def enrich_batch(event_ids: List[int], verbose: bool = True) -> List[Dict]:

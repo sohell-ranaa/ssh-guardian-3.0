@@ -1,6 +1,7 @@
 """
-SSH Guardian v3.0 - Threat Intelligence Module
+SSH Guardian v3.1 - Threat Intelligence Module
 Integrates with AbuseIPDB, VirusTotal, and Shodan for IP reputation checking
+Updated for v3.1 schema (threat intel merged into ip_geolocation table)
 """
 
 import sys
@@ -17,24 +18,30 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
 
 from connection import get_connection
+from integrations_config import get_integration_config_value
 
 # Load environment variables
 load_dotenv(PROJECT_ROOT / ".env")
 
 
-def _get_api_key_from_db(integration_id: str) -> str:
-    """Load API key from database integration_config table."""
+def _get_api_key_from_db(integration_type: str) -> str:
+    """Load API key from database integrations table (v3.1 schema)."""
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT config_value FROM integration_config
-            WHERE integration_id = %s AND config_key = 'api_key'
-        """, (integration_id,))
+            SELECT credentials FROM integrations
+            WHERE integration_type = %s
+        """, (integration_type,))
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        return row.get('config_value') if row else None
+        if row and row.get('credentials'):
+            creds = row['credentials']
+            if isinstance(creds, str):
+                creds = json.loads(creds)
+            return creds.get('api_key')
+        return None
     except Exception:
         return None
 
@@ -65,6 +72,8 @@ class ThreatIntelligence:
     ABUSEIPDB_URL = "https://api.abuseipdb.com/api/v2/check"
     VIRUSTOTAL_URL = "https://www.virustotal.com/api/v3/ip_addresses/{ip}"
     SHODAN_URL = "https://api.shodan.io/shodan/host/{ip}"
+    GREYNOISE_COMMUNITY_URL = "https://api.greynoise.io/v3/community/{ip}"
+    GREYNOISE_ENTERPRISE_URL = "https://api.greynoise.io/v2/noise/context/{ip}"
 
     @staticmethod
     def check_abuseipdb(ip_address):
@@ -249,6 +258,89 @@ class ThreatIntelligence:
             return None
 
     @staticmethod
+    def check_greynoise(ip_address):
+        """
+        Check IP against GreyNoise to determine if it's internet noise or targeted attack.
+        Uses Community API (free, 100/day) or Enterprise API if key configured.
+
+        Returns:
+            dict: GreyNoise data or None
+            - noise: True if IP is a known internet scanner
+            - riot: True if IP belongs to a known benign service (e.g., Google, Microsoft)
+            - classification: 'benign', 'malicious', or 'unknown'
+        """
+        try:
+            # Check if enterprise API key is configured
+            api_key = _get_api_key_from_db('greynoise')
+            use_community = get_integration_config_value('greynoise', 'use_community_api')
+
+            if api_key and use_community != 'true':
+                # Use Enterprise API
+                url = ThreatIntelligence.GREYNOISE_ENTERPRISE_URL.format(ip=ip_address)
+                headers = {'key': api_key, 'Accept': 'application/json'}
+            else:
+                # Use Community API (free, no key required)
+                url = ThreatIntelligence.GREYNOISE_COMMUNITY_URL.format(ip=ip_address)
+                headers = {'Accept': 'application/json'}
+                if api_key:
+                    headers['key'] = api_key
+
+            print(f"🔍 Checking GreyNoise for {ip_address}...")
+
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                result = {
+                    'noise': data.get('noise', False),
+                    'riot': data.get('riot', False),
+                    'classification': data.get('classification', 'unknown'),
+                    'name': data.get('name', ''),  # For RIOT IPs (e.g., "Google")
+                    'link': data.get('link', ''),
+                    'last_seen': data.get('last_seen'),
+                    'message': data.get('message', ''),
+                    'checked_at': datetime.now()
+                }
+
+                status = []
+                if result['noise']:
+                    status.append('Internet Scanner')
+                if result['riot']:
+                    status.append(f"Known Service: {result['name']}")
+                if result['classification'] == 'malicious':
+                    status.append('Malicious')
+
+                print(f"✅ GreyNoise: {', '.join(status) if status else 'Unknown/Clean'}")
+                return result
+
+            elif response.status_code == 404:
+                # IP not found in GreyNoise database - this is normal for most IPs
+                print("ℹ️  IP not found in GreyNoise database (not a known scanner)")
+                return {
+                    'noise': False,
+                    'riot': False,
+                    'classification': 'unknown',
+                    'name': '',
+                    'link': '',
+                    'last_seen': None,
+                    'message': 'IP not observed',
+                    'checked_at': datetime.now()
+                }
+
+            elif response.status_code == 429:
+                print("⚠️  GreyNoise rate limit exceeded")
+                return None
+
+            else:
+                print(f"❌ GreyNoise error: HTTP {response.status_code}")
+                return None
+
+        except Exception as e:
+            print(f"❌ GreyNoise lookup failed: {e}")
+            return None
+
+    @staticmethod
     def calculate_threat_level(abuseipdb_data, virustotal_data, shodan_data):
         """
         Calculate overall threat level based on all sources
@@ -337,6 +429,10 @@ class ThreatIntelligence:
         time.sleep(1)
 
         shodan_data = ThreatIntelligence.check_shodan(ip_address)
+        time.sleep(0.5)
+
+        # GreyNoise lookup (helps distinguish scanners from targeted attacks)
+        greynoise_data = ThreatIntelligence.check_greynoise(ip_address)
 
         # Calculate overall threat
         threat_level, confidence = ThreatIntelligence.calculate_threat_level(
@@ -344,6 +440,20 @@ class ThreatIntelligence:
             virustotal_data,
             shodan_data
         )
+
+        # Adjust threat level based on GreyNoise data
+        if greynoise_data:
+            if greynoise_data.get('riot'):
+                # Known benign service (Google, Microsoft, etc.) - lower threat
+                if threat_level in ['medium', 'high']:
+                    threat_level = 'low'
+                    print(f"ℹ️  GreyNoise RIOT: Known benign service, lowering threat level")
+            elif greynoise_data.get('noise') and greynoise_data.get('classification') == 'malicious':
+                # Known malicious scanner - raise threat
+                if threat_level in ['clean', 'low', 'medium']:
+                    threat_level = 'high'
+                    confidence = max(confidence, 0.7)
+                    print(f"⚠️  GreyNoise: Known malicious scanner, raising threat level")
 
         print(f"\n📊 Overall Threat Level: {threat_level.upper()} (confidence: {confidence:.2f})")
         print("="*70)
@@ -354,6 +464,7 @@ class ThreatIntelligence:
             'abuseipdb': abuseipdb_data,
             'virustotal': virustotal_data,
             'shodan': shodan_data,
+            'greynoise': greynoise_data,
             'threat_level': threat_level,
             'confidence': confidence
         }
@@ -365,17 +476,32 @@ class ThreatIntelligence:
 
     @staticmethod
     def _get_from_cache(ip_address):
-        """Check if threat intelligence is in cache"""
+        """Check if threat intelligence is in cache (v3.1: using ip_geolocation table)"""
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # v3.1: Threat intel is now merged into ip_geolocation table
             cursor.execute("""
-                SELECT *
-                FROM ip_threat_intelligence
+                SELECT
+                    ip_address_text,
+                    abuseipdb_score,
+                    abuseipdb_reports,
+                    abuseipdb_last_reported,
+                    abuseipdb_checked_at,
+                    virustotal_positives,
+                    virustotal_total,
+                    virustotal_checked_at,
+                    shodan_ports,
+                    shodan_vulns,
+                    shodan_checked_at,
+                    threat_level,
+                    last_seen as updated_at
+                FROM ip_geolocation
                 WHERE ip_address_text = %s
-                AND (needs_refresh = FALSE OR refresh_after > NOW())
+                AND abuseipdb_checked_at IS NOT NULL
+                AND abuseipdb_checked_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
             """, (ip_address,))
 
             cached = cursor.fetchone()
@@ -387,76 +513,165 @@ class ThreatIntelligence:
 
     @staticmethod
     def _save_to_cache(threat_data):
-        """Save threat intelligence to cache"""
+        """Save threat intelligence to cache (writes to both ip_geolocation and ip_threat_intelligence)"""
 
         conn = get_connection()
         cursor = conn.cursor()
 
         try:
-            # Calculate refresh date
-            refresh_after = datetime.now() + timedelta(days=ThreatIntelligence.CACHE_DURATION_DAYS)
-
-            # Extract data
+            # Extract data (use 'or {}' to handle None values)
             ip = threat_data['ip_address_text']
-            abuseipdb = threat_data.get('abuseipdb', {})
-            virustotal = threat_data.get('virustotal', {})
-            shodan = threat_data.get('shodan', {})
+            abuseipdb = threat_data.get('abuseipdb') or {}
+            virustotal = threat_data.get('virustotal') or {}
+            shodan = threat_data.get('shodan') or {}
+            greynoise = threat_data.get('greynoise') or {}
 
-            cursor.execute("""
-                INSERT INTO ip_threat_intelligence (
-                    ip_address_text,
-                    abuseipdb_score,
-                    abuseipdb_confidence,
-                    abuseipdb_reports,
-                    abuseipdb_checked_at,
-                    virustotal_positives,
-                    virustotal_total,
-                    virustotal_checked_at,
-                    shodan_ports,
-                    shodan_tags,
-                    shodan_vulns,
-                    shodan_checked_at,
-                    overall_threat_level,
-                    threat_confidence,
-                    needs_refresh,
-                    refresh_after
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE, %s
-                )
-                ON DUPLICATE KEY UPDATE
-                    abuseipdb_score = VALUES(abuseipdb_score),
-                    abuseipdb_confidence = VALUES(abuseipdb_confidence),
-                    abuseipdb_reports = VALUES(abuseipdb_reports),
-                    abuseipdb_checked_at = VALUES(abuseipdb_checked_at),
-                    virustotal_positives = VALUES(virustotal_positives),
-                    virustotal_total = VALUES(virustotal_total),
-                    virustotal_checked_at = VALUES(virustotal_checked_at),
-                    shodan_ports = VALUES(shodan_ports),
-                    shodan_tags = VALUES(shodan_tags),
-                    shodan_vulns = VALUES(shodan_vulns),
-                    shodan_checked_at = VALUES(shodan_checked_at),
-                    overall_threat_level = VALUES(overall_threat_level),
-                    threat_confidence = VALUES(threat_confidence),
-                    needs_refresh = FALSE,
-                    refresh_after = VALUES(refresh_after),
-                    updated_at = NOW()
-            """, (
-                ip,
-                abuseipdb.get('score') if abuseipdb else None,
-                abuseipdb.get('confidence') if abuseipdb else None,
-                abuseipdb.get('reports') if abuseipdb else None,
-                abuseipdb.get('checked_at') if abuseipdb else None,
-                virustotal.get('positives') if virustotal else None,
-                virustotal.get('total') if virustotal else None,
-                virustotal.get('checked_at') if virustotal else None,
-                json.dumps(shodan.get('ports', [])) if shodan else None,
-                json.dumps(shodan.get('tags', [])) if shodan else None,
-                json.dumps(shodan.get('vulns', [])) if shodan else None,
-                shodan.get('checked_at') if shodan else None,
-                threat_data['threat_level'],
-                threat_data['confidence'],
-                refresh_after
-            ))
+            # Also save to ip_threat_intelligence table (for compatibility with other modules)
+            cursor.execute("SELECT id FROM ip_threat_intelligence WHERE ip_address_text = %s", (ip,))
+            ti_exists = cursor.fetchone()
+
+            if ti_exists:
+                cursor.execute("""
+                    UPDATE ip_threat_intelligence SET
+                        abuseipdb_score = %s,
+                        abuseipdb_confidence = %s,
+                        abuseipdb_reports = %s,
+                        abuseipdb_last_reported = %s,
+                        abuseipdb_checked_at = %s,
+                        virustotal_positives = %s,
+                        virustotal_total = %s,
+                        virustotal_checked_at = %s,
+                        shodan_ports = %s,
+                        shodan_vulns = %s,
+                        shodan_checked_at = %s,
+                        overall_threat_level = %s,
+                        threat_confidence = %s,
+                        last_seen = NOW()
+                    WHERE ip_address_text = %s
+                """, (
+                    abuseipdb.get('score'),
+                    abuseipdb.get('confidence'),
+                    abuseipdb.get('reports'),
+                    abuseipdb.get('last_reported'),
+                    abuseipdb.get('checked_at'),
+                    virustotal.get('positives'),
+                    virustotal.get('total'),
+                    virustotal.get('checked_at'),
+                    json.dumps(shodan.get('ports', [])) if shodan else None,
+                    json.dumps(shodan.get('vulns', [])) if shodan else None,
+                    shodan.get('checked_at'),
+                    threat_data.get('threat_level', 'clean'),
+                    threat_data.get('confidence', 0),
+                    ip
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO ip_threat_intelligence (
+                        ip_address_text,
+                        abuseipdb_score, abuseipdb_confidence, abuseipdb_reports,
+                        abuseipdb_last_reported, abuseipdb_checked_at,
+                        virustotal_positives, virustotal_total, virustotal_checked_at,
+                        shodan_ports, shodan_vulns, shodan_checked_at,
+                        overall_threat_level, threat_confidence
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    ip,
+                    abuseipdb.get('score'),
+                    abuseipdb.get('confidence'),
+                    abuseipdb.get('reports'),
+                    abuseipdb.get('last_reported'),
+                    abuseipdb.get('checked_at'),
+                    virustotal.get('positives'),
+                    virustotal.get('total'),
+                    virustotal.get('checked_at'),
+                    json.dumps(shodan.get('ports', [])) if shodan else None,
+                    json.dumps(shodan.get('vulns', [])) if shodan else None,
+                    shodan.get('checked_at'),
+                    threat_data.get('threat_level', 'clean'),
+                    threat_data.get('confidence', 0)
+                ))
+
+            # v3.1: Threat intel is now merged into ip_geolocation table
+            # First check if IP exists
+            cursor.execute("SELECT id FROM ip_geolocation WHERE ip_address_text = %s", (ip,))
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing record
+                cursor.execute("""
+                    UPDATE ip_geolocation SET
+                        abuseipdb_score = %s,
+                        abuseipdb_reports = %s,
+                        abuseipdb_last_reported = %s,
+                        abuseipdb_checked_at = %s,
+                        virustotal_positives = %s,
+                        virustotal_total = %s,
+                        virustotal_checked_at = %s,
+                        shodan_ports = %s,
+                        shodan_vulns = %s,
+                        shodan_checked_at = %s,
+                        greynoise_noise = %s,
+                        greynoise_riot = %s,
+                        greynoise_classification = %s,
+                        greynoise_checked_at = %s,
+                        threat_level = %s,
+                        last_seen = NOW()
+                    WHERE ip_address_text = %s
+                """, (
+                    abuseipdb.get('score') if abuseipdb else None,
+                    abuseipdb.get('reports') if abuseipdb else None,
+                    abuseipdb.get('last_reported') if abuseipdb else None,
+                    abuseipdb.get('checked_at') if abuseipdb else None,
+                    virustotal.get('positives') if virustotal else None,
+                    virustotal.get('total') if virustotal else None,
+                    virustotal.get('checked_at') if virustotal else None,
+                    json.dumps(shodan.get('ports', [])) if shodan else None,
+                    json.dumps(shodan.get('vulns', [])) if shodan else None,
+                    shodan.get('checked_at') if shodan else None,
+                    greynoise.get('noise') if greynoise else None,
+                    greynoise.get('riot') if greynoise else None,
+                    greynoise.get('classification') if greynoise else None,
+                    greynoise.get('checked_at') if greynoise else None,
+                    threat_data['threat_level'],
+                    ip
+                ))
+            else:
+                # Insert new record with basic geolocation placeholder
+                import socket
+                import struct
+                ip_binary = socket.inet_aton(ip) if '.' in ip else socket.inet_pton(socket.AF_INET6, ip)
+
+                cursor.execute("""
+                    INSERT INTO ip_geolocation (
+                        ip_address, ip_address_text, ip_version,
+                        abuseipdb_score, abuseipdb_reports, abuseipdb_last_reported, abuseipdb_checked_at,
+                        virustotal_positives, virustotal_total, virustotal_checked_at,
+                        shodan_ports, shodan_vulns, shodan_checked_at,
+                        greynoise_noise, greynoise_riot, greynoise_classification, greynoise_checked_at,
+                        threat_level, last_seen
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                    )
+                """, (
+                    ip_binary,
+                    ip,
+                    4 if '.' in ip else 6,
+                    abuseipdb.get('score') if abuseipdb else None,
+                    abuseipdb.get('reports') if abuseipdb else None,
+                    abuseipdb.get('last_reported') if abuseipdb else None,
+                    abuseipdb.get('checked_at') if abuseipdb else None,
+                    virustotal.get('positives') if virustotal else None,
+                    virustotal.get('total') if virustotal else None,
+                    virustotal.get('checked_at') if virustotal else None,
+                    json.dumps(shodan.get('ports', [])) if shodan else None,
+                    json.dumps(shodan.get('vulns', [])) if shodan else None,
+                    shodan.get('checked_at') if shodan else None,
+                    greynoise.get('noise') if greynoise else None,
+                    greynoise.get('riot') if greynoise else None,
+                    greynoise.get('classification') if greynoise else None,
+                    greynoise.get('checked_at') if greynoise else None,
+                    threat_data['threat_level']
+                ))
 
             conn.commit()
             print(f"💾 Threat intelligence cached for {ip}")

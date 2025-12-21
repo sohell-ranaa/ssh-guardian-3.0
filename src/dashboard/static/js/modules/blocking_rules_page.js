@@ -62,8 +62,8 @@ async function loadRules() {
         const tableBody = document.getElementById('rulesTableBody');
         tableBody.innerHTML = data.rules.map(rule => {
             const statusBadge = rule.is_enabled
-                ? '<span style="padding: 4px 12px; background: #107C10; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Enabled</span>'
-                : '<span style="padding: 4px 12px; background: #8A8886; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Disabled</span>';
+                ? `<span style="padding: 4px 12px; background: ${TC.successDark}; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Enabled</span>`
+                : `<span style="padding: 4px 12px; background: ${TC.muted}; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Disabled</span>`;
 
             const conditions = formatRuleConditions(rule.rule_type, rule.conditions);
             const stats = `
@@ -81,14 +81,14 @@ async function loadRules() {
             const deleteButton = isSystemRule
                 ? `<button
                     disabled
-                    style="padding: 6px 12px; border: 1px solid #8A8886; background: var(--surface); color: #8A8886; border-radius: 3px; cursor: not-allowed; font-size: 12px;"
+                    style="padding: 6px 12px; border: 1px solid ${TC.muted}; background: var(--surface); color: ${TC.muted}; border-radius: 3px; cursor: not-allowed; font-size: 12px;"
                     title="System rules cannot be deleted"
                 >
                     🔒 Protected
                 </button>`
                 : `<button
                     onclick="deleteRule(${rule.id}, '${escapeHtml(rule.rule_name)}')"
-                    style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
+                    style="padding: 6px 12px; border: 1px solid ${TC.danger}; background: var(--surface); color: ${TC.danger}; border-radius: 3px; cursor: pointer; font-size: 12px;"
                     title="Delete Rule"
                 >
                     Delete
@@ -98,7 +98,7 @@ async function loadRules() {
                 <tr style="border-bottom: 1px solid var(--border-light);">
                     <td style="padding: 12px; font-size: 13px; font-weight: 600;">
                         ${escapeHtml(rule.rule_name)}
-                        ${isSystemRule ? '<span style="margin-left: 8px; padding: 2px 6px; background: #0078D4; color: white; border-radius: 2px; font-size: 10px; font-weight: 600;">SYSTEM</span>' : ''}
+                        ${isSystemRule ? `<span style="margin-left: 8px; padding: 2px 6px; background: ${TC.primary}; color: white; border-radius: 2px; font-size: 10px; font-weight: 600;">SYSTEM</span>` : ''}
                     </td>
                     <td style="padding: 12px; font-size: 13px;">${escapeHtml(rule.rule_type)}</td>
                     <td style="padding: 12px; font-size: 13px; text-align: center;">${rule.priority}</td>
@@ -156,10 +156,11 @@ function formatRuleConditions(ruleType, conditions) {
                 </div>
             `;
         case 'threat_threshold':
+        case 'api_reputation':
             return `
                 <div style="font-size: 12px;">
-                    <div><strong>Threat Level:</strong> ${conditions.threat_level || 'N/A'}</div>
-                    <div><strong>Min Score:</strong> ${conditions.min_abuseipdb_score || 'N/A'}</div>
+                    <div><strong>Threat Level:</strong> ${conditions.threat_level || conditions.min_threat_level || 'N/A'}</div>
+                    <div><strong>Min Score:</strong> ${conditions.min_abuseipdb_score || conditions.min_confidence || 'N/A'}</div>
                 </div>
             `;
         case 'country_block':
@@ -169,14 +170,61 @@ function formatRuleConditions(ruleType, conditions) {
                 </div>
             `;
         case 'rate_limit':
+        case 'velocity':
             return `
                 <div style="font-size: 12px;">
-                    <div><strong>Max Requests:</strong> ${conditions.max_requests || 'N/A'}</div>
-                    <div><strong>Time Window:</strong> ${conditions.time_window_seconds || 'N/A'}s</div>
+                    <div><strong>Max Requests:</strong> ${conditions.max_requests || conditions.max_events || 'N/A'}</div>
+                    <div><strong>Time Window:</strong> ${conditions.time_window_seconds || conditions.time_window_minutes + ' min' || 'N/A'}</div>
+                </div>
+            `;
+        case 'behavioral_analysis':
+            return `
+                <div style="font-size: 12px;">
+                    <div><strong>Min Risk Score:</strong> ${conditions.min_risk_score || 'N/A'}</div>
+                    <div><strong>Min Confidence:</strong> ${conditions.min_confidence || 'N/A'}</div>
+                    <div><strong>Priority Factors:</strong> ${conditions.priority_factors ? conditions.priority_factors.join(', ') : 'N/A'}</div>
+                </div>
+            `;
+        case 'distributed_brute_force':
+            return `
+                <div style="font-size: 12px;">
+                    <div><strong>Unique IPs:</strong> ≥${conditions.unique_ips_threshold || 'N/A'}</div>
+                    <div><strong>Unique Users:</strong> ≥${conditions.unique_usernames_threshold || 'N/A'}</div>
+                    <div><strong>Time Window:</strong> ${conditions.time_window_minutes || 'N/A'} min</div>
+                </div>
+            `;
+        case 'account_takeover':
+            return `
+                <div style="font-size: 12px;">
+                    <div><strong>Unique IPs:</strong> ≥${conditions.unique_ips_threshold || 'N/A'}</div>
+                    <div><strong>Unique Countries:</strong> ≥${conditions.unique_countries_threshold || 'N/A'}</div>
+                    <div><strong>Time Window:</strong> ${conditions.time_window_minutes || 'N/A'} min</div>
+                </div>
+            `;
+        case 'off_hours_anomaly':
+            return `
+                <div style="font-size: 12px;">
+                    <div><strong>Work Hours:</strong> ${conditions.work_start_hour || 8}:00 - ${conditions.work_end_hour || 18}:00</div>
+                    <div><strong>Min Attempts:</strong> ${conditions.min_off_hours_attempts || 'N/A'}</div>
+                </div>
+            `;
+        case 'ml_threshold':
+            return `
+                <div style="font-size: 12px;">
+                    <div><strong>Min ML Score:</strong> ${conditions.min_ml_score || conditions.min_risk_score || 'N/A'}</div>
+                    <div><strong>Auto Block:</strong> ${conditions.auto_block ? 'Yes' : 'No'}</div>
+                </div>
+            `;
+        case 'repeat_offender':
+            return `
+                <div style="font-size: 12px;">
+                    <div><strong>Min Bans:</strong> ${conditions.min_previous_bans || 'N/A'}</div>
+                    <div><strong>Lookback:</strong> ${conditions.lookback_days || 'N/A'} days</div>
                 </div>
             `;
         default:
-            return '<div style="font-size: 12px;">Custom conditions</div>';
+            // Show JSON for unknown types
+            return `<div style="font-size: 11px; font-family: monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${JSON.stringify(conditions).substring(0, 100)}...</div>`;
     }
 }
 
@@ -388,10 +436,10 @@ async function deleteRule(ruleId, ruleName) {
 // Show notification
 function showNotification(message, type = 'info') {
     const colors = {
-        success: '#107C10',
-        error: '#D13438',
-        info: '#0078D4',
-        warning: '#FFB900'
+        success: TC.successDark,
+        error: TC.danger,
+        info: TC.primary,
+        warning: TC.warning
     };
 
     const notification = document.createElement('div');

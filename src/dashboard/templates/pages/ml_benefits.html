@@ -10,12 +10,9 @@
             </p>
         </div>
         <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="ml_benefits">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadBenefitsReport()" title="Refresh data">↻</button>
-            </div>
+            <button class="refresh-btn" onclick="loadBenefitsReport()">
+                <span class="refresh-icon">↻</span> Refresh
+            </button>
             <select id="benefits-days" onchange="loadBenefitsReport()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary);">
                 <option value="7">Last 7 days</option>
                 <option value="30" selected>Last 30 days</option>

@@ -16,8 +16,6 @@
      * Load and display Daily Reports page
      */
     window.loadDailyReportsPage = async function() {
-        console.log('Loading Daily Reports page...');
-
         try {
             // Set date picker
             const datePicker = document.getElementById('report-date-picker');
@@ -99,8 +97,6 @@
      * Load all daily report data
      */
     async function loadDailyReport() {
-        console.log('Loading daily report for:', reportDate);
-
         try {
             // Load all data in parallel
             await Promise.all([
@@ -186,15 +182,15 @@
                     {
                         label: 'Failed',
                         data: hourlyData.map(d => d.failed),
-                        backgroundColor: 'rgba(209, 52, 56, 0.8)',
-                        borderColor: '#D13438',
+                        backgroundColor: TC.dangerBg,
+                        borderColor: TC.danger,
                         borderWidth: 1
                     },
                     {
                         label: 'Successful',
                         data: hourlyData.map(d => d.successful),
-                        backgroundColor: 'rgba(46, 164, 79, 0.8)',
-                        borderColor: '#2EA44F',
+                        backgroundColor: TC.successBg,
+                        borderColor: TC.success,
                         borderWidth: 1
                     }
                 ]
@@ -250,7 +246,7 @@
         tbody.innerHTML = threats.map((threat, index) => `
             <tr>
                 <td><span class="badge badge-secondary">#${index + 1}</span></td>
-                <td><code style="color: #0078D4;">${threat.ip}</code></td>
+                <td><code style="color: ${TC.primary};">${threat.ip}</code></td>
                 <td>
                     ${threat.country || 'Unknown'}
                     ${threat.city ? `<span style="color: var(--text-hint);">(${threat.city})</span>` : ''}
@@ -297,8 +293,8 @@
         }
 
         const colors = [
-            '#0078D4', '#D13438', '#E6A502', '#2EA44F', '#8764B8',
-            '#00B7C3', '#F7630C', '#107C10', '#C239B3', '#605E5C'
+            TC.primary, TC.danger, TC.warning, TC.success, TC.purple,
+            TC.teal, TC.orange, TC.successDark, TC.pink, TC.textSecondary
         ];
 
         geoChart = new Chart(ctx, {
@@ -434,7 +430,7 @@
         }
 
         const colors = [
-            '#D13438', '#E6A502', '#0078D4', '#2EA44F', '#8764B8', '#00B7C3'
+            TC.danger, TC.warning, TC.primary, TC.success, TC.purple, TC.teal
         ];
 
         threatTypesChart = new Chart(ctx, {
@@ -482,7 +478,7 @@
     function renderComparison(comparison) {
         const renderChange = (value, prevValue, change) => {
             const icon = change >= 0 ? '↑' : '↓';
-            const color = change >= 0 ? '#D13438' : '#2EA44F';
+            const color = change >= 0 ? TC.danger : TC.success;
             return `vs ${formatNumber(prevValue)} yesterday <span style="color: ${color};">${icon} ${Math.abs(change)}%</span>`;
         };
 

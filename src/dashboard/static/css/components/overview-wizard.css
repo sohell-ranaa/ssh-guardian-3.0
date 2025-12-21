@@ -1,0 +1,476 @@
+/* ============================================
+   OVERVIEW - WIZARD SECTION
+   Getting Started Guide with 8 steps
+   ============================================ */
+.wizard-section {
+    padding: 48px 40px;
+    background: var(--background);
+    scroll-margin-top: 60px;
+}
+
+.wizard-container {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+/* Wizard header extends section-header */
+.wizard-header {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.wizard-progress-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.wizard-progress-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.wizard-progress-text span {
+    color: var(--azure-blue);
+    font-weight: 700;
+}
+
+.wizard-progress-bar-mini {
+    width: 120px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.wizard-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--azure-blue), var(--color-success));
+    border-radius: 3px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Step Cards Layout */
+.wizard-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+.wizard-step-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.wizard-step-card::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -18px;
+    width: 20px;
+    height: 2px;
+    background: var(--border);
+}
+
+.wizard-step-card:last-child::after {
+    display: none;
+}
+
+.wizard-step-card:hover {
+    border-color: var(--azure-blue);
+    transform: translateY(-2px);
+}
+
+.wizard-step-card.active {
+    border-color: var(--azure-blue);
+    background: rgba(0, 120, 212, 0.05);
+    box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.1);
+}
+
+.wizard-step-card.completed {
+    border-color: var(--color-success);
+    background: var(--color-success-bg);
+}
+
+.wizard-step-card.completed .wizard-step-number {
+    background: var(--color-success);
+    color: white;
+}
+
+.wizard-step-number {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--background);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    margin: 0 auto 12px;
+    transition: all 0.3s ease;
+}
+
+.wizard-step-card.active .wizard-step-number {
+    background: var(--azure-blue);
+    color: white;
+}
+
+.wizard-step-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.wizard-step-card.active .wizard-step-label,
+.wizard-step-card.completed .wizard-step-label {
+    color: var(--text-primary);
+}
+
+/* Wizard Content Panel */
+.wizard-content-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    scroll-margin-top: 80px;
+}
+
+.wizard-content-header {
+    padding: 32px 40px;
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.08), rgba(0, 76, 135, 0.03));
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.wizard-content-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--azure-blue), var(--azure-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.wizard-content-title-group h2 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.wizard-content-title-group p {
+    font-size: 15px;
+    color: var(--text-secondary);
+}
+
+.wizard-content-body {
+    padding: 40px;
+}
+
+.wizard-content-body p {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+}
+
+.wizard-content-body h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 28px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.wizard-content-body ul,
+.wizard-content-body ol {
+    margin: 16px 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.wizard-content-body li {
+    padding: 12px 16px 12px 48px;
+    background: var(--background);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    position: relative;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.wizard-content-body li::before {
+    content: '\2713';
+    position: absolute;
+    left: 16px;
+    color: var(--color-success);
+    font-weight: bold;
+}
+
+.wizard-content-body ol li {
+    counter-increment: item;
+}
+
+.wizard-content-body ol li::before {
+    content: counter(item);
+    background: var(--azure-blue);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Tips Box */
+.wizard-tips-box {
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.08), rgba(0, 76, 135, 0.04));
+    border: 1px solid rgba(0, 120, 212, 0.2);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-top: 24px;
+}
+
+.wizard-tips-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--azure-blue);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wizard-tips-box p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Architecture Tables in Guide */
+.wizard-content-body .arch-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+.wizard-content-body .arch-table tr {
+    border-bottom: 1px solid var(--border);
+}
+
+.wizard-content-body .arch-table td {
+    padding: 12px 16px;
+    vertical-align: top;
+    background: none;
+}
+
+.wizard-content-body .arch-table tr:nth-child(odd) td {
+    background: var(--background);
+}
+
+.wizard-content-body .arch-table td:first-child {
+    width: 35%;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.wizard-content-body .arch-table td:last-child {
+    color: var(--text-secondary);
+}
+
+/* Code Blocks in Guide */
+.wizard-content-body .code-block {
+    background: var(--terminal-bg);
+    border: 1px solid var(--terminal-border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    overflow-x: auto;
+}
+
+.wizard-content-body .code-block code {
+    color: var(--syntax-cyan);
+    display: block;
+    line-height: 1.8;
+    background: none;
+    padding: 0;
+}
+
+/* Deployment Mode Cards */
+.wizard-content-body .deployment-modes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.wizard-content-body .mode-card {
+    background: linear-gradient(135deg, var(--background) 0%, var(--surface) 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.wizard-content-body .mode-card:hover {
+    border-color: var(--azure-blue);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 120, 212, 0.1);
+}
+
+.wizard-content-body .mode-card strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 10px;
+    color: var(--azure-blue);
+}
+
+.wizard-content-body .mode-card p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Event Badges */
+.wizard-content-body .event-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+.wizard-content-body .event-badge.failed {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--color-danger);
+}
+
+.wizard-content-body .event-badge.success {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--color-success-light);
+}
+
+.wizard-content-body .event-badge.invalid {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--color-warning-light);
+}
+
+.wizard-content-body .event-badge.disconnect {
+    background: rgba(107, 114, 128, 0.12);
+    color: var(--color-muted-light);
+}
+
+/* Wizard Navigation */
+.wizard-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 40px;
+    background: var(--background);
+    border-top: 1px solid var(--border);
+}
+
+.wizard-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wizard-nav-btn.prev {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.wizard-nav-btn.prev:hover:not(:disabled) {
+    background: var(--background);
+    color: var(--text-primary);
+}
+
+.wizard-nav-btn.next {
+    background: linear-gradient(135deg, var(--azure-blue), var(--azure-dark));
+    color: white;
+    box-shadow: 0 4px 15px rgba(0, 120, 212, 0.3);
+}
+
+.wizard-nav-btn.next:hover:not(:disabled) {
+    transform: translateX(4px);
+    box-shadow: 0 6px 20px rgba(0, 120, 212, 0.4);
+}
+
+.wizard-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.wizard-step-dots {
+    display: flex;
+    gap: 8px;
+}
+
+.wizard-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wizard-dot.active {
+    background: var(--azure-blue);
+    transform: scale(1.2);
+}
+
+.wizard-dot.completed {
+    background: var(--color-success);
+}
+
+/* Loading State */
+.wizard-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px;
+    color: var(--text-secondary);
+}

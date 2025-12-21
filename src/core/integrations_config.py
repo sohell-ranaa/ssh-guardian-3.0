@@ -1,8 +1,10 @@
 """
-Integrations Configuration Manager
+SSH Guardian v3.1 - Integrations Configuration Manager
 Handles database operations for third-party integrations
+Updated for v3.1 schema with JSON config/credentials columns
 """
 import sys
+import json
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -20,177 +22,366 @@ def mask_sensitive_value(value, show_chars=4):
     return value[:show_chars] + '*' * (len(value) - show_chars * 2) + value[-show_chars:]
 
 
+# Integration metadata (icons and descriptions)
+INTEGRATION_METADATA = {
+    'telegram': {
+        'icon': '📱',
+        'description': 'Receive real-time security alerts via Telegram messenger.'
+    },
+    'abuseipdb': {
+        'icon': '🛡️',
+        'description': 'Check IP reputation and abuse reports from AbuseIPDB database.'
+    },
+    'virustotal': {
+        'icon': '🔬',
+        'description': 'Scan IPs against 70+ security vendors via VirusTotal API.'
+    },
+    'shodan': {
+        'icon': '🔍',
+        'description': 'Discover open ports, services, and vulnerabilities on IP addresses.'
+    },
+    'smtp': {
+        'icon': '📧',
+        'description': 'Send email notifications and alerts via SMTP server.'
+    },
+    'ipapi': {
+        'icon': '🌍',
+        'description': 'Free GeoIP lookup service for IP geolocation data.'
+    },
+    'freeipapi': {
+        'icon': '🌐',
+        'description': 'Alternative GeoIP service with proxy/VPN detection.'
+    },
+    'greynoise': {
+        'icon': '🔇',
+        'description': 'Identify mass internet scanners vs targeted attacks. Free: 100 lookups/day, no API key required.'
+    }
+}
+
+
+def _parse_json(json_value):
+    """Parse JSON value from database"""
+    if json_value is None:
+        return {}
+    if isinstance(json_value, dict):
+        return json_value
+    if isinstance(json_value, str):
+        try:
+            return json.loads(json_value)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
 def get_all_integrations():
-    """Get all integrations with their configurations"""
+    """Get all integrations with their configurations (v3.1 schema)"""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # Get all integrations
         cursor.execute("""
-            SELECT id, integration_id, name, description, icon, category,
-                   is_enabled, status, last_test_at, last_test_result, error_message
+            SELECT id, integration_type, name, is_enabled, config, credentials,
+                   last_used_at, last_error, error_count, created_at, updated_at
             FROM integrations
-            ORDER BY category, name
+            ORDER BY name
         """)
         integrations = cursor.fetchall()
 
-        # Get configurations for each integration
+        result = []
         for integration in integrations:
-            cursor.execute("""
-                SELECT config_key, config_value, value_type, is_sensitive,
-                       is_required, display_name, description, display_order
-                FROM integration_config
-                WHERE integration_id = %s
-                ORDER BY display_order
-            """, (integration['integration_id'],))
+            config = _parse_json(integration.get('config'))
+            credentials = _parse_json(integration.get('credentials'))
 
-            configs = cursor.fetchall()
-            integration['config'] = {}
-            integration['config_fields'] = []
-
-            for config in configs:
-                # Mask sensitive values for display
-                value = config['config_value']
-                if config['is_sensitive'] and value:
-                    integration['config'][config['config_key']] = mask_sensitive_value(value)
-                    integration['config'][f"{config['config_key']}_has_value"] = bool(value)
+            # Build config dict with masked sensitive values
+            config_display = dict(config)
+            for key, value in credentials.items():
+                if value:
+                    config_display[key] = mask_sensitive_value(str(value))
+                    config_display[f"{key}_has_value"] = True
                 else:
-                    integration['config'][config['config_key']] = value
+                    config_display[key] = ''
+                    config_display[f"{key}_has_value"] = False
 
-                # Add field metadata for form generation
-                integration['config_fields'].append({
-                    'key': config['config_key'],
-                    'value': value if not config['is_sensitive'] else '',
-                    'type': config['value_type'],
-                    'is_sensitive': config['is_sensitive'],
-                    'is_required': config['is_required'],
-                    'display_name': config['display_name'],
-                    'description': config['description'],
+            # Build config_fields for form generation
+            config_fields = []
+
+            # Boolean field keys - these should render as checkboxes
+            boolean_fields = {'enabled', 'use_community_api', 'use_ssl', 'verify_ssl'}
+
+            # Add config fields (non-sensitive)
+            for key, value in config.items():
+                field_type = 'boolean' if key in boolean_fields else 'text'
+                config_fields.append({
+                    'key': key,
+                    'value': value if value else '',
+                    'type': field_type,
+                    'is_sensitive': False,
+                    'is_required': False,
+                    'display_name': key.replace('_', ' ').title(),
+                    'description': '',
                     'has_value': bool(value)
                 })
 
-            # Format timestamps
-            if integration['last_test_at']:
-                integration['last_test_at'] = integration['last_test_at'].isoformat()
+            # Integrations with optional credentials (free tier available)
+            optional_creds = {'greynoise', 'ipapi', 'freeipapi'}
+            integration_type = integration['integration_type']
 
-        return integrations
+            # Add credential fields (sensitive)
+            for key, value in credentials.items():
+                # Mark as optional for integrations with free tier
+                is_required = integration_type not in optional_creds
+                description = '(Optional - Free tier available)' if not is_required else ''
+
+                config_fields.append({
+                    'key': key,
+                    'value': '',  # Never expose sensitive values
+                    'type': 'password',
+                    'is_sensitive': True,
+                    'is_required': is_required,
+                    'display_name': key.replace('_', ' ').title(),
+                    'description': description,
+                    'has_value': bool(value)
+                })
+
+            # Determine status based on config
+            is_enabled = integration.get('is_enabled', False)
+
+            if integration_type in optional_creds:
+                has_credentials = True  # Credentials are optional
+            else:
+                has_credentials = all(credentials.values()) if credentials else True
+
+            if is_enabled and has_credentials:
+                status = 'active'
+            elif has_credentials:
+                status = 'configured'
+            else:
+                status = 'inactive'
+
+            # Get metadata
+            metadata = INTEGRATION_METADATA.get(integration['integration_type'], {})
+
+            result.append({
+                'id': integration['id'],
+                'integration_id': integration['integration_type'],  # Backwards compatibility
+                'integration_type': integration['integration_type'],
+                'name': integration['name'],
+                'icon': metadata.get('icon', '🔌'),
+                'description': metadata.get('description', ''),
+                'is_enabled': bool(is_enabled),
+                'status': status,
+                'config': config_display,
+                'config_fields': config_fields,
+                'last_used_at': integration['last_used_at'].isoformat() if integration.get('last_used_at') else None,
+                'last_error': integration.get('last_error'),
+                'error_count': integration.get('error_count', 0),
+                'last_test_at': integration['last_used_at'].isoformat() if integration.get('last_used_at') else None,
+                'last_test_result': 'Success' if not integration.get('last_error') else None,
+                'error_message': integration.get('last_error')
+            })
+
+        return result
 
     finally:
         cursor.close()
         conn.close()
 
 
-def get_integration(integration_id):
-    """Get a single integration with its configuration"""
+def get_integration(integration_type):
+    """Get a single integration with its configuration (v3.1 schema)"""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
         cursor.execute("""
-            SELECT id, integration_id, name, description, icon, category,
-                   is_enabled, status, last_test_at, last_test_result, error_message
+            SELECT id, integration_type, name, is_enabled, config, credentials,
+                   last_used_at, last_error, error_count, created_at, updated_at
             FROM integrations
-            WHERE integration_id = %s
-        """, (integration_id,))
+            WHERE integration_type = %s
+        """, (integration_type,))
 
         integration = cursor.fetchone()
         if not integration:
             return None
 
-        # Get configurations
-        cursor.execute("""
-            SELECT config_key, config_value, value_type, is_sensitive,
-                   is_required, display_name, description, display_order
-            FROM integration_config
-            WHERE integration_id = %s
-            ORDER BY display_order
-        """, (integration_id,))
+        config = _parse_json(integration.get('config'))
+        credentials = _parse_json(integration.get('credentials'))
 
-        configs = cursor.fetchall()
-        integration['config'] = {}
-        integration['config_fields'] = []
-
-        for config in configs:
-            value = config['config_value']
-            if config['is_sensitive'] and value:
-                integration['config'][config['config_key']] = mask_sensitive_value(value)
-                integration['config'][f"{config['config_key']}_has_value"] = bool(value)
+        # Build config dict with masked sensitive values
+        config_display = dict(config)
+        for key, value in credentials.items():
+            if value:
+                config_display[key] = mask_sensitive_value(str(value))
+                config_display[f"{key}_has_value"] = True
             else:
-                integration['config'][config['config_key']] = value
+                config_display[key] = ''
+                config_display[f"{key}_has_value"] = False
 
-            integration['config_fields'].append({
-                'key': config['config_key'],
-                'value': value if not config['is_sensitive'] else '',
-                'type': config['value_type'],
-                'is_sensitive': config['is_sensitive'],
-                'is_required': config['is_required'],
-                'display_name': config['display_name'],
-                'description': config['description'],
+        # Build config_fields for form generation
+        config_fields = []
+
+        # Boolean field keys - these should render as checkboxes
+        boolean_fields = {'enabled', 'use_community_api', 'use_ssl', 'verify_ssl'}
+
+        # Add config fields (non-sensitive)
+        for key, value in config.items():
+            field_type = 'boolean' if key in boolean_fields else 'text'
+            config_fields.append({
+                'key': key,
+                'value': value if value else '',
+                'type': field_type,
+                'is_sensitive': False,
+                'is_required': False,
+                'display_name': key.replace('_', ' ').title(),
+                'description': '',
                 'has_value': bool(value)
             })
 
-        if integration['last_test_at']:
-            integration['last_test_at'] = integration['last_test_at'].isoformat()
+        # Integrations with optional credentials (free tier available)
+        optional_creds = {'greynoise', 'ipapi', 'freeipapi'}
+        int_type = integration['integration_type']
 
-        return integration
+        # Add credential fields (sensitive)
+        for key, value in credentials.items():
+            # Mark as optional for integrations with free tier
+            is_required = int_type not in optional_creds
+            description = '(Optional - Free tier available)' if not is_required else ''
+
+            config_fields.append({
+                'key': key,
+                'value': '',  # Never expose sensitive values
+                'type': 'password',
+                'is_sensitive': True,
+                'is_required': is_required,
+                'display_name': key.replace('_', ' ').title(),
+                'description': description,
+                'has_value': bool(value)
+            })
+
+        # Determine status
+        is_enabled = integration.get('is_enabled', False)
+
+        if int_type in optional_creds:
+            has_credentials = True  # Credentials are optional
+        else:
+            has_credentials = all(credentials.values()) if credentials else True
+
+        if is_enabled and has_credentials:
+            status = 'active'
+        elif has_credentials:
+            status = 'configured'
+        else:
+            status = 'inactive'
+
+        # Get metadata
+        metadata = INTEGRATION_METADATA.get(integration['integration_type'], {})
+
+        return {
+            'id': integration['id'],
+            'integration_id': integration['integration_type'],  # Backwards compatibility
+            'integration_type': integration['integration_type'],
+            'name': integration['name'],
+            'icon': metadata.get('icon', '🔌'),
+            'description': metadata.get('description', ''),
+            'is_enabled': bool(is_enabled),
+            'status': status,
+            'config': config_display,
+            'config_fields': config_fields,
+            'last_used_at': integration['last_used_at'].isoformat() if integration.get('last_used_at') else None,
+            'last_error': integration.get('last_error'),
+            'error_count': integration.get('error_count', 0),
+            'last_test_at': integration['last_used_at'].isoformat() if integration.get('last_used_at') else None,
+            'last_test_result': 'Success' if not integration.get('last_error') else None,
+            'error_message': integration.get('last_error')
+        }
 
     finally:
         cursor.close()
         conn.close()
 
 
-def get_integration_config_value(integration_id, config_key):
-    """Get a single config value (unmasked) for internal use"""
+def get_integration_config_value(integration_type, config_key):
+    """Get a single config value (unmasked) for internal use (v3.1 schema)"""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
         cursor.execute("""
-            SELECT config_value
-            FROM integration_config
-            WHERE integration_id = %s AND config_key = %s
-        """, (integration_id, config_key))
+            SELECT config, credentials
+            FROM integrations
+            WHERE integration_type = %s
+        """, (integration_type,))
 
         result = cursor.fetchone()
-        return result['config_value'] if result else None
+        if not result:
+            return None
+
+        config = _parse_json(result.get('config'))
+        credentials = _parse_json(result.get('credentials'))
+
+        # Check config first, then credentials
+        if config_key in config:
+            return config[config_key]
+        if config_key in credentials:
+            return credentials[config_key]
+
+        return None
 
     finally:
         cursor.close()
         conn.close()
 
 
-def update_integration_config(integration_id, config_updates):
+def update_integration_config(integration_type, config_updates):
     """
-    Update integration configuration
+    Update integration configuration (v3.1 schema)
     config_updates: dict of {config_key: config_value}
+    Automatically determines if value goes to config or credentials based on sensitivity
     """
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
     try:
-        for config_key, config_value in config_updates.items():
+        # Get current config and credentials
+        cursor.execute("""
+            SELECT config, credentials
+            FROM integrations
+            WHERE integration_type = %s
+        """, (integration_type,))
+
+        result = cursor.fetchone()
+        if not result:
+            return False
+
+        current_config = _parse_json(result.get('config'))
+        current_credentials = _parse_json(result.get('credentials'))
+
+        # Define which keys are sensitive (go to credentials)
+        sensitive_keys = {'api_key', 'bot_token', 'password', 'secret', 'token'}
+
+        for key, value in config_updates.items():
             # Skip empty values for sensitive fields (keep existing)
-            if config_value == '' or config_value is None:
-                cursor.execute("""
-                    SELECT is_sensitive, config_value
-                    FROM integration_config
-                    WHERE integration_id = %s AND config_key = %s
-                """, (integration_id, config_key))
-                result = cursor.fetchone()
-                if result and result[0] and result[1]:  # is_sensitive and has value
+            if (value == '' or value is None) and key in sensitive_keys:
+                if current_credentials.get(key):
                     continue  # Keep existing sensitive value
 
-            cursor.execute("""
-                UPDATE integration_config
-                SET config_value = %s, updated_at = NOW()
-                WHERE integration_id = %s AND config_key = %s
-            """, (str(config_value) if config_value is not None else '', integration_id, config_key))
+            # Determine if this is a credential or config
+            if key in sensitive_keys:
+                current_credentials[key] = str(value) if value else ''
+            else:
+                current_config[key] = str(value) if value else ''
+
+        # Update database
+        cursor.execute("""
+            UPDATE integrations
+            SET config = %s, credentials = %s, updated_at = NOW()
+            WHERE integration_type = %s
+        """, (json.dumps(current_config), json.dumps(current_credentials), integration_type))
 
         conn.commit()
 
         # Update integration status based on config
-        update_integration_status(integration_id)
+        update_integration_status(integration_type)
 
         return True
 
@@ -203,43 +394,36 @@ def update_integration_config(integration_id, config_updates):
         conn.close()
 
 
-def update_integration_status(integration_id):
-    """Update integration status based on configuration"""
+def update_integration_status(integration_type):
+    """Update integration status based on configuration (v3.1 schema)"""
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # Check if all required fields have values
         cursor.execute("""
-            SELECT config_key, config_value, is_required
-            FROM integration_config
-            WHERE integration_id = %s
-        """, (integration_id,))
+            SELECT config, credentials
+            FROM integrations
+            WHERE integration_type = %s
+        """, (integration_type,))
 
-        configs = cursor.fetchall()
+        result = cursor.fetchone()
+        if not result:
+            return
 
-        all_required_filled = True
-        is_enabled = False
+        config = _parse_json(result.get('config'))
+        credentials = _parse_json(result.get('credentials'))
 
-        for config in configs:
-            if config['is_required'] and not config['config_value']:
-                all_required_filled = False
-            if config['config_key'] == 'enabled' and config['config_value'] == 'true':
-                is_enabled = True
+        # Check if enabled in config
+        is_enabled = config.get('enabled', 'false').lower() == 'true'
 
-        # Determine status
-        if all_required_filled and is_enabled:
-            status = 'active'
-        elif all_required_filled:
-            status = 'configured'
-        else:
-            status = 'inactive'
+        # Check if all credentials have values
+        has_all_credentials = all(credentials.values()) if credentials else True
 
         cursor.execute("""
             UPDATE integrations
-            SET status = %s, is_enabled = %s, updated_at = NOW()
-            WHERE integration_id = %s
-        """, (status, is_enabled, integration_id))
+            SET is_enabled = %s, updated_at = NOW()
+            WHERE integration_type = %s
+        """, (is_enabled and has_all_credentials, integration_type))
 
         conn.commit()
 
@@ -248,24 +432,34 @@ def update_integration_status(integration_id):
         conn.close()
 
 
-def set_integration_enabled(integration_id, enabled):
-    """Enable or disable an integration"""
+def set_integration_enabled(integration_type, enabled):
+    """Enable or disable an integration (v3.1 schema)"""
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
     try:
-        # Update enabled config
+        # Get current config
         cursor.execute("""
-            UPDATE integration_config
-            SET config_value = %s, updated_at = NOW()
-            WHERE integration_id = %s AND config_key = 'enabled'
-        """, ('true' if enabled else 'false', integration_id))
+            SELECT config
+            FROM integrations
+            WHERE integration_type = %s
+        """, (integration_type,))
+
+        result = cursor.fetchone()
+        if not result:
+            return False
+
+        config = _parse_json(result.get('config'))
+        config['enabled'] = 'true' if enabled else 'false'
+
+        # Update config and is_enabled
+        cursor.execute("""
+            UPDATE integrations
+            SET config = %s, is_enabled = %s, updated_at = NOW()
+            WHERE integration_type = %s
+        """, (json.dumps(config), enabled, integration_type))
 
         conn.commit()
-
-        # Update status
-        update_integration_status(integration_id)
-
         return True
 
     finally:
@@ -273,8 +467,8 @@ def set_integration_enabled(integration_id, enabled):
         conn.close()
 
 
-def update_test_result(integration_id, success, message):
-    """Update the last test result for an integration"""
+def update_test_result(integration_type, success, message):
+    """Update the last test result for an integration (v3.1 schema)"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -282,18 +476,35 @@ def update_test_result(integration_id, success, message):
         if success:
             cursor.execute("""
                 UPDATE integrations
-                SET last_test_at = NOW(), last_test_result = %s, error_message = NULL, updated_at = NOW()
-                WHERE integration_id = %s
-            """, (message, integration_id))
+                SET last_used_at = NOW(), last_error = NULL, error_count = 0, updated_at = NOW()
+                WHERE integration_type = %s
+            """, (integration_type,))
         else:
             cursor.execute("""
                 UPDATE integrations
-                SET last_test_result = NULL, error_message = %s, updated_at = NOW()
-                WHERE integration_id = %s
-            """, (message, integration_id))
+                SET last_error = %s, error_count = error_count + 1, updated_at = NOW()
+                WHERE integration_type = %s
+            """, (message, integration_type))
 
         conn.commit()
 
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def update_last_used(integration_type):
+    """Update last_used_at timestamp for an integration"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            UPDATE integrations
+            SET last_used_at = NOW(), updated_at = NOW()
+            WHERE integration_type = %s
+        """, (integration_type,))
+        conn.commit()
     finally:
         cursor.close()
         conn.close()
@@ -303,6 +514,7 @@ def sync_env_to_database():
     """
     Sync .env values to database (one-time migration helper)
     This should be called once to populate database from existing .env
+    Updated for v3.1 schema with JSON columns
     """
     import os
     from dotenv import load_dotenv
@@ -311,46 +523,99 @@ def sync_env_to_database():
 
     env_mappings = {
         'telegram': {
-            'bot_token': 'TELEGRAM_BOT_TOKEN',
-            'chat_id': 'TELEGRAM_CHAT_ID',
+            'config': {
+                'chat_id': 'TELEGRAM_CHAT_ID',
+                'enabled': lambda: 'true' if os.getenv('TELEGRAM_BOT_TOKEN') else 'false'
+            },
+            'credentials': {
+                'bot_token': 'TELEGRAM_BOT_TOKEN'
+            }
         },
         'abuseipdb': {
-            'api_key': 'ABUSEIPDB_API_KEY',
-            'enabled': 'ABUSEIPDB_ENABLED',
-            'rate_limit_day': 'ABUSEIPDB_RATE_LIMIT_PER_DAY',
-            'rate_limit_minute': 'ABUSEIPDB_RATE_LIMIT_PER_MINUTE',
+            'config': {
+                'enabled': 'ABUSEIPDB_ENABLED',
+                'rate_limit_day': 'ABUSEIPDB_RATE_LIMIT_PER_DAY',
+                'rate_limit_minute': 'ABUSEIPDB_RATE_LIMIT_PER_MINUTE'
+            },
+            'credentials': {
+                'api_key': 'ABUSEIPDB_API_KEY'
+            }
         },
         'virustotal': {
-            'api_key': 'VIRUSTOTAL_API_KEY',
-            'enabled': 'VIRUSTOTAL_ENABLED',
-            'rate_limit_day': 'VIRUSTOTAL_RATE_LIMIT_PER_DAY',
-            'rate_limit_minute': 'VIRUSTOTAL_RATE_LIMIT_PER_MINUTE',
+            'config': {
+                'enabled': 'VIRUSTOTAL_ENABLED',
+                'rate_limit_day': 'VIRUSTOTAL_RATE_LIMIT_PER_DAY',
+                'rate_limit_minute': 'VIRUSTOTAL_RATE_LIMIT_PER_MINUTE'
+            },
+            'credentials': {
+                'api_key': 'VIRUSTOTAL_API_KEY'
+            }
         },
         'shodan': {
-            'api_key': 'SHODAN_API_KEY',
-            'enabled': 'SHODAN_ENABLED',
-            'high_risk_only': 'SHODAN_HIGH_RISK_ONLY',
-            'rate_limit_month': 'SHODAN_RATE_LIMIT_PER_MONTH',
-            'rate_limit_day': 'SHODAN_RATE_LIMIT_PER_DAY',
+            'config': {
+                'enabled': 'SHODAN_ENABLED',
+                'high_risk_only': 'SHODAN_HIGH_RISK_ONLY',
+                'rate_limit_month': 'SHODAN_RATE_LIMIT_PER_MONTH',
+                'rate_limit_day': 'SHODAN_RATE_LIMIT_PER_DAY'
+            },
+            'credentials': {
+                'api_key': 'SHODAN_API_KEY'
+            }
         },
         'smtp': {
-            'host': 'SMTP_HOST',
-            'port': 'SMTP_PORT',
-            'user': 'SMTP_USER',
-            'password': 'SMTP_PASSWORD',
-            'from_email': 'FROM_EMAIL',
-            'from_name': 'FROM_NAME',
+            'config': {
+                'host': 'SMTP_HOST',
+                'port': 'SMTP_PORT',
+                'from_email': 'FROM_EMAIL',
+                'from_name': 'FROM_NAME'
+            },
+            'credentials': {
+                'user': 'SMTP_USER',
+                'password': 'SMTP_PASSWORD'
+            }
         },
+        'greynoise': {
+            'config': {
+                'enabled': 'GREYNOISE_ENABLED',
+                'use_community_api': 'GREYNOISE_USE_COMMUNITY_API'
+            },
+            'credentials': {
+                'api_key': 'GREYNOISE_API_KEY'
+            }
+        }
     }
 
-    for integration_id, mappings in env_mappings.items():
-        config_updates = {}
-        for config_key, env_key in mappings.items():
-            env_value = os.getenv(env_key, '')
-            if env_value:
-                config_updates[config_key] = env_value
+    conn = get_connection()
+    cursor = conn.cursor()
 
-        if config_updates:
-            update_integration_config(integration_id, config_updates)
+    try:
+        for integration_type, mappings in env_mappings.items():
+            config = {}
+            credentials = {}
 
-    print("Environment variables synced to database")
+            for config_key, env_key in mappings.get('config', {}).items():
+                if callable(env_key):
+                    config[config_key] = env_key()
+                else:
+                    env_value = os.getenv(env_key, '')
+                    if env_value:
+                        config[config_key] = env_value
+
+            for cred_key, env_key in mappings.get('credentials', {}).items():
+                env_value = os.getenv(env_key, '')
+                if env_value:
+                    credentials[cred_key] = env_value
+
+            if config or credentials:
+                cursor.execute("""
+                    UPDATE integrations
+                    SET config = %s, credentials = %s, updated_at = NOW()
+                    WHERE integration_type = %s
+                """, (json.dumps(config), json.dumps(credentials), integration_type))
+
+        conn.commit()
+        print("Environment variables synced to database")
+
+    finally:
+        cursor.close()
+        conn.close()

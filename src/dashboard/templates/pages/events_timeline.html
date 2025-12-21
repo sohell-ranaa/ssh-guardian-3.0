@@ -1,20 +1,15 @@
 <!-- SSH Guardian v3.0 - Events Timeline Page -->
 <div id="page-events-timeline" class="page-content" style="display: none;">
+    <!-- Page Header -->
     <div class="page-header-with-cache">
         <div>
             <h2 style="margin: 0 0 4px 0; font-size: 24px; font-weight: 600;">Events Timeline</h2>
             <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Track authentication patterns and trends over time</p>
         </div>
-        <div class="page-header-actions" style="display: flex; align-items: center; gap: 12px;">
-            <button id="timeline-refresh-btn" style="padding: 8px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                ↻ Refresh
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button id="timeline-refresh-btn" class="refresh-btn">
+                <span class="refresh-icon">↻</span> Refresh
             </button>
-            <div class="cache-indicator loading" data-cache-endpoint="events_timeline">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadEventsTimelinePage()" title="Refresh data">↻</button>
-            </div>
         </div>
     </div>
 
@@ -102,7 +97,7 @@
 
         <!-- Timeline Visualization -->
         <div class="card" style="padding: 20px; margin-bottom: 24px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
                 <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Event Trends Over Time</h3>
                 <div style="display: flex; gap: 16px; flex-wrap: wrap;">
                     <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
@@ -138,7 +133,7 @@
                 <h3 style="margin: 0; font-size: 16px; font-weight: 600;">📋 Detailed Timeline Data</h3>
                 <div style="font-size: 12px; color: var(--text-secondary);">Showing <span id="timeline-row-count">0</span> time periods</div>
             </div>
-            <div class="table-wrapper" style="overflow-x: auto;">
+            <div style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <thead>
                         <tr style="background: var(--background); border-bottom: 2px solid var(--border);">

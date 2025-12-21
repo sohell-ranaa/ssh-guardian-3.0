@@ -120,12 +120,13 @@ def execute_pipeline(
             # Create UFW command
             command_uuid = str(uuid_module.uuid4())
             params = json.dumps({'ip': source_ip, 'block_id': block_id})
+            ufw_command = f"ufw deny from {source_ip}"
 
             cursor.execute("""
                 INSERT INTO agent_ufw_commands
-                (agent_id, command_uuid, command_type, params_json, status, created_at)
-                VALUES (%s, %s, 'deny_from', %s, 'pending', NOW())
-            """, (agent_id, command_uuid, params))
+                (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at)
+                VALUES (%s, %s, 'deny_from', %s, %s, 'pending', NOW())
+            """, (agent_id, command_uuid, params, ufw_command))
 
             ufw_id = cursor.lastrowid
             conn.commit()

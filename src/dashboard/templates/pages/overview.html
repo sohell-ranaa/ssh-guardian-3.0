@@ -1,17 +1,20 @@
 <!-- Overview Page - User Guide & Research Thesis -->
 <div id="page-overview" class="page-content">
-    <!-- Tab Navigation -->
+    <!-- Tab Navigation - Modern Pill Design -->
     <div class="overview-tabs">
-        <button class="overview-tab active" data-tab="guide" onclick="Overview.switchTab('guide')">
-            <span class="tab-icon">&#128214;</span>
-            <span class="tab-text">User Guide</span>
-        </button>
-        <button class="overview-tab" data-tab="thesis" onclick="Overview.switchTab('thesis')">
-            <span class="tab-icon">&#128218;</span>
-            <span class="tab-text">Research Thesis</span>
-        </button>
+        <div class="overview-tabs-inner">
+            <button class="overview-tab active" data-tab="guide" onclick="Overview.switchTab('guide')">
+                <span class="tab-icon">&#128214;</span>
+                <span class="tab-text">User Guide</span>
+            </button>
+            <button class="overview-tab" data-tab="thesis" onclick="Overview.switchTab('thesis')">
+                <span class="tab-icon">&#128218;</span>
+                <span class="tab-text">Research Thesis</span>
+            </button>
+        </div>
         <div class="research-badge">
-            <span>&#127891;</span> Masters Research Project
+            <span>&#127891;</span>
+            <span class="badge-text">Masters Research</span>
         </div>
     </div>
 
@@ -20,12 +23,14 @@
         <!-- Hero Section - Light Theme -->
         <div class="overview-hero">
             <div class="overview-hero-content">
-                <!-- Logo with blue background -->
+                <!-- Logo - using global app-logo component -->
                 <div class="overview-hero-logo">
-                    <div class="hero-logo-circle">
-                        <span class="hero-logo-icon">&#128737;</span>
+                    <div class="app-logo logo-xl">
+                        <div class="app-logo-circle">
+                            <span class="app-logo-icon">&#128737;</span>
+                        </div>
+                        <div class="app-logo-badge">v3.0</div>
                     </div>
-                    <div class="hero-logo-badge">v3.0</div>
                 </div>
 
                 <h1 class="overview-hero-title">SSH Guardian</h1>
@@ -95,14 +100,35 @@
             </div>
         </div>
 
+        <!-- Quick Navigation Bar -->
+        <div class="quick-nav-bar" id="quickNavBar">
+            <div class="quick-nav-inner">
+                <a href="#quick-actions-section" class="quick-nav-item active" data-section="quick-actions">
+                    <span class="quick-nav-icon">&#9889;</span>
+                    <span class="quick-nav-label">Quick Actions</span>
+                </a>
+                <a href="#tech-stack-section" class="quick-nav-item" data-section="tech-stack">
+                    <span class="quick-nav-icon">&#128736;</span>
+                    <span class="quick-nav-label">Tech Stack</span>
+                </a>
+                <a href="#wizard-section" class="quick-nav-item" data-section="wizard">
+                    <span class="quick-nav-icon">&#128218;</span>
+                    <span class="quick-nav-label">Getting Started</span>
+                </a>
+            </div>
+        </div>
+
         <!-- Quick Actions Grid -->
-        <div class="quick-actions">
-            <div class="quick-actions-header">
-                <div>
-                    <h2 class="quick-actions-title">Quick Actions</h2>
-                    <p class="quick-actions-subtitle">Jump to key features and start monitoring your SSH security</p>
+        <div class="quick-actions" id="quick-actions-section">
+            <div class="section-header">
+                <div class="section-header-left">
+                    <div class="section-header-icon blue">&#9889;</div>
+                    <div class="section-header-text">
+                        <h2>Quick Actions</h2>
+                        <p>Jump to key features and start monitoring your SSH security</p>
+                    </div>
                 </div>
-                <div class="quick-actions-hint">
+                <div class="section-header-badge">
                     <span>&#128161;</span> Click any card to navigate
                 </div>
             </div>
@@ -201,9 +227,19 @@
         </div>
 
         <!-- Technology Stack Section -->
-        <div class="tech-stack-section">
-            <h2 class="section-title">Technology Stack</h2>
-            <p class="section-subtitle">Built with modern, proven technologies for reliability and performance</p>
+        <div class="tech-stack-section" id="tech-stack-section">
+            <div class="section-header" style="max-width: 900px; margin: 0 auto 32px;">
+                <div class="section-header-left">
+                    <div class="section-header-icon purple">&#128736;</div>
+                    <div class="section-header-text">
+                        <h2>Technology Stack</h2>
+                        <p>Built with modern, proven technologies for reliability and performance</p>
+                    </div>
+                </div>
+                <div class="section-header-badge">
+                    <span>&#128640;</span> Production Ready
+                </div>
+            </div>
             <div class="tech-stack-grid">
                 <div class="tech-item">
                     <div class="tech-icon">&#128013;</div>
@@ -239,17 +275,20 @@
         </div>
 
         <!-- Step-by-Step Guide Section -->
-        <div class="wizard-section">
+        <div class="wizard-section" id="wizard-section">
             <div class="wizard-container">
-                <div class="wizard-header">
-                    <div>
-                        <h2 class="wizard-title">Getting Started Guide</h2>
-                        <p class="wizard-subtitle">Follow these steps to set up and use SSH Guardian effectively</p>
+                <div class="section-header wizard-header">
+                    <div class="section-header-left">
+                        <div class="section-header-icon green">&#128218;</div>
+                        <div class="section-header-text">
+                            <h2>Getting Started Guide</h2>
+                            <p>Follow these steps to set up and use SSH Guardian effectively</p>
+                        </div>
                     </div>
                     <div class="wizard-progress-info">
-                        <span class="wizard-progress-text">Step <span id="overview-current-step">1</span> of <span id="overview-total-steps">6</span></span>
+                        <span class="wizard-progress-text">Step <span id="overview-current-step">1</span> of <span id="overview-total-steps">8</span></span>
                         <div class="wizard-progress-bar-mini">
-                            <div class="wizard-progress-fill" id="overview-wizard-progress-fill" style="width: 16.67%"></div>
+                            <div class="wizard-progress-fill" id="overview-wizard-progress-fill" style="width: 12.5%"></div>
                         </div>
                     </div>
                 </div>
@@ -258,7 +297,7 @@
                 <div class="wizard-steps-grid" id="overview-wizard-steps-grid">
                     <div class="wizard-step-card active" data-step="1" onclick="Overview.goToStep(1)">
                         <div class="wizard-step-number">1</div>
-                        <div class="wizard-step-label">Welcome</div>
+                        <div class="wizard-step-label">Introduction</div>
                     </div>
                     <div class="wizard-step-card" data-step="2" onclick="Overview.goToStep(2)">
                         <div class="wizard-step-number">2</div>
@@ -266,19 +305,27 @@
                     </div>
                     <div class="wizard-step-card" data-step="3" onclick="Overview.goToStep(3)">
                         <div class="wizard-step-number">3</div>
-                        <div class="wizard-step-label">Deployment</div>
+                        <div class="wizard-step-label">Installation</div>
                     </div>
                     <div class="wizard-step-card" data-step="4" onclick="Overview.goToStep(4)">
                         <div class="wizard-step-number">4</div>
-                        <div class="wizard-step-label">Monitoring</div>
+                        <div class="wizard-step-label">Agent Setup</div>
                     </div>
                     <div class="wizard-step-card" data-step="5" onclick="Overview.goToStep(5)">
                         <div class="wizard-step-number">5</div>
-                        <div class="wizard-step-label">Firewall</div>
+                        <div class="wizard-step-label">Monitoring</div>
                     </div>
                     <div class="wizard-step-card" data-step="6" onclick="Overview.goToStep(6)">
                         <div class="wizard-step-number">6</div>
-                        <div class="wizard-step-label">ML & Intel</div>
+                        <div class="wizard-step-label">Fail2ban & UFW</div>
+                    </div>
+                    <div class="wizard-step-card" data-step="7" onclick="Overview.goToStep(7)">
+                        <div class="wizard-step-number">7</div>
+                        <div class="wizard-step-label">ML & Threat Intel</div>
+                    </div>
+                    <div class="wizard-step-card" data-step="8" onclick="Overview.goToStep(8)">
+                        <div class="wizard-step-number">8</div>
+                        <div class="wizard-step-label">Auto-Blocking</div>
                     </div>
                 </div>
 
@@ -314,6 +361,13 @@
     <!-- Tab 2: Research Thesis -->
     <div id="overview-tab-thesis" class="overview-tab-content">
         <div class="thesis-container">
+            <!-- Mobile TOC Toggle Button -->
+            <button class="thesis-mobile-toc-btn" onclick="Overview.toggleMobileTOC()" title="Table of Contents">
+                <span class="toc-btn-icon">&#9776;</span>
+                <span class="toc-btn-text">Contents</span>
+            </button>
+            <!-- Mobile TOC Overlay -->
+            <div class="thesis-toc-overlay" onclick="Overview.toggleMobileTOC()"></div>
             <!-- Table of Contents -->
             <nav class="thesis-toc" id="overview-thesis-toc">
                 <div class="toc-header">
@@ -321,6 +375,14 @@
                     <p class="toc-subtitle">Navigate thesis sections</p>
                 </div>
                 <ul class="toc-list" id="overview-toc-list"></ul>
+
+                <!-- Export Button -->
+                <div class="toc-export">
+                    <button class="btn-export-docx" onclick="Overview.exportThesisDocx()" title="Export as Word Document">
+                        <span class="export-icon">&#128196;</span>
+                        <span class="export-text">Export to DOCX</span>
+                    </button>
+                </div>
             </nav>
 
             <!-- Thesis Content -->
@@ -341,4 +403,5 @@
     </div>
 </div>
 
-<script src="/static/js/modules/overview.js"></script>
+<script src="/static/js/modules/overview_thesis.js?v=3.1.0"></script>
+<script src="/static/js/modules/overview.js?v=3.1.0"></script>

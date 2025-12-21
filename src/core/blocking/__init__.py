@@ -7,6 +7,7 @@ from .rule_evaluators import evaluate_brute_force_rule, evaluate_threat_threshol
 from .rule_coordinator import evaluate_rules_for_ip, check_and_block_ip
 from .ip_operations import block_ip, unblock_ip, block_ip_manual
 from .cleanup import cleanup_expired_blocks
+from .ufw_sync import reconcile_ufw_with_ip_blocks
 
 # Backwards compatibility - expose the original BlockingEngine class
 class BlockingEngine:
@@ -61,5 +62,6 @@ __all__ = [
     'block_ip',
     'unblock_ip',
     'block_ip_manual',
-    'cleanup_expired_blocks'
+    'cleanup_expired_blocks',
+    'reconcile_ufw_with_ip_blocks'
 ]

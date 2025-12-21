@@ -392,7 +392,7 @@ class GuardianAPIClient:
             return []
 
     def report_command_result(self, command_id: str, success: bool, message: str) -> bool:
-        """Report the result of a firewall command execution"""
+        """Report the result of a firewall command execution (tries UFW endpoint first)"""
         try:
             payload = {
                 'agent_id': self.config.agent_id,
@@ -402,6 +402,14 @@ class GuardianAPIClient:
                 'executed_at': datetime.now().isoformat()
             }
 
+            # Try UFW endpoint first (for UFW commands from agent_ufw_commands table)
+            url = f"{self.config.server_url}/api/agents/ufw/command-result"
+            response = self.session.post(url, json=payload, timeout=30)
+
+            if response.status_code == 200:
+                return True
+
+            # Fallback to generic firewall endpoint (for iptables commands)
             url = f"{self.config.server_url}/api/agents/firewall/command-result"
             response = self.session.post(url, json=payload, timeout=30)
 
@@ -514,6 +522,38 @@ class GuardianAPIClient:
         except Exception as e:
             logging.error(f"Error reporting fail2ban unban result: {e}")
             return False
+
+    def sync_fail2ban_bans(self, bans: List[Dict], hostname: str) -> Dict:
+        """
+        Sync current fail2ban bans with timestamps to central server.
+
+        Args:
+            bans: List of ban dicts with 'ip', 'jail', 'banned_at' keys
+            hostname: Agent hostname
+
+        Returns:
+            dict with success status and counts
+        """
+        try:
+            payload = {
+                'agent_id': self.config.agent_id,
+                'hostname': hostname,
+                'bans': bans
+            }
+
+            url = f"{self.config.server_url}/api/agents/fail2ban/sync"
+            response = self.session.post(url, json=payload, timeout=30)
+
+            if response.status_code == 200:
+                data = response.json()
+                return data
+            else:
+                logging.warning(f"Failed to sync fail2ban bans: {response.status_code}")
+                return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+        except Exception as e:
+            logging.error(f"Error syncing fail2ban bans: {e}")
+            return {'success': False, 'error': str(e)}
 
     def _get_system_info(self) -> Dict:
         """Collect system information"""
@@ -696,7 +736,7 @@ class SSHGuardianAgent:
                         self.state.save()
 
                 # Firewall synchronization (UFW or iptables)
-                if self.config.firewall_enabled and (self.ufw_manager or self.firewall_collector):
+                if self.config.firewall_enabled:
                     if current_time - last_firewall_sync_time >= self.config.firewall_sync_interval:
                         self._sync_firewall()
                         last_firewall_sync_time = current_time
@@ -704,9 +744,12 @@ class SSHGuardianAgent:
                     # Process any pending firewall commands
                     self._process_firewall_commands()
 
-                # Fail2ban sync (for dashboard unbans)
+                # Fail2ban sync (bans to server + unbans from server)
                 if self.config.use_fail2ban:
                     if current_time - last_fail2ban_sync_time >= self.config.fail2ban_sync_interval:
+                        # Sync current bans WITH timestamps to server
+                        self._sync_fail2ban_bans_to_server()
+                        # Process pending unbans from dashboard
                         self._sync_fail2ban_unbans()
                         last_fail2ban_sync_time = current_time
 
@@ -745,8 +788,156 @@ class SSHGuardianAgent:
                 else:
                     logging.warning(f"Firewall collection error: {firewall_data.get('error')}")
 
+            else:
+                # Fallback: Direct UFW collection without external modules
+                self._sync_ufw_direct()
+
         except Exception as e:
             logging.error(f"Error syncing firewall: {e}")
+
+    def _sync_ufw_direct(self):
+        """Direct UFW sync without external modules - fallback method"""
+        try:
+            import re
+            logging.info("🔥 Collecting UFW rules (direct mode)...")
+
+            # Get UFW status
+            status_result = subprocess.run(['ufw', 'status'], capture_output=True, text=True, timeout=30)
+            if status_result.returncode != 0:
+                logging.warning("UFW not available or not running")
+                return
+
+            ufw_active = 'Status: active' in status_result.stdout
+
+            # Get numbered rules
+            rules = []
+            result = subprocess.run(['ufw', 'status', 'numbered'], capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    line = line.strip()
+                    if line.startswith('['):
+                        try:
+                            # Parse: [ 1] 22/tcp ALLOW IN Anywhere
+                            # Or: [ 2] Anywhere DENY IN 192.168.1.100
+                            idx_end = line.index(']')
+                            idx = int(line[1:idx_end].strip())
+                            rule_text = line[idx_end+1:].strip()
+
+                            # Determine action
+                            action = 'ALLOW'
+                            if 'DENY' in rule_text:
+                                action = 'DENY'
+                            elif 'REJECT' in rule_text:
+                                action = 'REJECT'
+                            elif 'LIMIT' in rule_text:
+                                action = 'LIMIT'
+
+                            # Determine direction
+                            direction = 'IN'
+                            if ' OUT ' in rule_text:
+                                direction = 'OUT'
+
+                            # Check IPv6
+                            is_v6 = '(v6)' in rule_text
+                            rule_text_clean = rule_text.replace('(v6)', '').strip()
+
+                            # Parse rule components
+                            # Format: TO_PART ACTION [DIRECTION] FROM_PART
+                            # Examples:
+                            #   22/tcp                     ALLOW IN    Anywhere
+                            #   Anywhere                   DENY IN     192.168.1.100
+                            #   80,443/tcp                 ALLOW IN    Anywhere
+                            #   Anywhere on eth0           ALLOW IN    Anywhere
+
+                            to_port = ''
+                            to_ip = 'Anywhere'
+                            from_ip = 'Anywhere'
+                            from_port = ''
+                            protocol = ''
+                            interface = ''
+
+                            # Split by action keyword
+                            action_pattern = r'\s+(ALLOW|DENY|REJECT|LIMIT)\s+(IN|OUT|FWD)?\s*'
+                            match = re.split(action_pattern, rule_text_clean, maxsplit=1)
+
+                            if len(match) >= 3:
+                                to_part = match[0].strip()
+                                from_part = match[-1].strip() if len(match) > 3 else 'Anywhere'
+
+                                # Parse TO part (destination - usually port or "Anywhere")
+                                if '/' in to_part:
+                                    # Has protocol: 22/tcp, 80,443/tcp
+                                    port_proto = to_part.split('/')
+                                    to_port = port_proto[0]
+                                    protocol = port_proto[1] if len(port_proto) > 1 else ''
+                                elif to_part.isdigit():
+                                    to_port = to_part
+                                elif to_part.lower() != 'anywhere':
+                                    # Could be IP or interface
+                                    if ' on ' in to_part:
+                                        parts = to_part.split(' on ')
+                                        to_ip = parts[0].strip()
+                                        interface = parts[1].strip()
+                                    else:
+                                        to_ip = to_part
+
+                                # Parse FROM part (source IP)
+                                if from_part and from_part.lower() != 'anywhere':
+                                    # Check for "port X" in from
+                                    if ' port ' in from_part:
+                                        parts = from_part.split(' port ')
+                                        from_ip = parts[0].strip()
+                                        from_port = parts[1].strip()
+                                    else:
+                                        from_ip = from_part
+
+                            rules.append({
+                                'rule_index': idx,
+                                'rule_text': rule_text,
+                                'action': action,
+                                'direction': direction,
+                                'from_ip': from_ip,
+                                'from_port': from_port,
+                                'to_ip': to_ip,
+                                'to_port': to_port,
+                                'protocol': protocol,
+                                'interface': interface,
+                                'ipv6': is_v6
+                            })
+                        except (ValueError, IndexError) as e:
+                            logging.debug(f"Failed to parse rule: {line} - {e}")
+                            continue
+
+            # Get default policies
+            default_incoming = 'deny'
+            default_outgoing = 'allow'
+            verbose_result = subprocess.run(['ufw', 'status', 'verbose'], capture_output=True, text=True, timeout=30)
+            if verbose_result.returncode == 0:
+                for line in verbose_result.stdout.split('\n'):
+                    if 'Default:' in line:
+                        if 'deny (incoming)' in line.lower():
+                            default_incoming = 'deny'
+                        elif 'allow (incoming)' in line.lower():
+                            default_incoming = 'allow'
+                        if 'allow (outgoing)' in line.lower():
+                            default_outgoing = 'allow'
+                        elif 'deny (outgoing)' in line.lower():
+                            default_outgoing = 'deny'
+
+            ufw_data = {
+                'ufw_status': 'active' if ufw_active else 'inactive',
+                'default_incoming': default_incoming,
+                'default_outgoing': default_outgoing,
+                'rules': rules
+            }
+
+            if self.api_client.submit_ufw_rules(ufw_data):
+                logging.info(f"✅ UFW synced: {len(rules)} rules")
+            else:
+                logging.warning("Failed to submit UFW rules")
+
+        except Exception as e:
+            logging.error(f"Error in direct UFW sync: {e}")
 
     def _sync_extended_data(self, firewall_data: dict = None):
         """Sync extended data including ports, users, and suggestions"""
@@ -846,15 +1037,166 @@ class SSHGuardianAgent:
         except Exception as e:
             logging.error(f"Error syncing fail2ban unbans: {e}")
 
+    def _sync_fail2ban_bans_to_server(self):
+        """
+        Sync current fail2ban bans WITH ACTUAL TIMESTAMPS to central server.
+        Queries fail2ban's sqlite database to get the real ban times.
+        """
+        if not self.config.use_fail2ban:
+            return
+
+        try:
+            import sqlite3
+
+            # Fail2ban stores its database here
+            f2b_db_paths = [
+                '/var/lib/fail2ban/fail2ban.sqlite3',
+                '/var/lib/fail2ban/fail2ban.db'
+            ]
+
+            db_path = None
+            for path in f2b_db_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+
+            if not db_path:
+                logging.debug("Fail2ban database not found, using fail2ban-client")
+                # Fall back to fail2ban-client (without timestamps)
+                self._sync_fail2ban_bans_via_client()
+                return
+
+            # Query fail2ban's sqlite database for current bans with timestamps
+            bans = []
+            try:
+                conn = sqlite3.connect(db_path, timeout=10)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                # Query the bans table for currently banned IPs
+                # timeofban is Unix timestamp
+                cursor.execute("""
+                    SELECT ip, jail, timeofban
+                    FROM bans
+                    WHERE 1=1
+                    ORDER BY timeofban DESC
+                """)
+
+                for row in cursor.fetchall():
+                    ip = row['ip']
+                    jail = row['jail']
+                    timeofban = row['timeofban']
+
+                    # Convert Unix timestamp to ISO format
+                    if timeofban:
+                        banned_at = datetime.fromtimestamp(timeofban).isoformat()
+                    else:
+                        banned_at = None
+
+                    bans.append({
+                        'ip': ip,
+                        'jail': jail,
+                        'banned_at': banned_at
+                    })
+
+                cursor.close()
+                conn.close()
+
+            except sqlite3.Error as e:
+                logging.warning(f"Failed to read fail2ban database: {e}")
+                # Fall back to fail2ban-client
+                self._sync_fail2ban_bans_via_client()
+                return
+
+            if not bans:
+                logging.debug("No fail2ban bans to sync")
+                return
+
+            # Send to server
+            result = self.api_client.sync_fail2ban_bans(
+                bans=bans,
+                hostname=socket.gethostname()
+            )
+
+            if result.get('success'):
+                new_count = result.get('new', 0)
+                synced_count = result.get('synced', 0)
+                if new_count > 0:
+                    logging.info(f"🔒 Synced {len(bans)} fail2ban bans (new: {new_count}, existing: {synced_count})")
+            else:
+                logging.warning(f"Fail2ban ban sync failed: {result.get('error')}")
+
+        except ImportError:
+            logging.debug("sqlite3 not available, using fail2ban-client")
+            self._sync_fail2ban_bans_via_client()
+        except Exception as e:
+            logging.error(f"Error syncing fail2ban bans: {e}")
+
+    def _sync_fail2ban_bans_via_client(self):
+        """
+        Fallback: Sync fail2ban bans using fail2ban-client (without timestamps).
+        Used when fail2ban database is not accessible.
+        """
+        try:
+            # Get list of jails
+            result = subprocess.run(
+                ['fail2ban-client', 'status'],
+                capture_output=True, text=True, timeout=30
+            )
+
+            if result.returncode != 0:
+                return
+
+            # Parse jail list
+            jails = []
+            for line in result.stdout.split('\n'):
+                if 'Jail list:' in line:
+                    jail_str = line.split(':')[1].strip()
+                    jails = [j.strip() for j in jail_str.split(',') if j.strip()]
+                    break
+
+            bans = []
+            for jail in jails:
+                # Get banned IPs for each jail
+                result = subprocess.run(
+                    ['fail2ban-client', 'status', jail],
+                    capture_output=True, text=True, timeout=30
+                )
+
+                if result.returncode != 0:
+                    continue
+
+                for line in result.stdout.split('\n'):
+                    if 'Banned IP list:' in line:
+                        ip_str = line.split(':')[1].strip()
+                        ips = [ip.strip() for ip in ip_str.split() if ip.strip()]
+                        for ip in ips:
+                            bans.append({
+                                'ip': ip,
+                                'jail': jail,
+                                'banned_at': None  # No timestamp available via client
+                            })
+                        break
+
+            if bans:
+                result = self.api_client.sync_fail2ban_bans(
+                    bans=bans,
+                    hostname=socket.gethostname()
+                )
+                if result.get('success'):
+                    logging.info(f"🔒 Synced {len(bans)} fail2ban bans (via client, no timestamps)")
+
+        except FileNotFoundError:
+            logging.debug("fail2ban-client not found")
+        except Exception as e:
+            logging.error(f"Error syncing fail2ban bans via client: {e}")
+
     def _process_firewall_commands(self):
         """Process pending firewall commands from central server"""
         try:
             # Get pending commands - works for both UFW and iptables
-            if self.ufw_manager:
-                commands = self.api_client.get_pending_ufw_commands()
-            elif self.firewall_manager:
-                commands = self.api_client.get_pending_firewall_commands()
-            else:
+            commands = self.api_client.get_pending_ufw_commands()
+            if not commands:
                 return
 
             for cmd in commands:
@@ -869,7 +1211,7 @@ class SSHGuardianAgent:
 
                 try:
                     if self.ufw_manager:
-                        # UFW command processing
+                        # UFW command processing with module
                         success, message = self.ufw_manager.execute_command(action, params)
                     elif self.firewall_manager:
                         # iptables command processing (legacy)
@@ -913,6 +1255,9 @@ class SSHGuardianAgent:
                             )
                         else:
                             message = f"Unknown action: {action}"
+                    else:
+                        # Direct UFW command execution (fallback without modules)
+                        success, message = self._execute_ufw_command_direct(action, params)
 
                 except Exception as e:
                     message = f"Error executing command: {str(e)}"
@@ -929,6 +1274,117 @@ class SSHGuardianAgent:
 
         except Exception as e:
             logging.error(f"Error processing firewall commands: {e}")
+
+    def _execute_ufw_command_direct(self, action: str, params: dict) -> Tuple[bool, str]:
+        """
+        Direct UFW command execution without external modules.
+        Fallback method for remote servers without ufw_manager module.
+        """
+        try:
+            if action == 'sync_now':
+                # Trigger immediate sync
+                self._sync_ufw_direct()
+                return True, "Sync triggered successfully"
+
+            elif action == 'deny_from' or action == 'block_ip':
+                ip = params.get('ip') or params.get('source_ip')
+                if not ip:
+                    return False, "No IP address provided"
+
+                # Check if rule already exists
+                check = subprocess.run(['ufw', 'status', 'numbered'], capture_output=True, text=True, timeout=30)
+                if f"from {ip}" in check.stdout and "DENY" in check.stdout:
+                    return True, f"Rule already exists for {ip}"
+
+                # Add deny rule
+                result = subprocess.run(['ufw', 'deny', 'from', ip], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, f"Blocked IP {ip}"
+                return False, f"Failed to block {ip}: {result.stderr}"
+
+            elif action == 'allow_from' or action == 'unblock_ip':
+                ip = params.get('ip') or params.get('source_ip')
+                if not ip:
+                    return False, "No IP address provided"
+
+                result = subprocess.run(['ufw', 'allow', 'from', ip], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, f"Allowed IP {ip}"
+                return False, f"Failed to allow {ip}: {result.stderr}"
+
+            elif action == 'delete_deny' or action == 'delete_rule':
+                ip = params.get('ip') or params.get('source_ip')
+                rule_num = params.get('rule_num')
+
+                if rule_num:
+                    # Delete by rule number
+                    result = subprocess.run(['ufw', '--force', 'delete', str(rule_num)], capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        return True, f"Deleted rule {rule_num}"
+                    return False, f"Failed to delete rule {rule_num}: {result.stderr}"
+                elif ip:
+                    # Delete by IP - need to find rule number first
+                    check = subprocess.run(['ufw', 'status', 'numbered'], capture_output=True, text=True, timeout=30)
+                    import re
+                    for line in check.stdout.split('\n'):
+                        if f"from {ip}" in line and "DENY" in line:
+                            match = re.search(r'\[\s*(\d+)\]', line)
+                            if match:
+                                rule_num = match.group(1)
+                                result = subprocess.run(['ufw', '--force', 'delete', rule_num], capture_output=True, text=True, timeout=30)
+                                if result.returncode == 0:
+                                    return True, f"Deleted deny rule for {ip}"
+                                return False, f"Failed to delete rule for {ip}: {result.stderr}"
+                    return False, f"No deny rule found for {ip}"
+                return False, "No IP or rule number provided"
+
+            elif action == 'allow_port':
+                port = params.get('port')
+                proto = params.get('protocol', 'tcp')
+                if not port:
+                    return False, "No port provided"
+
+                result = subprocess.run(['ufw', 'allow', f'{port}/{proto}'], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, f"Allowed port {port}/{proto}"
+                return False, f"Failed to allow port: {result.stderr}"
+
+            elif action == 'deny_port':
+                port = params.get('port')
+                proto = params.get('protocol', 'tcp')
+                if not port:
+                    return False, "No port provided"
+
+                result = subprocess.run(['ufw', 'deny', f'{port}/{proto}'], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, f"Denied port {port}/{proto}"
+                return False, f"Failed to deny port: {result.stderr}"
+
+            elif action == 'enable':
+                result = subprocess.run(['ufw', '--force', 'enable'], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, "UFW enabled"
+                return False, f"Failed to enable UFW: {result.stderr}"
+
+            elif action == 'disable':
+                result = subprocess.run(['ufw', 'disable'], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, "UFW disabled"
+                return False, f"Failed to disable UFW: {result.stderr}"
+
+            elif action == 'reset':
+                result = subprocess.run(['ufw', '--force', 'reset'], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    return True, "UFW reset to defaults"
+                return False, f"Failed to reset UFW: {result.stderr}"
+
+            else:
+                return False, f"Unknown action: {action}"
+
+        except subprocess.TimeoutExpired:
+            return False, f"Command timed out: {action}"
+        except Exception as e:
+            return False, f"Error executing {action}: {str(e)}"
 
     def stop(self):
         """Stop the agent"""

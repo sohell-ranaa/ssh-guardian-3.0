@@ -33,7 +33,7 @@
     async function loadApiKeys() {
         const container = document.getElementById('api-keys-container');
         if (container) {
-            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #605E5C;">Loading API keys...</div>';
+            container.innerHTML = `<div style="text-align: center; padding: 40px; color: ${TC.textSecondary};">Loading API keys...</div>`;
         }
 
         try {
@@ -51,7 +51,7 @@
             console.error('Error loading API keys:', error);
             showNotification('Failed to load API keys', 'error');
             if (container) {
-                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #D13438;">Failed to load API keys. Please try again.</div>';
+                container.innerHTML = `<div style="text-align: center; padding: 40px; color: ${TC.danger};">Failed to load API keys. Please try again.</div>`;
             }
         }
     }
@@ -66,9 +66,9 @@
 
         if (!agents || agents.length === 0) {
             container.innerHTML = `
-                <div style="text-align: center; padding: 60px 20px; color: #605E5C;">
+                <div style="text-align: center; padding: 60px 20px; color: ${TC.textSecondary};">
                     <div style="font-size: 48px; margin-bottom: 16px;">🔑</div>
-                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #323130;">No API Keys</h3>
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: ${TC.textPrimary};">No API Keys</h3>
                     <p style="font-size: 14px; margin-bottom: 24px;">Create an API key to allow agents to submit events</p>
                     <button onclick="showCreateApiKeyModal()" class="btn btn-primary" style="padding: 10px 20px;">
                         + Create API Key
@@ -79,16 +79,16 @@
         }
 
         let html = `
-            <div style="background: #FFFFFF; border: 1px solid #EDEBE9; border-radius: 8px; overflow: hidden;">
+            <div style="background: ${TC.surface}; border: 1px solid ${TC.border}; border-radius: 8px; overflow: hidden;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
-                        <tr style="background: #F3F2F1;">
-                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #605E5C; border-bottom: 1px solid #EDEBE9;">Agent Name</th>
-                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #605E5C; border-bottom: 1px solid #EDEBE9;">Hostname</th>
-                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #605E5C; border-bottom: 1px solid #EDEBE9;">API Key</th>
-                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #605E5C; border-bottom: 1px solid #EDEBE9;">Status</th>
-                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #605E5C; border-bottom: 1px solid #EDEBE9;">Last Seen</th>
-                            <th style="text-align: center; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #605E5C; border-bottom: 1px solid #EDEBE9;">Actions</th>
+                        <tr style="background: ${TC.surfaceAlt};">
+                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${TC.textSecondary}; border-bottom: 1px solid ${TC.border};">Agent Name</th>
+                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${TC.textSecondary}; border-bottom: 1px solid ${TC.border};">Hostname</th>
+                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${TC.textSecondary}; border-bottom: 1px solid ${TC.border};">API Key</th>
+                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${TC.textSecondary}; border-bottom: 1px solid ${TC.border};">Status</th>
+                            <th style="text-align: left; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${TC.textSecondary}; border-bottom: 1px solid ${TC.border};">Last Seen</th>
+                            <th style="text-align: center; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${TC.textSecondary}; border-bottom: 1px solid ${TC.border};">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -96,56 +96,56 @@
 
         agents.forEach((agent, index) => {
             const isLast = index === agents.length - 1;
-            const borderStyle = isLast ? '' : 'border-bottom: 1px solid #EDEBE9;';
-            const statusColor = agent.status === 'online' ? '#107C10' : (agent.status === 'offline' ? '#D13438' : '#605E5C');
+            const borderStyle = isLast ? '' : `border-bottom: 1px solid ${TC.border};`;
+            const statusColor = agent.status === 'online' ? TC.successDark : (agent.status === 'offline' ? TC.danger : TC.textSecondary);
             const maskedKey = agent.api_key ? maskApiKey(agent.api_key) : 'N/A';
 
             html += `
                 <tr style="${borderStyle}">
-                    <td style="padding: 14px 16px; font-size: 14px; color: #323130;">
+                    <td style="padding: 14px 16px; font-size: 14px; color: ${TC.textPrimary};">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 20px;">🖥️</span>
                             <div>
                                 <div style="font-weight: 500;">${agent.display_name || agent.hostname || 'Unknown'}</div>
-                                <div style="font-size: 12px; color: #605E5C;">${agent.environment || 'production'}</div>
+                                <div style="font-size: 12px; color: ${TC.textSecondary};">${agent.environment || 'production'}</div>
                             </div>
                         </div>
                     </td>
-                    <td style="padding: 14px 16px; font-size: 14px; color: #605E5C;">
+                    <td style="padding: 14px 16px; font-size: 14px; color: ${TC.textSecondary};">
                         ${agent.hostname || 'N/A'}
                     </td>
-                    <td style="padding: 14px 16px; font-size: 13px; font-family: 'Consolas', 'Monaco', monospace; color: #605E5C;">
+                    <td style="padding: 14px 16px; font-size: 13px; font-family: 'Consolas', 'Monaco', monospace; color: ${TC.textSecondary};">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span class="api-key-display" data-agent-id="${agent.id}" data-masked="${maskedKey}" data-full="${agent.api_key || ''}">${maskedKey}</span>
                             ${agent.api_key ? `
                                 <button class="btn-toggle-key" data-agent-id="${agent.id}"
-                                        style="padding: 4px 8px; font-size: 11px; background: transparent; border: 1px solid #EDEBE9; border-radius: 4px; cursor: pointer; color: #605E5C;">
+                                        style="padding: 4px 8px; font-size: 11px; background: transparent; border: 1px solid ${TC.border}; border-radius: 4px; cursor: pointer; color: ${TC.textSecondary};">
                                     Show
                                 </button>
                                 <button class="btn-copy-key" data-key="${agent.api_key}"
-                                        style="padding: 4px 8px; font-size: 11px; background: transparent; border: 1px solid #EDEBE9; border-radius: 4px; cursor: pointer; color: #605E5C;">
+                                        style="padding: 4px 8px; font-size: 11px; background: transparent; border: 1px solid ${TC.border}; border-radius: 4px; cursor: pointer; color: ${TC.textSecondary};">
                                     📋
                                 </button>
-                            ` : '<span style="color: #A19F9D;">Not set</span>'}
+                            ` : `<span style="color: ${TC.textHint};">Not set</span>`}
                         </div>
                     </td>
                     <td style="padding: 14px 16px;">
                         <span style="display: inline-flex; align-items: center; gap: 6px;">
                             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
-                            <span style="font-size: 14px; color: #605E5C; text-transform: capitalize;">${agent.status || 'unknown'}</span>
+                            <span style="font-size: 14px; color: ${TC.textSecondary}; text-transform: capitalize;">${agent.status || 'unknown'}</span>
                         </span>
                     </td>
-                    <td style="padding: 14px 16px; font-size: 14px; color: #605E5C;">
+                    <td style="padding: 14px 16px; font-size: 14px; color: ${TC.textSecondary};">
                         ${formatTimestamp(agent.last_heartbeat)}
                     </td>
                     <td style="padding: 14px 16px; text-align: center;">
                         <div style="display: flex; gap: 8px; justify-content: center;">
                             <button class="btn-regenerate-key btn btn-sm" data-agent-id="${agent.id}"
-                                    style="padding: 6px 12px; font-size: 12px; background: #0078D4; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    style="padding: 6px 12px; font-size: 12px; background: ${TC.primary}; color: white; border: none; border-radius: 4px; cursor: pointer;">
                                 🔄 Regenerate
                             </button>
                             <button class="btn-revoke-key btn btn-sm" data-agent-id="${agent.id}"
-                                    style="padding: 6px 12px; font-size: 12px; background: #D13438; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    style="padding: 6px 12px; font-size: 12px; background: ${TC.danger}; color: white; border: none; border-radius: 4px; cursor: pointer;">
                                 🚫 Revoke
                             </button>
                         </div>
@@ -175,32 +175,32 @@
     function renderCreateApiKeyModal() {
         return `
             <div id="create-api-key-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-                <div class="modal-content" style="background: #FFFFFF; border-radius: 8px; width: 100%; max-width: 500px; max-height: 90vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-                    <div class="modal-header" style="padding: 20px 24px; border-bottom: 1px solid #EDEBE9; display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #323130;">Create New API Key</h3>
-                        <button id="create-modal-close-btn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #605E5C; padding: 0; line-height: 1;">&times;</button>
+                <div class="modal-content" style="background: ${TC.surface}; border-radius: 8px; width: 100%; max-width: 500px; max-height: 90vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                    <div class="modal-header" style="padding: 20px 24px; border-bottom: 1px solid ${TC.border}; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: ${TC.textPrimary};">Create New API Key</h3>
+                        <button id="create-modal-close-btn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: ${TC.textSecondary}; padding: 0; line-height: 1;">&times;</button>
                     </div>
                     <div class="modal-body" style="padding: 24px;">
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div class="form-group">
-                                <label for="agent-display-name" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: #323130;">
-                                    Agent Display Name <span style="color: #D13438;">*</span>
+                                <label for="agent-display-name" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: ${TC.textPrimary};">
+                                    Agent Display Name <span style="color: ${TC.danger};">*</span>
                                 </label>
                                 <input type="text" id="agent-display-name" placeholder="e.g., Production Server 01"
-                                       style="width: 100%; padding: 10px 12px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid ${TC.border}; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                             </div>
                             <div class="form-group">
-                                <label for="agent-hostname" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: #323130;">
-                                    Hostname <span style="color: #D13438;">*</span>
+                                <label for="agent-hostname" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: ${TC.textPrimary};">
+                                    Hostname <span style="color: ${TC.danger};">*</span>
                                 </label>
                                 <input type="text" id="agent-hostname" placeholder="e.g., server-01.example.com"
-                                       style="width: 100%; padding: 10px 12px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid ${TC.border}; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                             </div>
                             <div class="form-group">
-                                <label for="agent-environment" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: #323130;">
+                                <label for="agent-environment" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: ${TC.textPrimary};">
                                     Environment
                                 </label>
-                                <select id="agent-environment" style="width: 100%; padding: 10px 12px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                                <select id="agent-environment" style="width: 100%; padding: 10px 12px; border: 1px solid ${TC.border}; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                                     <option value="production">Production</option>
                                     <option value="staging">Staging</option>
                                     <option value="development">Development</option>
@@ -208,10 +208,10 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="agent-type" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: #323130;">
+                                <label for="agent-type" style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: ${TC.textPrimary};">
                                     Agent Type
                                 </label>
-                                <select id="agent-type" style="width: 100%; padding: 10px 12px; border: 1px solid #EDEBE9; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                                <select id="agent-type" style="width: 100%; padding: 10px 12px; border: 1px solid ${TC.border}; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
                                     <option value="primary">Primary</option>
                                     <option value="secondary" selected>Secondary</option>
                                     <option value="monitor_only">Monitor Only</option>
@@ -219,7 +219,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid #EDEBE9; display: flex; justify-content: flex-end; gap: 12px;">
+                    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid ${TC.border}; display: flex; justify-content: flex-end; gap: 12px;">
                         <button id="create-modal-cancel-btn" class="btn btn-secondary" style="padding: 10px 20px;">Cancel</button>
                         <button id="create-modal-save-btn" class="btn btn-primary" style="padding: 10px 20px;">Create Agent</button>
                     </div>
@@ -247,10 +247,10 @@
             return window.TimeSettings.relative(timestamp);
         }
 
-        // Ensure UTC parsing - append Z if no timezone info
-        let dateStr = String(timestamp);
-        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-            dateStr += 'Z';
+        // Server timestamps are in server timezone (+08:00)
+        let dateStr = String(timestamp).replace(' ', 'T');
+        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.match(/T\d{2}:\d{2}:\d{2}-/)) {
+            dateStr += '+08:00';
         }
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return 'Never';
@@ -259,6 +259,7 @@
         const diffMs = now - date;
         const diffMins = Math.floor(diffMs / 60000);
 
+        if (diffMs < 0) return 'Just now';
         if (diffMins < 1) return 'Just now';
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
@@ -420,18 +421,18 @@
     function showNewApiKeyAlert(apiKey, agentName) {
         const alertHtml = `
             <div id="new-api-key-alert" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1001; display: flex; justify-content: center; align-items: center;">
-                <div style="background: #FFFFFF; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                <div style="background: ${TC.surface}; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                         <span style="font-size: 32px;">✅</span>
-                        <h3 style="margin: 0; color: #107C10;">Agent Created Successfully!</h3>
+                        <h3 style="margin: 0; color: ${TC.successDark};">Agent Created Successfully!</h3>
                     </div>
-                    <p style="color: #323130; margin-bottom: 16px;">Your new API key for <strong>${agentName}</strong>:</p>
-                    <div style="background: #F3F2F1; padding: 16px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 14px; word-break: break-all; margin-bottom: 16px;">
+                    <p style="color: ${TC.textPrimary}; margin-bottom: 16px;">Your new API key for <strong>${agentName}</strong>:</p>
+                    <div style="background: ${TC.surfaceAlt}; padding: 16px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 14px; word-break: break-all; margin-bottom: 16px;">
                         ${apiKey}
                     </div>
-                    <div style="background: #FFF4CE; border: 1px solid #FFB900; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
-                        <strong style="color: #B47B00;">⚠️ Important:</strong>
-                        <span style="color: #323130;">Copy this API key now. You won't be able to see it again!</span>
+                    <div style="background: ${TC.warningBg}; border: 1px solid ${TC.warning}; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+                        <strong style="color: ${TC.warningDark};">⚠️ Important:</strong>
+                        <span style="color: ${TC.textPrimary};">Copy this API key now. You won't be able to see it again!</span>
                     </div>
                     <div style="display: flex; gap: 12px; justify-content: flex-end;">
                         <button onclick="navigator.clipboard.writeText('${apiKey}').then(() => showNotification('API key copied!', 'success'))"

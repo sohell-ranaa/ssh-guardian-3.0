@@ -18,11 +18,14 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 
-# Try to import enrichment
+# Try to import threat intel for live lookups
 try:
-    from enrichment import EventEnricher
+    from core.threat_intel import ThreatIntelligence
 except ImportError:
-    EventEnricher = None
+    try:
+        from threat_intel import ThreatIntelligence
+    except ImportError:
+        ThreatIntelligence = None
 
 # Try to import blocking operations
 try:
@@ -57,8 +60,11 @@ class Fail2banMLEvaluator:
     BAN_DURATION_HIGH = 86400     # 24 hours - high risk
     BAN_DURATION_PERMANENT = -1   # Escalate to UFW
 
+    # High-risk countries for scoring boost
+    HIGH_RISK_COUNTRIES = {'CN', 'RU', 'KP', 'IR', 'BY', 'VN', 'NG', 'PK', 'IN', 'BR'}
+
     def __init__(self):
-        self.enricher = EventEnricher() if EventEnricher else None
+        self.threat_intel = ThreatIntelligence if ThreatIntelligence else None
 
     def evaluate_ban(self, ip_address: str, failures: int = 0,
                      jail: str = 'sshd', agent_id: int = None) -> Dict:
@@ -211,42 +217,95 @@ class Fail2banMLEvaluator:
                 conn.close()
 
     def _get_enrichment(self, ip_address: str) -> Optional[Dict]:
-        """Get enrichment data for IP."""
-        if not self.enricher:
-            return None
-
+        """Get enrichment data for IP from ip_threat_intelligence and ip_geolocation tables."""
         conn = None
         cursor = None
         try:
-            # Check cached enrichment first
             conn = get_connection()
             cursor = conn.cursor(dictionary=True)
 
+            # Check threat intelligence cache first
             cursor.execute("""
                 SELECT abuseipdb_score, abuseipdb_reports,
-                       virustotal_malicious, is_tor, is_vpn, is_proxy,
-                       country_code, is_high_risk_country
-                FROM ip_enrichment
-                WHERE ip_address = %s
-                  AND enriched_at >= NOW() - INTERVAL 24 HOUR
+                       virustotal_positives, overall_threat_level,
+                       updated_at
+                FROM ip_threat_intelligence
+                WHERE ip_address_text = %s
+                  AND (needs_refresh = FALSE OR refresh_after > NOW())
             """, (ip_address,))
 
-            cached = cursor.fetchone()
+            threat_data = cursor.fetchone()
 
-            if cached:
+            # Check geolocation for Tor/VPN/proxy detection
+            cursor.execute("""
+                SELECT country_code, is_tor, is_vpn, is_proxy, is_datacenter
+                FROM ip_geolocation
+                WHERE ip_address_text = %s
+            """, (ip_address,))
+
+            geo_data = cursor.fetchone()
+
+            # If we have threat data, use it
+            if threat_data:
+                country_code = geo_data.get('country_code', 'XX') if geo_data else 'XX'
+                is_high_risk = country_code in self.HIGH_RISK_COUNTRIES
+
                 return {
-                    'abuseipdb_score': cached.get('abuseipdb_score', 0),
-                    'abuseipdb_reports': cached.get('abuseipdb_reports', 0),
-                    'virustotal_detections': cached.get('virustotal_malicious', 0),
-                    'is_tor_exit': cached.get('is_tor', False),
-                    'is_vpn': cached.get('is_vpn', False),
-                    'is_proxy': cached.get('is_proxy', False),
-                    'country': cached.get('country_code', 'Unknown'),
-                    'is_high_risk_country': cached.get('is_high_risk_country', False)
+                    'abuseipdb_score': threat_data.get('abuseipdb_score') or 0,
+                    'abuseipdb_reports': threat_data.get('abuseipdb_reports') or 0,
+                    'virustotal_detections': threat_data.get('virustotal_positives') or 0,
+                    'is_tor_exit': geo_data.get('is_tor', False) if geo_data else False,
+                    'is_vpn': geo_data.get('is_vpn', False) if geo_data else False,
+                    'is_proxy': geo_data.get('is_proxy', False) if geo_data else False,
+                    'is_datacenter': geo_data.get('is_datacenter', False) if geo_data else False,
+                    'country': country_code,
+                    'is_high_risk_country': is_high_risk,
+                    'threat_level': threat_data.get('overall_threat_level', 'unknown')
                 }
 
-            # Trigger async enrichment for future lookups
-            self.enricher.enrich_ip_background(ip_address)
+            # No cached data - trigger live lookup if threat intel available
+            if self.threat_intel:
+                print(f"🔍 No cached threat data for {ip_address} - fetching live...")
+                try:
+                    live_data = self.threat_intel.lookup_ip_threat(ip_address)
+                    if live_data:
+                        country_code = geo_data.get('country_code', 'XX') if geo_data else 'XX'
+                        is_high_risk = country_code in self.HIGH_RISK_COUNTRIES
+
+                        abuseipdb = live_data.get('abuseipdb', {})
+                        virustotal = live_data.get('virustotal', {})
+
+                        return {
+                            'abuseipdb_score': abuseipdb.get('score', 0) if abuseipdb else 0,
+                            'abuseipdb_reports': abuseipdb.get('reports', 0) if abuseipdb else 0,
+                            'virustotal_detections': virustotal.get('positives', 0) if virustotal else 0,
+                            'is_tor_exit': geo_data.get('is_tor', False) if geo_data else False,
+                            'is_vpn': geo_data.get('is_vpn', False) if geo_data else False,
+                            'is_proxy': geo_data.get('is_proxy', False) if geo_data else False,
+                            'is_datacenter': geo_data.get('is_datacenter', False) if geo_data else False,
+                            'country': country_code,
+                            'is_high_risk_country': is_high_risk,
+                            'threat_level': live_data.get('threat_level', 'unknown')
+                        }
+                except Exception as e:
+                    print(f"⚠️ Live threat lookup failed: {e}")
+
+            # Return geo-only data if available
+            if geo_data:
+                country_code = geo_data.get('country_code', 'XX')
+                return {
+                    'abuseipdb_score': 0,
+                    'abuseipdb_reports': 0,
+                    'virustotal_detections': 0,
+                    'is_tor_exit': geo_data.get('is_tor', False),
+                    'is_vpn': geo_data.get('is_vpn', False),
+                    'is_proxy': geo_data.get('is_proxy', False),
+                    'is_datacenter': geo_data.get('is_datacenter', False),
+                    'country': country_code,
+                    'is_high_risk_country': country_code in self.HIGH_RISK_COUNTRIES,
+                    'threat_level': 'unknown'
+                }
+
             return None
 
         except Exception as e:

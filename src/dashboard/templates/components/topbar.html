@@ -4,15 +4,23 @@
         <button class="menu-toggle" id="menuToggle">
             <span>☰</span>
         </button>
-        <a href="#home" class="logo-link" style="display: flex; align-items: center; text-decoration: none; color: inherit;">
-            <div class="logo">S</div>
-            <span class="app-title">SSH Guardian v3.0</span>
+        <a href="#overview" class="logo-link" style="text-decoration: none; color: inherit;">
+            <div class="app-logo logo-md">
+                <div class="app-logo-circle">
+                    <span class="app-logo-icon">&#128737;</span>
+                </div>
+                <div class="app-logo-badge">v3.0</div>
+                <span class="app-logo-title">SSH Guardian</span>
+            </div>
         </a>
     </div>
     <div class="topbar-right">
         <div class="header-actions" id="headerActions">
             <!-- Cache toggle button will be inserted here by CacheManager -->
         </div>
+
+        <!-- Hard Reload Button -->
+        <div class="hard-reload-container" data-hard-reload></div>
 
         <!-- Notification Bell -->
         <div class="notification-bell" id="notificationBell">
@@ -24,9 +32,17 @@
             <!-- Notification Pane (hidden by default) -->
             <div class="notification-pane" id="notificationPane">
                 <div class="pane-header">
-                    <h3>Notifications</h3>
+                    <div class="pane-header-title">
+                        <h3>Notifications</h3>
+                        <span class="pane-unread-count" id="paneUnreadCount"></span>
+                    </div>
                     <div class="pane-header-actions">
-                        <button class="pane-header-btn" onclick="NotificationPane.markAllRead()">Mark all read</button>
+                        <button class="pane-header-btn" onclick="NotificationPane.markAllRead()" title="Mark all as read">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Mark all read
+                        </button>
                     </div>
                 </div>
                 <div class="pane-body" id="notificationList">
@@ -37,7 +53,7 @@
                     </div>
                 </div>
                 <div class="pane-footer">
-                    <a href="#notif-history">View All Notifications &#8594;</a>
+                    <a href="#notif-history">View All Notifications &rarr;</a>
                 </div>
             </div>
         </div>

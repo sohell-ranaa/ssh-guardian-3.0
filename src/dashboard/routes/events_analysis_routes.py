@@ -1,14 +1,16 @@
 """
-Events Analysis Routes - API endpoints for auth events analysis
-With Redis caching and optimized queries for improved performance
+SSH Guardian v3.1 - Events Analysis Routes
+API endpoints for auth events analysis with enrichment data
+Updated for v3.1 schema:
+- ML data in auth_events_ml table
+- Threat data merged into ip_geolocation table
+- auth_events_daily for aggregated data
 """
 import sys
 import json
 from pathlib import Path
 from flask import Blueprint, jsonify, request
-from datetime import datetime, timedelta
 
-# Add database path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "dbs"))
 sys.path.append(str(PROJECT_ROOT / "src" / "core"))
@@ -16,33 +18,25 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 from connection import get_connection
 from cache import get_cache, cache_key, cache_key_hash
 
-# Create Blueprint with URL prefix
 events_analysis_routes = Blueprint('events_analysis', __name__, url_prefix='/api/dashboard/events-analysis')
 
-# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
-EVENTS_LIST_TTL = 900       # 15 minutes for paginated list
-EVENTS_SUMMARY_TTL = 900    # 15 minutes for summary stats
-EVENTS_TIMELINE_TTL = 900   # 15 minutes for timeline data
-EVENTS_DETAIL_TTL = 1800    # 30 minutes for event details (rarely changes)
+# Cache TTLs
+EVENTS_LIST_TTL = 30
+EVENTS_SUMMARY_TTL = 60
+EVENTS_TIMELINE_TTL = 60
+EVENTS_DETAIL_TTL = 120
 
-# Allowed sort fields (whitelist for SQL injection prevention)
+# Allowed sort fields
 ALLOWED_SORT_FIELDS = {
     'timestamp': 'e.timestamp',
     'source_ip_text': 'e.source_ip_text',
-    'ml_risk_score': 'e.ml_risk_score',
     'event_type': 'e.event_type',
     'target_username': 'e.target_username'
 }
 
 
-def invalidate_events_analysis_cache():
-    """Invalidate all events analysis caches"""
-    cache = get_cache()
-    cache.delete_pattern('events_analysis')
-
-
 def _get_approximate_count(cursor):
-    """Get approximate row count from table statistics (much faster than COUNT(*))"""
+    """Get approximate row count from table statistics"""
     cursor.execute("""
         SELECT TABLE_ROWS as approx_count
         FROM information_schema.TABLES
@@ -57,14 +51,10 @@ def _get_approximate_count(cursor):
 
 @events_analysis_routes.route('/list', methods=['GET'])
 def get_events_list():
-    """
-    Get paginated list of auth events with caching
-    OPTIMIZED: Uses approximate counts for unfiltered queries
-    """
+    """Get paginated list of auth events - v3.1 schema"""
     conn = None
     cursor = None
     try:
-        # Get query parameters
         page = int(request.args.get('page', 1))
         limit = min(int(request.args.get('limit', 20)), 100)
         sort = request.args.get('sort', 'timestamp')
@@ -80,7 +70,6 @@ def get_events_list():
         sort_column = ALLOWED_SORT_FIELDS.get(sort, 'e.timestamp')
         offset = (page - 1) * limit
 
-        # Try cache first
         cache = get_cache()
         cache_params = {
             'page': page, 'limit': limit, 'sort': sort, 'order': order,
@@ -100,7 +89,7 @@ def get_events_list():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Build WHERE clause
+        # Build WHERE clause - v3.1: ML data from auth_events_ml
         where_conditions = []
         params = []
         has_filters = False
@@ -116,34 +105,40 @@ def get_events_list():
             has_filters = True
 
         if risk_level:
+            # v3.1: risk_score is in auth_events_ml
             if risk_level == 'high':
-                where_conditions.append("e.ml_risk_score >= 70")
+                where_conditions.append("ml.risk_score >= 0.70")
             elif risk_level == 'medium':
-                where_conditions.append("e.ml_risk_score >= 40 AND e.ml_risk_score < 70")
+                where_conditions.append("ml.risk_score >= 0.40 AND ml.risk_score < 0.70")
             elif risk_level == 'low':
-                where_conditions.append("e.ml_risk_score < 40")
+                where_conditions.append("(ml.risk_score < 0.40 OR ml.risk_score IS NULL)")
             has_filters = True
 
         if anomaly:
+            # v3.1: is_anomaly is in auth_events_ml
             if anomaly.lower() == 'true':
-                where_conditions.append("e.is_anomaly = 1")
+                where_conditions.append("ml.is_anomaly = 1")
             elif anomaly.lower() == 'false':
-                where_conditions.append("e.is_anomaly = 0")
+                where_conditions.append("(ml.is_anomaly = 0 OR ml.is_anomaly IS NULL)")
             has_filters = True
 
         where_clause = ""
         if where_conditions:
             where_clause = "WHERE " + " AND ".join(where_conditions)
 
-        # OPTIMIZATION: Use approximate count for unfiltered queries
         if not has_filters:
             total_count = _get_approximate_count(cursor)
         else:
-            count_query = f"SELECT COUNT(*) as total FROM auth_events e {where_clause}"
+            count_query = f"""
+                SELECT COUNT(*) as total
+                FROM auth_events e
+                LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
+                {where_clause}
+            """
             cursor.execute(count_query, params)
             total_count = cursor.fetchone()['total']
 
-        # Get data - OPTIMIZED: only fetch needed columns
+        # v3.1: Join with auth_events_ml for ML data
         query = f"""
             SELECT
                 e.id,
@@ -154,13 +149,14 @@ def get_events_list():
                 e.target_server,
                 e.target_username,
                 e.failure_reason,
-                e.ml_risk_score,
-                e.is_anomaly,
-                e.was_blocked,
+                ml.risk_score as ml_risk_score,
+                ml.is_anomaly,
                 g.country_name,
                 g.country_code,
-                g.city
+                g.city,
+                g.threat_level
             FROM auth_events e
+            LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
             LEFT JOIN ip_geolocation g ON e.geo_id = g.id
             {where_clause}
             ORDER BY {sort_column} {order}
@@ -170,10 +166,11 @@ def get_events_list():
         cursor.execute(query, params + [limit, offset])
         events = cursor.fetchall()
 
-        # Format dates
         for event in events:
             if event.get('timestamp'):
                 event['timestamp'] = event['timestamp'].isoformat()
+            if event.get('ml_risk_score'):
+                event['ml_risk_score'] = round(float(event['ml_risk_score']) * 100, 1)
 
         pagination = {
             'page': page,
@@ -204,10 +201,7 @@ def get_events_list():
 
 @events_analysis_routes.route('/summary', methods=['GET'])
 def get_events_summary():
-    """
-    Get overall events summary statistics with caching
-    OPTIMIZED: Single query for main stats, parallel-friendly structure
-    """
+    """Get overall events summary statistics - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -225,36 +219,35 @@ def get_events_summary():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # OPTIMIZATION: Single comprehensive query instead of 6 separate queries
-        # This dramatically reduces database round-trips
-        # OPTIMIZED: Removed slow COUNT(DISTINCT) operations that caused 25+ second delays
+        # Basic counts from auth_events
         cursor.execute("""
             SELECT
-                -- Basic counts
                 COUNT(*) as total_events,
                 SUM(event_type = 'failed') as failed_count,
                 SUM(event_type = 'successful') as successful_count,
-                SUM(event_type = 'invalid') as invalid_count,
-                SUM(is_anomaly = 1) as anomaly_count,
-                SUM(was_blocked = 1) as blocked_count,
-
-                -- Risk metrics
-                AVG(ml_risk_score) as avg_risk_score,
-                SUM(ml_risk_score >= 70) as high_risk_count,
-                SUM(ml_risk_score >= 40 AND ml_risk_score < 70) as medium_risk_count,
-                SUM(ml_risk_score < 40 OR ml_risk_score IS NULL) as low_risk_count
+                SUM(event_type = 'invalid') as invalid_count
             FROM auth_events
         """)
         stats = cursor.fetchone()
 
-        # PERFORMANCE FIX: Use pre-aggregated ip_statistics table instead of COUNT(DISTINCT)
-        # This avoids scanning millions of rows and is orders of magnitude faster
-        cursor.execute("SELECT COUNT(*) as cnt FROM ip_statistics")
-        unique_ips_result = cursor.fetchone()
-        unique_ips = int(unique_ips_result['cnt'] or 0)
+        # v3.1: ML stats from auth_events_ml
+        cursor.execute("""
+            SELECT
+                SUM(is_anomaly = 1) as anomaly_count,
+                SUM(was_blocked = 1) as blocked_count,
+                AVG(risk_score) as avg_risk_score,
+                SUM(risk_score >= 0.70) as high_risk_count,
+                SUM(risk_score >= 0.40 AND risk_score < 0.70) as medium_risk_count,
+                SUM(risk_score < 0.40 OR risk_score IS NULL) as low_risk_count
+            FROM auth_events_ml
+        """)
+        ml_stats = cursor.fetchone()
 
-        # PERFORMANCE FIX: Estimate unique usernames from a small sample
-        # Use approximate count for better performance (~100ms vs 25+ seconds)
+        # Unique IPs count
+        cursor.execute("SELECT COUNT(DISTINCT source_ip_text) as cnt FROM auth_events")
+        unique_ips = cursor.fetchone()['cnt'] or 0
+
+        # Unique usernames (optimized with limit)
         cursor.execute("""
             SELECT COUNT(DISTINCT target_username) as cnt
             FROM (
@@ -265,34 +258,24 @@ def get_events_summary():
                 LIMIT 50000
             ) sample
         """)
-        unique_usernames_result = cursor.fetchone()
-        # Extrapolate from sample to estimate total unique usernames
-        sample_unique = int(unique_usernames_result['cnt'] or 0)
-        # If we have fewer than 50k events, use exact count; otherwise estimate
-        if int(stats['total_events'] or 0) <= 50000:
-            unique_usernames = sample_unique
-        else:
-            # Conservative estimate: sample shows saturation behavior after 50k events
-            # Most attacks use the same ~100-500 usernames repeatedly
-            unique_usernames = min(sample_unique * 2, int(stats['total_events'] or 0))
+        unique_usernames = cursor.fetchone()['cnt'] or 0
 
-        # Convert to proper types
         summary = {
             'total_events': int(stats['total_events'] or 0),
             'failed_count': int(stats['failed_count'] or 0),
             'successful_count': int(stats['successful_count'] or 0),
             'invalid_count': int(stats['invalid_count'] or 0),
-            'anomaly_count': int(stats['anomaly_count'] or 0),
-            'blocked_count': int(stats['blocked_count'] or 0),
-            'avg_risk_score': float(stats['avg_risk_score'] or 0),
+            'anomaly_count': int(ml_stats['anomaly_count'] or 0) if ml_stats else 0,
+            'blocked_count': int(ml_stats['blocked_count'] or 0) if ml_stats else 0,
+            'avg_risk_score': float(ml_stats['avg_risk_score'] or 0) if ml_stats else 0,
             'unique_ips': unique_ips,
             'unique_usernames': unique_usernames
         }
 
         risk_distribution = {
-            'high': int(stats['high_risk_count'] or 0),
-            'medium': int(stats['medium_risk_count'] or 0),
-            'low': int(stats['low_risk_count'] or 0)
+            'high': int(ml_stats['high_risk_count'] or 0) if ml_stats else 0,
+            'medium': int(ml_stats['medium_risk_count'] or 0) if ml_stats else 0,
+            'low': int(ml_stats['low_risk_count'] or 0) if ml_stats else 0
         }
 
         events_by_type = {
@@ -301,7 +284,7 @@ def get_events_summary():
             'invalid': summary['invalid_count']
         }
 
-        # Get top failure reasons - OPTIMIZED with LIMIT in subquery
+        # Top failure reasons
         cursor.execute("""
             SELECT failure_reason, COUNT(*) as count
             FROM auth_events
@@ -312,7 +295,7 @@ def get_events_summary():
         """)
         top_failure_reasons = cursor.fetchall()
 
-        # Get top targeted usernames - OPTIMIZED
+        # Top targeted usernames
         cursor.execute("""
             SELECT
                 target_username,
@@ -326,12 +309,11 @@ def get_events_summary():
         """)
         top_usernames = cursor.fetchall()
 
-        # Convert Decimal fields
         for user in top_usernames:
             if user.get('failed_count') is not None:
                 user['failed_count'] = int(user['failed_count'])
 
-        # Get auth methods - small result set
+        # Auth methods
         cursor.execute("""
             SELECT auth_method, COUNT(*) as count
             FROM auth_events
@@ -368,10 +350,7 @@ def get_events_summary():
 
 @events_analysis_routes.route('/timeline', methods=['GET'])
 def get_events_timeline():
-    """
-    Get time-series data for events with caching
-    OPTIMIZED: Uses pre-aggregated summary table for daily queries
-    """
+    """Get time-series data for events - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -395,41 +374,41 @@ def get_events_timeline():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # OPTIMIZATION: Use pre-aggregated summary table for daily queries (most common)
+        # v3.1: Use auth_events_daily for daily queries
         if interval == 'day':
-            # Fast path: query from summary table (pre-aggregated, very fast)
             query = """
                 SELECT
                     summary_date as time_period,
                     total_events,
-                    failed_count as failed,
-                    successful_count as successful,
-                    invalid_count as invalid,
-                    anomaly_count as anomalies,
-                    avg_risk_score
-                FROM auth_events_daily_summary
+                    failed_events as failed,
+                    successful_events as successful,
+                    invalid_user_events as invalid,
+                    0 as anomalies,
+                    0.0 as avg_risk_score
+                FROM auth_events_daily
                 WHERE summary_date >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
                 ORDER BY summary_date ASC
             """
             cursor.execute(query, (days,))
         else:
-            # Fallback: real-time aggregation for hourly/weekly
+            # Real-time aggregation for hourly/weekly with ML join
             if interval == 'hour':
-                group_by = "DATE_FORMAT(timestamp, '%Y-%m-%d %H:00:00')"
-            else:  # week
-                group_by = "YEARWEEK(timestamp, 1)"
+                group_by = "DATE_FORMAT(e.timestamp, '%Y-%m-%d %H:00:00')"
+            else:
+                group_by = "YEARWEEK(e.timestamp, 1)"
 
             query = f"""
                 SELECT
                     {group_by} as time_period,
                     COUNT(*) as total_events,
-                    SUM(event_type = 'failed') as failed,
-                    SUM(event_type = 'successful') as successful,
-                    SUM(event_type = 'invalid') as invalid,
-                    SUM(is_anomaly = 1) as anomalies,
-                    AVG(ml_risk_score) as avg_risk_score
-                FROM auth_events
-                WHERE timestamp >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
+                    SUM(e.event_type = 'failed') as failed,
+                    SUM(e.event_type = 'successful') as successful,
+                    SUM(e.event_type = 'invalid') as invalid,
+                    SUM(ml.is_anomaly = 1) as anomalies,
+                    AVG(COALESCE(ml.risk_score, 0)) as avg_risk_score
+                FROM auth_events e
+                LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
+                WHERE e.timestamp >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
                 GROUP BY time_period
                 ORDER BY time_period ASC
             """
@@ -437,7 +416,6 @@ def get_events_timeline():
 
         timeline = cursor.fetchall()
 
-        # Convert types
         for row in timeline:
             if row.get('time_period'):
                 if hasattr(row['time_period'], 'isoformat'):
@@ -477,9 +455,7 @@ def get_events_timeline():
 
 @events_analysis_routes.route('/<int:event_id>', methods=['GET'])
 def get_event_detail(event_id):
-    """
-    Get detailed information for a specific event with caching
-    """
+    """Get detailed information for a specific event - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -497,13 +473,12 @@ def get_event_detail(event_id):
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get event details - uses primary key index
+        # v3.1: ML from auth_events_ml, threat from ip_geolocation
         cursor.execute("""
             SELECT
                 e.id,
                 e.event_uuid,
                 e.timestamp,
-                e.processed_at,
                 e.source_type,
                 e.agent_id,
                 e.event_type,
@@ -514,26 +489,25 @@ def get_event_detail(event_id):
                 e.target_port,
                 e.target_username,
                 e.failure_reason,
-                e.session_id,
-                e.session_duration_sec,
-                e.ml_risk_score,
-                e.ml_threat_type,
-                e.ml_confidence,
-                e.is_anomaly,
-                e.anomaly_reasons,
-                e.was_blocked,
-                e.block_id,
                 e.raw_log_line,
-                e.additional_metadata,
                 e.created_at,
+                ml.risk_score as ml_risk_score,
+                ml.threat_type as ml_threat_type,
+                ml.confidence as ml_confidence,
+                ml.is_anomaly,
+                ml.was_blocked,
                 g.country_name,
                 g.country_code,
                 g.city,
                 g.region,
                 g.latitude,
                 g.longitude,
-                g.timezone
+                g.timezone,
+                g.threat_level,
+                g.abuseipdb_score,
+                g.virustotal_positives
             FROM auth_events e
+            LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
             LEFT JOIN ip_geolocation g ON e.geo_id = g.id
             WHERE e.id = %s
         """, (event_id,))
@@ -543,29 +517,21 @@ def get_event_detail(event_id):
         if not event:
             return jsonify({'success': False, 'error': 'Event not found'}), 404
 
-        # Format dates and convert Decimal fields
-        for field in ['timestamp', 'processed_at', 'created_at']:
+        for field in ['timestamp', 'created_at']:
             if event.get(field):
                 event[field] = event[field].isoformat()
 
-        for field in ['latitude', 'longitude', 'ml_confidence']:
+        for field in ['latitude', 'longitude', 'ml_confidence', 'ml_risk_score']:
             if event.get(field) is not None:
                 event[field] = float(event[field])
 
-        # Parse JSON fields
-        for field in ['anomaly_reasons', 'additional_metadata']:
-            if event.get(field) and isinstance(event[field], str):
-                try:
-                    event[field] = json.loads(event[field])
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
-        # Get related events - uses source_ip_text index
+        # Get related events
         cursor.execute("""
-            SELECT id, event_type, target_username, ml_risk_score, timestamp
-            FROM auth_events
-            WHERE source_ip_text = %s AND id != %s
-            ORDER BY timestamp DESC
+            SELECT e.id, e.event_type, e.target_username, ml.risk_score as ml_risk_score, e.timestamp
+            FROM auth_events e
+            LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
+            WHERE e.source_ip_text = %s AND e.id != %s
+            ORDER BY e.timestamp DESC
             LIMIT 10
         """, (event['source_ip_text'], event_id))
 
@@ -574,6 +540,8 @@ def get_event_detail(event_id):
         for rel_event in related_events:
             if rel_event.get('timestamp'):
                 rel_event['timestamp'] = rel_event['timestamp'].isoformat()
+            if rel_event.get('ml_risk_score'):
+                rel_event['ml_risk_score'] = round(float(rel_event['ml_risk_score']) * 100, 1)
 
         data = {
             'event': event,
@@ -596,13 +564,10 @@ def get_event_detail(event_id):
         if conn:
             conn.close()
 
-# ==================== NEW ENHANCED ENDPOINTS ====================
 
 @events_analysis_routes.route('/geography', methods=['GET'])
 def get_geography_data():
-    """
-    Get geographic distribution of events with caching
-    """
+    """Get geographic distribution of events - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -617,16 +582,17 @@ def get_geography_data():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get top countries with event counts
+        # v3.1: ML data from auth_events_ml
         cursor.execute("""
             SELECT
                 g.country_name as name,
                 g.country_code as code,
                 COUNT(*) as count,
                 SUM(e.event_type = 'failed') as failed_count,
-                SUM(e.ml_risk_score >= 70) as high_threat_count
+                SUM(ml.risk_score >= 0.70) as high_threat_count
             FROM auth_events e
             JOIN ip_geolocation g ON e.geo_id = g.id
+            LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
             WHERE g.country_name IS NOT NULL
             GROUP BY g.country_name, g.country_code
             ORDER BY count DESC
@@ -640,7 +606,6 @@ def get_geography_data():
             country['failed_count'] = int(country['failed_count'] or 0)
             country['high_threat_count'] = int(country['high_threat_count'] or 0)
             country['percentage'] = (country['count'] / total * 100) if total > 0 else 0
-            # Add flag emoji
             country['flag'] = get_country_flag(country['code'])
 
         data = {'countries': countries}
@@ -659,9 +624,7 @@ def get_geography_data():
 
 @events_analysis_routes.route('/top-ips', methods=['GET'])
 def get_top_ips():
-    """
-    Get top attacking IP addresses with caching
-    """
+    """Get top attacking IP addresses - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -677,21 +640,22 @@ def get_top_ips():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # v3.1: threat_level from ip_geolocation, risk_score from auth_events_ml
         cursor.execute("""
             SELECT
                 e.source_ip_text as ip_address,
                 COUNT(*) as count,
                 SUM(e.event_type = 'failed') as failed_count,
-                MAX(e.ml_risk_score) as max_risk_score,
-                MAX(t.threat_level) as threat_level,
+                MAX(ml.risk_score) as max_risk_score,
+                g.threat_level,
                 g.country_name as country,
                 g.country_code,
                 (SELECT 1 FROM ip_blocks WHERE ip_address_text = e.source_ip_text AND is_active = 1 LIMIT 1) as is_blocked
             FROM auth_events e
             LEFT JOIN ip_geolocation g ON e.geo_id = g.id
-            LEFT JOIN ip_threat_intel t ON e.threat_id = t.id
+            LEFT JOIN auth_events_ml ml ON e.id = ml.event_id
             WHERE e.event_type = 'failed'
-            GROUP BY e.source_ip_text, g.country_name, g.country_code
+            GROUP BY e.source_ip_text, g.threat_level, g.country_name, g.country_code
             ORDER BY count DESC
             LIMIT %s
         """, (limit,))
@@ -700,7 +664,7 @@ def get_top_ips():
         for ip in ips:
             ip['count'] = int(ip['count'])
             ip['failed_count'] = int(ip['failed_count'] or 0)
-            ip['max_risk_score'] = float(ip['max_risk_score'] or 0)
+            ip['max_risk_score'] = float(ip['max_risk_score']) if ip['max_risk_score'] else 0
             ip['is_blocked'] = bool(ip['is_blocked'])
             ip['country_flag'] = get_country_flag(ip.get('country_code'))
 
@@ -720,9 +684,7 @@ def get_top_ips():
 
 @events_analysis_routes.route('/recommendations', methods=['GET'])
 def get_ai_recommendations():
-    """
-    Get AI-powered security recommendations with caching
-    """
+    """Get security recommendations - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -738,24 +700,25 @@ def get_ai_recommendations():
 
         recommendations = []
 
-        # Check for high-risk IPs
+        # v3.1: High-risk IPs from auth_events_ml
         cursor.execute("""
-            SELECT COUNT(DISTINCT source_ip_text) as count
-            FROM auth_events
-            WHERE ml_risk_score >= 80
-            AND timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-            AND source_ip_text NOT IN (SELECT ip_address_text FROM ip_blocks WHERE is_active = 1)
+            SELECT COUNT(DISTINCT e.source_ip_text) as count
+            FROM auth_events e
+            JOIN auth_events_ml ml ON e.id = ml.event_id
+            WHERE ml.risk_score >= 0.80
+            AND e.timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            AND e.source_ip_text NOT IN (SELECT ip_address_text FROM ip_blocks WHERE is_active = 1)
         """)
         high_risk = cursor.fetchone()
         if high_risk and high_risk['count'] > 5:
             recommendations.append({
                 'priority': 'critical',
                 'title': f"{high_risk['count']} High-Risk IPs Detected",
-                'description': f"{high_risk['count']} IPs with risk scores above 80 are actively attacking. Consider blocking them.",
+                'description': f"{high_risk['count']} IPs with risk scores above 80% are actively attacking. Consider blocking them.",
                 'action': 'Review & Block IPs'
             })
 
-        # Check for brute force attempts
+        # Brute force attempts
         cursor.execute("""
             SELECT COUNT(*) as count, source_ip_text
             FROM auth_events
@@ -775,7 +738,7 @@ def get_ai_recommendations():
                 'action': 'Block IP'
             })
 
-        # Check for weak usernames being targeted
+        # Weak usernames
         cursor.execute("""
             SELECT target_username, COUNT(*) as count
             FROM auth_events
@@ -791,7 +754,7 @@ def get_ai_recommendations():
             recommendations.append({
                 'priority': 'medium',
                 'title': 'Common Username Under Attack',
-                'description': f"Username '{weak_user['target_username']}' received {weak_user['count']} failed login attempts. Consider disabling or renaming.",
+                'description': f"Username '{weak_user['target_username']}' received {weak_user['count']} failed login attempts.",
                 'action': 'Review Account'
             })
 
@@ -811,9 +774,7 @@ def get_ai_recommendations():
 
 @events_analysis_routes.route('/threat-distribution', methods=['GET'])
 def get_threat_distribution():
-    """
-    Get threat level distribution for pie chart with caching
-    """
+    """Get threat level distribution - v3.1 schema"""
     conn = None
     cursor = None
     try:
@@ -827,15 +788,16 @@ def get_threat_distribution():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # v3.1: threat_level is in ip_geolocation
         cursor.execute("""
             SELECT
                 CASE
-                    WHEN t.threat_level IS NULL OR t.threat_level = '' THEN 'clean'
-                    ELSE LOWER(t.threat_level)
+                    WHEN g.threat_level IS NULL OR g.threat_level = '' THEN 'clean'
+                    ELSE LOWER(g.threat_level)
                 END as threat_level,
                 COUNT(*) as count
             FROM auth_events e
-            LEFT JOIN ip_threat_intel t ON e.threat_id = t.id
+            LEFT JOIN ip_geolocation g ON e.geo_id = g.id
             GROUP BY threat_level
         """)
         results = cursor.fetchall()
@@ -861,9 +823,7 @@ def get_threat_distribution():
 
 @events_analysis_routes.route('/attack-patterns', methods=['GET'])
 def get_attack_patterns():
-    """
-    Get attack patterns (failure reasons) with caching
-    """
+    """Get attack patterns (failure reasons)"""
     conn = None
     cursor = None
     try:
@@ -893,7 +853,7 @@ def get_attack_patterns():
 
         for pattern in patterns:
             pattern['count'] = int(pattern['count'])
-            pattern['trend'] = 0.0  # TODO: Calculate actual trend
+            pattern['trend'] = 0.0
 
         data = {'patterns': patterns}
         cache.set(cache_k, data, EVENTS_SUMMARY_TTL)
@@ -911,9 +871,7 @@ def get_attack_patterns():
 
 @events_analysis_routes.route('/top-usernames', methods=['GET'])
 def get_top_usernames():
-    """
-    Get targeted usernames with statistics and caching
-    """
+    """Get targeted usernames with statistics"""
     conn = None
     cursor = None
     try:
@@ -966,13 +924,9 @@ def get_top_usernames():
 
 
 def get_country_flag(country_code):
-    """
-    Convert country code to flag emoji
-    """
+    """Convert country code to flag emoji"""
     if not country_code or len(country_code) != 2:
         return '🌍'
 
-    # Convert country code to flag emoji
-    # A = U+1F1E6, B = U+1F1E7, etc.
     code = country_code.upper()
     return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397)

@@ -109,12 +109,13 @@ show_menu() {
         echo -e "  ${GREEN}3)${NC} Restart Agent Service"
         echo -e "  ${GREEN}4)${NC} View Agent Logs"
         echo -e "  ${GREEN}5)${NC} Reconfigure Server URL"
-        echo -e "  ${GREEN}6)${NC} Test Connection to Server"
-        echo -e "  ${GREEN}7)${NC} View Fail2ban Status"
-        echo -e "  ${GREEN}8)${NC} Install Simulation Receiver"
+        echo -e "  ${GREEN}6)${NC} Update API Key"
+        echo -e "  ${GREEN}7)${NC} Test Connection to Server"
+        echo -e "  ${GREEN}8)${NC} View Fail2ban Status"
+        echo -e "  ${GREEN}14)${NC} Install Simulation Receiver"
     else
         echo -e "  ${GREEN}1)${NC} Install Agent"
-        echo -e "  ${GREEN}8)${NC} Install Simulation Receiver (standalone)"
+        echo -e "  ${GREEN}14)${NC} Install Simulation Receiver (standalone)"
     fi
 
     # Show simulation receiver options if installed
@@ -349,13 +350,47 @@ class GuardianAPIClient:
 
     def send_heartbeat(self, state: AgentState) -> bool:
         try:
-            payload = {'agent_id': self.config.agent_id, 'metrics': {'cpu_usage_percent': 0, 'memory_usage_percent': 0}, 'status': 'online'}
+            # Collect system metrics
+            cpu_percent = self._get_cpu_percent()
+            mem_percent = self._get_memory_percent()
+            disk_percent = self._get_disk_percent()
+            payload = {'agent_id': self.config.agent_id, 'metrics': {
+                'cpu_usage_percent': cpu_percent, 'memory_usage_percent': mem_percent, 'disk_usage_percent': disk_percent
+            }, 'status': 'online'}
             response = self.session.post(f"{self.config.server_url}/api/agents/heartbeat", json=payload, timeout=10)
             if response.status_code == 200:
                 state.last_heartbeat = datetime.now().isoformat()
                 return True
             return False
         except: return False
+
+    def _get_cpu_percent(self) -> float:
+        try:
+            with open('/proc/stat', 'r') as f:
+                line = f.readline()
+                parts = line.split()
+                idle = float(parts[4])
+                total = sum(float(p) for p in parts[1:])
+                return round(100 * (1 - idle / total), 1) if total > 0 else 0
+        except: return 0
+
+    def _get_memory_percent(self) -> float:
+        try:
+            with open('/proc/meminfo', 'r') as f:
+                lines = f.readlines()
+                mem = {l.split(':')[0]: int(l.split(':')[1].strip().split()[0]) for l in lines[:3]}
+                total, available = mem.get('MemTotal', 1), mem.get('MemAvailable', 0)
+                return round(100 * (1 - available / total), 1) if total > 0 else 0
+        except: return 0
+
+    def _get_disk_percent(self) -> float:
+        try:
+            result = subprocess.run(['df', '/'], capture_output=True, text=True, timeout=5)
+            for line in result.stdout.split('\n')[1:]:
+                parts = line.split()
+                if len(parts) >= 5: return float(parts[4].replace('%', ''))
+            return 0
+        except: return 0
 
     def submit_log_batch(self, log_lines: List[str]) -> bool:
         try:
@@ -393,6 +428,13 @@ class GuardianAPIClient:
             return True
         except: return False
 
+    def submit_ufw_rules(self, ufw_data: Dict) -> bool:
+        try:
+            payload = {'agent_id': self.config.agent_id, 'hostname': self.config.hostname, 'ufw_data': ufw_data}
+            response = self.session.post(f"{self.config.server_url}/api/agents/ufw/sync", json=payload, timeout=60)
+            return response.status_code == 200
+        except: return False
+
 class SSHGuardianAgent:
     def __init__(self, config: AgentConfig):
         self.config = config
@@ -428,18 +470,45 @@ class SSHGuardianAgent:
                 now = time.time()
                 if now - last_hb >= self.config.heartbeat_interval:
                     if self.api_client.send_heartbeat(self.state): last_hb = now
+                # Periodic firewall sync
+                if self.config.firewall_enabled and now - last_fw >= self.config.firewall_sync_interval:
+                    self._sync_firewall()
+                    last_fw = now
                 if self.config.use_fail2ban and now - last_f2b >= self.config.fail2ban_sync_interval:
                     self._sync_fail2ban_unbans()
                     last_f2b = now
                 # Process UFW commands
                 for cmd in self.api_client.get_pending_ufw_commands():
-                    self._execute_ufw_command(cmd)
+                    need_sync = self._execute_ufw_command(cmd)
+                    if need_sync: self._sync_firewall()
                 time.sleep(self.config.check_interval)
             except KeyboardInterrupt:
                 self.running = False
             except Exception as e:
                 logging.error(f"Error: {e}")
                 time.sleep(self.config.check_interval)
+
+    def _sync_firewall(self):
+        """Collect and sync UFW rules to server"""
+        try:
+            result = subprocess.run(['ufw', 'status', 'numbered'], capture_output=True, text=True, timeout=30)
+            if result.returncode != 0: return
+            rules = []
+            for line in result.stdout.split('\n'):
+                if line.startswith('['):
+                    parts = line.split(']', 1)
+                    if len(parts) == 2:
+                        idx = parts[0].replace('[', '').strip()
+                        rule = parts[1].strip()
+                        action = 'ALLOW' if 'ALLOW' in rule else ('DENY' if 'DENY' in rule else 'REJECT')
+                        rules.append({'rule_index': int(idx), 'rule_text': rule, 'action': action, 'direction': 'IN' if '(v6)' not in rule else 'IN'})
+            status_result = subprocess.run(['ufw', 'status'], capture_output=True, text=True, timeout=10)
+            ufw_status = 'active' if 'Status: active' in status_result.stdout else 'inactive'
+            ufw_data = {'ufw_status': ufw_status, 'default_incoming': 'deny', 'default_outgoing': 'allow', 'rules': rules}
+            self.api_client.submit_ufw_rules(ufw_data)
+            logging.info(f"Firewall synced: {len(rules)} rules")
+        except Exception as e:
+            logging.error(f"Firewall sync error: {e}")
 
     def _sync_fail2ban_unbans(self):
         for cmd in self.api_client.get_pending_fail2ban_unbans():
@@ -452,17 +521,23 @@ class SSHGuardianAgent:
                 self.api_client.report_fail2ban_unban_result(block_id, False, str(e))
 
     def _execute_ufw_command(self, cmd):
+        """Execute UFW command, returns True if sync needed after"""
         command_id, action, params = cmd.get('id'), cmd.get('action') or cmd.get('command_type'), cmd.get('params', {})
         try:
-            if action == 'deny_from':
+            if action == 'sync_now':
+                self.api_client.report_command_result(command_id, True, 'Sync requested')
+                return True  # Trigger immediate sync
+            elif action == 'deny_from':
                 result = subprocess.run(['ufw', 'deny', 'from', params.get('ip')], capture_output=True, text=True, timeout=30)
-            elif action == 'delete_deny':
+            elif action == 'delete_deny' or action == 'delete_deny_from':
                 result = subprocess.run(['ufw', 'delete', 'deny', 'from', params.get('ip')], capture_output=True, text=True, timeout=30)
             else:
                 result = type('obj', (object,), {'returncode': 1, 'stderr': f'Unknown action: {action}'})()
             self.api_client.report_command_result(command_id, result.returncode == 0, result.stdout or result.stderr)
+            return result.returncode == 0  # Sync after successful command
         except Exception as e:
             self.api_client.report_command_result(command_id, False, str(e))
+            return False
 
 def main():
     parser = argparse.ArgumentParser(description='SSH Guardian v3.0 Agent')
@@ -477,9 +552,45 @@ AGENT_PY
     chmod +x "$INSTALL_DIR/ssh_guardian_agent.py"
 }
 
-# Configure fail2ban
+# Configure fail2ban with incremental banning
 configure_fail2ban() {
-    # Create action file
+    echo -e "  ${CYAN}Checking fail2ban installation...${NC}"
+
+    # Step 1: Check and install fail2ban if not present
+    if ! command -v fail2ban-client &> /dev/null; then
+        echo -e "  ${YELLOW}Installing fail2ban...${NC}"
+        apt-get update -qq
+        apt-get install -y -qq fail2ban
+        if [ $? -ne 0 ]; then
+            echo -e "  ${RED}Failed to install fail2ban${NC}"
+            return 1
+        fi
+        echo -e "  ${GREEN}fail2ban installed successfully${NC}"
+    else
+        echo -e "  ${GREEN}fail2ban already installed${NC}"
+    fi
+
+    # Step 2: Check and display timezone
+    echo -e "  ${CYAN}Checking timezone...${NC}"
+    CURRENT_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "Unknown")
+    echo -e "  Current timezone: ${YELLOW}$CURRENT_TZ${NC}"
+
+    # Offer to change timezone if it's UTC or unknown
+    if [[ "$CURRENT_TZ" == "Etc/UTC" || "$CURRENT_TZ" == "UTC" || "$CURRENT_TZ" == "Unknown" ]]; then
+        echo -e "  ${YELLOW}Timezone is set to UTC. Would you like to change it?${NC}"
+        echo -n -e "  Enter timezone (e.g., Asia/Dhaka, America/New_York) or press Enter to skip: "
+        read NEW_TZ
+        if [ -n "$NEW_TZ" ]; then
+            if timedatectl set-timezone "$NEW_TZ" 2>/dev/null; then
+                echo -e "  ${GREEN}Timezone changed to $NEW_TZ${NC}"
+            else
+                echo -e "  ${RED}Failed to set timezone. Please set manually with: timedatectl set-timezone <timezone>${NC}"
+            fi
+        fi
+    fi
+
+    # Step 3: Create SSH Guardian action file
+    echo -e "  ${CYAN}Creating fail2ban action for SSH Guardian...${NC}"
     cat > /etc/fail2ban/action.d/ssh_guardian.conf << 'EOF'
 [Definition]
 actionban = /opt/ssh-guardian-agent/fail2ban_report.sh ban <ip> <name> <failures> <bantime>
@@ -489,7 +600,7 @@ actionstop =
 [Init]
 EOF
 
-    # Create reporter script
+    # Step 4: Create reporter script
     cat > "$INSTALL_DIR/fail2ban_report.sh" << 'REPORTER'
 #!/bin/bash
 ACTION=$1; IP=$2; JAIL=$3; FAILURES=${4:-0}; BANTIME=${5:-3600}
@@ -510,22 +621,66 @@ fi
 REPORTER
     chmod +x "$INSTALL_DIR/fail2ban_report.sh"
 
-    # Create jail config
+    # Step 5: Create jail config with INCREMENTAL BANNING
+    echo -e "  ${CYAN}Configuring fail2ban with incremental banning...${NC}"
     cat > /etc/fail2ban/jail.d/ssh_guardian.local << EOF
+# SSH Guardian v3.0 - Fail2ban Configuration
+# Incremental banning: repeat offenders get longer bans
+
+[DEFAULT]
+# Incremental banning settings
+bantime.increment = true
+bantime.factor = 2
+bantime.formula = ban.Time * (1<<(ban.Count if ban.Count<20 else 20)) * banFactor
+bantime.maxtime = 1w
+bantime.rndtime = 4h
+
+# Whitelist local networks (customize as needed)
+ignoreip = 127.0.0.1/8 ::1
+
 [sshd]
 enabled = true
 port = ssh
 filter = sshd
 logpath = /var/log/auth.log
 backend = auto
+
+# Detection settings
 maxretry = 5
-findtime = 600
-bantime = 3600
+findtime = 10m
+
+# Ban duration (base time - will increase with each repeat offense)
+# 1st ban: 1 hour
+# 2nd ban: 2 hours
+# 3rd ban: 4 hours
+# 4th ban: 8 hours
+# ... up to 1 week max
+bantime = 1h
+
+# Actions: block via iptables AND report to SSH Guardian
 action = iptables-multiport[name=sshd, port="ssh", protocol=tcp]
          ssh_guardian
 EOF
 
+    # Step 6: Restart fail2ban
+    echo -e "  ${CYAN}Restarting fail2ban...${NC}"
+    systemctl enable fail2ban 2>/dev/null || true
     systemctl restart fail2ban 2>/dev/null || true
+
+    if systemctl is-active fail2ban &>/dev/null; then
+        echo -e "  ${GREEN}fail2ban configured and running${NC}"
+
+        # Show current settings
+        BANTIME=$(fail2ban-client get sshd bantime 2>/dev/null || echo "unknown")
+        MAXRETRY=$(fail2ban-client get sshd maxretry 2>/dev/null || echo "unknown")
+        echo -e "  ${CYAN}Settings:${NC}"
+        echo -e "    Base ban time: ${YELLOW}${BANTIME}s${NC}"
+        echo -e "    Max retry: ${YELLOW}${MAXRETRY}${NC}"
+        echo -e "    Incremental: ${GREEN}enabled (2x multiplier)${NC}"
+        echo -e "    Max ban time: ${YELLOW}1 week${NC}"
+    else
+        echo -e "  ${RED}Warning: fail2ban failed to start. Check logs with: journalctl -u fail2ban${NC}"
+    fi
 }
 
 # Create systemd service
@@ -642,6 +797,50 @@ with open('$CONFIG_FILE', 'w') as f: json.dump(config, f, indent=2)
     read -p "Press Enter to continue..."
 }
 
+# Update API Key
+update_api_key() {
+    print_banner
+    get_config
+    echo -e "${BOLD}Update API Key${NC}"
+    echo ""
+
+    # Get current API key
+    CURRENT_KEY=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('api_key', ''))" 2>/dev/null)
+
+    if [ -n "$CURRENT_KEY" ]; then
+        echo -e "Current API Key: ${YELLOW}${CURRENT_KEY:0:8}...${CURRENT_KEY: -4}${NC}"
+    else
+        echo -e "Current API Key: ${RED}Not set${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}You can find the API key in the dashboard:${NC}"
+    echo -e "  Agents → Click on agent → View Details → API Key"
+    echo ""
+    echo -n "Enter new API Key (or press Enter to cancel): "
+    read NEW_API_KEY
+
+    if [ -z "$NEW_API_KEY" ]; then
+        echo -e "${YELLOW}No change made.${NC}"
+    else
+        python3 -c "
+import json
+with open('$CONFIG_FILE', 'r') as f: config = json.load(f)
+config['api_key'] = '$NEW_API_KEY'
+with open('$CONFIG_FILE', 'w') as f: json.dump(config, f, indent=2)
+"
+        echo -e "${GREEN}API Key updated successfully!${NC}"
+        echo -e "${YELLOW}Restarting agent...${NC}"
+        systemctl restart $SERVICE_NAME
+        sleep 2
+        if systemctl is-active $SERVICE_NAME &>/dev/null; then
+            echo -e "${GREEN}Agent restarted and running with new API key.${NC}"
+        else
+            echo -e "${RED}Agent failed to start. Check logs with option 4.${NC}"
+        fi
+    fi
+    read -p "Press Enter to continue..."
+}
+
 # Test connection
 test_connection() {
     print_banner
@@ -650,14 +849,14 @@ test_connection() {
     echo ""
     echo -e "Server: ${YELLOW}$SERVER_URL${NC}"
     echo ""
-    
+
     echo -n "Testing health endpoint... "
     if curl -s --connect-timeout 5 "$SERVER_URL/health" | grep -q "healthy"; then
         echo -e "${GREEN}OK${NC}"
     else
         echo -e "${RED}FAILED${NC}"
     fi
-    
+
     echo ""
     read -p "Press Enter to continue..."
 }
@@ -1122,16 +1321,17 @@ main() {
                 3) restart_service ;;
                 4) view_logs ;;
                 5) reconfigure_server ;;
-                6) test_connection ;;
-                7) view_fail2ban ;;
-                8) install_simulation_receiver ;;
+                6) update_api_key ;;
+                7) test_connection ;;
+                8) view_fail2ban ;;
+                14) install_simulation_receiver ;;
                 0) echo -e "${GREEN}Goodbye!${NC}"; exit 0 ;;
                 *) echo -e "${RED}Invalid option${NC}"; sleep 1 ;;
             esac
         else
             case $choice in
                 1) install_agent ;;
-                8) install_simulation_receiver ;;
+                14) install_simulation_receiver ;;
                 0) echo -e "${GREEN}Goodbye!${NC}"; exit 0 ;;
                 *) echo -e "${RED}Invalid option${NC}"; sleep 1 ;;
             esac

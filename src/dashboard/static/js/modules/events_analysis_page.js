@@ -22,15 +22,8 @@
     let listenersSetup = false;
     let chartInstances = {};
 
-    /**
-     * Escape HTML to prevent XSS attacks
-     */
-    function escapeHtml(text) {
-        if (text === null || text === undefined) return '';
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
-    }
+    // escapeHtml - use global from utils.js
+    const escapeHtml = window.escapeHtml;
 
     /**
      * Format number with commas
@@ -44,8 +37,6 @@
      * Load and display Events Analysis page
      */
     window.loadEventsAnalysisPage = async function() {
-        console.log('Loading Enhanced Events Analysis page...');
-
         listenersSetup = false;
 
         if (typeof CacheManager !== 'undefined') {
@@ -263,7 +254,7 @@
         let html = '';
         countries.forEach((country, index) => {
             const percentage = country.percentage || 0;
-            const barColor = index === 0 ? '#D83B01' : index === 1 ? '#E6A502' : '#0078D4';
+            const barColor = index === 0 ? TC.danger : index === 1 ? TC.warning : TC.primary;
 
             html += `
                 <div style="margin-bottom: 16px;">
@@ -330,7 +321,7 @@
                     </div>
                     <div style="margin-top: 8px; font-size: 11px;">
                         <span style="background: ${threatColor}; color: white; padding: 2px 8px; border-radius: 2px;">${escapeHtml(ip.threat_level || 'Unknown')}</span>
-                        ${ip.is_blocked ? '<span style="background: #D83B01; color: white; padding: 2px 8px; border-radius: 2px; margin-left: 4px;">BLOCKED</span>' : ''}
+                        ${ip.is_blocked ? `<span style="background: ${TC.danger}; color: white; padding: 2px 8px; border-radius: 2px; margin-left: 4px;">BLOCKED</span>` : ''}
                     </div>
                 </div>
             `;
@@ -345,13 +336,13 @@
      */
     function getThreatColor(level) {
         const colors = {
-            'critical': '#A80000',
-            'high': '#D83B01',
-            'medium': '#E6A502',
-            'low': '#FFB900',
-            'clean': '#107C10'
+            'critical': TC.danger,
+            'high': TC.orange,
+            'medium': TC.warning,
+            'low': TC.warningDark,
+            'clean': TC.successDark
         };
-        return colors[(level || '').toLowerCase()] || '#605E5C';
+        return colors[(level || '').toLowerCase()] || TC.textSecondary;
     }
 
     /**
@@ -382,7 +373,7 @@
         if (recommendations.length === 0) {
             container.innerHTML = `
                 <div style="background: var(--background); padding: 12px; border-radius: 4px; border: 1px solid var(--border);">
-                    <div style="font-weight: 500; margin-bottom: 4px; color: #107C10;">✅ All Clear</div>
+                    <div style="font-weight: 500; margin-bottom: 4px; color: ${TC.successDark};">✅ All Clear</div>
                     <div style="font-size: 12px; color: var(--text-secondary);">No critical security recommendations at this time</div>
                 </div>
             `;
@@ -392,7 +383,7 @@
         let html = '';
         recommendations.forEach(rec => {
             const icon = rec.priority === 'critical' ? '🚨' : rec.priority === 'high' ? '⚠️' : '💡';
-            const borderColor = rec.priority === 'critical' ? '#A80000' : rec.priority === 'high' ? '#D83B01' : '#0078D4';
+            const borderColor = rec.priority === 'critical' ? TC.danger : rec.priority === 'high' ? TC.orange : TC.primary;
             html += `
                 <div style="background: var(--background); padding: 12px; border-radius: 4px; border-left: 3px solid ${borderColor}; border: 1px solid var(--border); border-left: 3px solid ${borderColor};">
                     <div style="font-weight: 500; margin-bottom: 4px; color: var(--text-primary);">${icon} ${escapeHtml(rec.title)}</div>
@@ -446,16 +437,16 @@
                     {
                         label: 'Failed',
                         data: failed,
-                        borderColor: '#D83B01',
-                        backgroundColor: 'rgba(216, 59, 1, 0.1)',
+                        borderColor: TC.danger,
+                        backgroundColor: TC.dangerBg,
                         tension: 0.4,
                         fill: true
                     },
                     {
                         label: 'Successful',
                         data: successful,
-                        borderColor: '#107C10',
-                        backgroundColor: 'rgba(16, 124, 16, 0.1)',
+                        borderColor: TC.successDark,
+                        backgroundColor: TC.successBg,
                         tension: 0.4,
                         fill: true
                     }
@@ -518,7 +509,7 @@
                     data: values,
                     backgroundColor: colors,
                     borderWidth: 2,
-                    borderColor: '#ffffff'
+                    borderColor: TC.surface
                 }]
             },
             options: {
@@ -612,13 +603,13 @@
         let html = '';
         usernames.forEach(user => {
             const successRate = user.total > 0 ? ((user.successful / user.total) * 100).toFixed(1) : 0;
-            const rateColor = successRate > 50 ? '#107C10' : successRate > 20 ? '#E6A502' : '#D83B01';
+            const rateColor = successRate > 50 ? TC.successDark : successRate > 20 ? TC.warning : TC.danger;
 
             html += `
                 <tr style="border-bottom: 1px solid var(--border);">
                     <td style="padding: 12px; font-weight: 500;">${escapeHtml(user.username)}</td>
                     <td style="padding: 12px;">${formatNumber(user.total)}</td>
-                    <td style="padding: 12px; color: #D83B01;">${formatNumber(user.failed)}</td>
+                    <td style="padding: 12px; color: ${TC.danger};">${formatNumber(user.failed)}</td>
                     <td style="padding: 12px; color: ${rateColor};">${successRate}%</td>
                     <td style="padding: 12px;">${formatNumber(user.unique_ips)}</td>
                 </tr>
@@ -628,302 +619,18 @@
         tbody.innerHTML = html;
     }
 
-    /**
-     * Load events table
-     */
-    async function loadEventsTable() {
-        try {
-            const query = buildQueryString();
-            const response = await fetch(`/api/dashboard/events/list?${query}&limit=${eventsCurrentLimit}&offset=${(eventsCurrentPage - 1) * eventsCurrentLimit}`);
-            const data = await response.json();
 
-            if (data.success) {
-                renderEventsTable(data.events || []);
-                renderPagination(data.pagination || {});
-            }
-        } catch (error) {
-            console.error('Error loading events table:', error);
-        }
-    }
-
-    /**
-     * Render events table
-     */
-    function renderEventsTable(events) {
-        const tbody = document.getElementById('events-table-body');
-        if (!tbody) return;
-
-        if (events.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-secondary);">No events found</td></tr>';
-            return;
-        }
-
-        let html = '';
-        events.forEach(event => {
-            const typeColor = event.event_type === 'failed' ? '#D83B01' : '#107C10';
-            const threatColor = getThreatColor(event.threat_level);
-
-            html += `
-                <tr style="border-bottom: 1px solid var(--border);">
-                    <td style="padding: 12px; font-size: 12px;">${escapeHtml(formatTimestamp(event.timestamp))}</td>
-                    <td style="padding: 12px;">
-                        <span style="padding: 4px 8px; background: ${typeColor}; color: white; border-radius: 2px; font-size: 11px;">
-                            ${escapeHtml(event.event_type || 'Unknown')}
-                        </span>
-                    </td>
-                    <td style="padding: 12px; font-family: monospace; font-size: 12px;">${escapeHtml(event.source_ip || 'N/A')}</td>
-                    <td style="padding: 12px;">${event.country_flag || '🌍'} ${escapeHtml(event.country || 'Unknown')}</td>
-                    <td style="padding: 12px; font-weight: 500;">${escapeHtml(event.username || 'N/A')}</td>
-                    <td style="padding: 12px; font-size: 12px;">${escapeHtml(event.agent_name || 'N/A')}</td>
-                    <td style="padding: 12px;">
-                        <span style="padding: 4px 8px; background: ${threatColor}; color: white; border-radius: 2px; font-size: 11px;">
-                            ${escapeHtml(event.threat_level || 'Unknown')}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        <button onclick="analyzeEventsIP('${escapeHtml(event.source_ip)}')" style="padding: 4px 8px; background: var(--azure-blue); color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 11px;">
-                            Analyze
-                        </button>
-                    </td>
-                </tr>
-            `;
-        });
-
-        tbody.innerHTML = html;
-    }
-
-    /**
-     * Render pagination
-     */
-    function renderPagination(pagination) {
-        const info = document.getElementById('events-pagination-info');
-        const prevBtn = document.getElementById('events-prev-page');
-        const nextBtn = document.getElementById('events-next-page');
-
-        if (info) {
-            const start = ((eventsCurrentPage - 1) * eventsCurrentLimit) + 1;
-            const end = Math.min(start + eventsCurrentLimit - 1, pagination.total || 0);
-            info.textContent = `Showing ${start}-${end} of ${formatNumber(pagination.total || 0)} events`;
-        }
-
-        if (prevBtn) {
-            prevBtn.disabled = eventsCurrentPage === 1;
-            prevBtn.style.opacity = eventsCurrentPage === 1 ? '0.5' : '1';
-        }
-
-        if (nextBtn) {
-            nextBtn.disabled = !pagination.has_more;
-            nextBtn.style.opacity = !pagination.has_more ? '0.5' : '1';
-        }
-    }
-
-    /**
-     * Format timestamp
-     */
-    function formatTimestamp(timestamp) {
-        if (!timestamp) return 'N/A';
-        const date = new Date(timestamp);
-        return date.toLocaleString(undefined, {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-    }
-
-    /**
-     * Update element content safely
-     */
-    function updateElement(id, content) {
-        const el = document.getElementById(id);
-        if (el) {
-            if (typeof content === 'string') {
-                el.innerHTML = content;
-            } else {
-                el.textContent = content;
-            }
-        }
-    }
-
-    /**
-     * Setup event listeners
-     */
-    function setupEventListeners() {
-        if (listenersSetup) return;
-        listenersSetup = true;
-
-        // Filter buttons
-        const applyBtn = document.getElementById('events-apply-filters');
-        const clearBtn = document.getElementById('events-clear-filters');
-        const refreshBtn = document.getElementById('events-refresh-btn');
-        const exportBtn = document.getElementById('events-export-btn');
-
-        if (applyBtn) {
-            applyBtn.addEventListener('click', applyFilters);
-        }
-
-        if (clearBtn) {
-            clearBtn.addEventListener('click', clearFilters);
-        }
-
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => loadEventsAnalysisPage());
-        }
-
-        if (exportBtn) {
-            exportBtn.addEventListener('click', exportReport);
-        }
-
-        // Pagination
-        const prevBtn = document.getElementById('events-prev-page');
-        const nextBtn = document.getElementById('events-next-page');
-
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => {
-                if (eventsCurrentPage > 1) {
-                    eventsCurrentPage--;
-                    loadEventsTable();
-                }
-            });
-        }
-
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => {
-                eventsCurrentPage++;
-                loadEventsTable();
-            });
-        }
-
-        // Per page selector
-        const perPageSelect = document.getElementById('events-per-page');
-        if (perPageSelect) {
-            perPageSelect.addEventListener('change', (e) => {
-                eventsCurrentLimit = parseInt(e.target.value);
-                eventsCurrentPage = 1;
-                loadEventsTable();
-            });
-        }
-
-        // Tab switching
-        const tabs = document.querySelectorAll('.analysis-tab');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                const targetTab = tab.dataset.tab;
-                switchTab(targetTab);
-            });
-        });
-    }
-
-    /**
-     * Apply filters
-     */
-    async function applyFilters() {
-        eventsFilters = {
-            dateRange: document.getElementById('events-date-range')?.value || '7d',
-            eventType: document.getElementById('events-type-filter')?.value || '',
-            threatLevel: document.getElementById('events-threat-filter')?.value || '',
-            country: document.getElementById('events-country-filter')?.value || '',
-            agent: document.getElementById('events-agent-filter')?.value || '',
-            search: document.getElementById('events-search')?.value || ''
-        };
-
-        eventsCurrentPage = 1;
-        await loadEventsAnalysisPage();
-    }
-
-    /**
-     * Clear filters
-     */
-    async function clearFilters() {
-        document.getElementById('events-date-range').value = '7d';
-        document.getElementById('events-type-filter').value = '';
-        document.getElementById('events-threat-filter').value = '';
-        document.getElementById('events-country-filter').value = '';
-        document.getElementById('events-agent-filter').value = '';
-        document.getElementById('events-search').value = '';
-
-        eventsFilters = {
-            dateRange: '7d',
-            eventType: '',
-            threatLevel: '',
-            country: '',
-            agent: '',
-            search: ''
-        };
-
-        eventsCurrentPage = 1;
-        await loadEventsAnalysisPage();
-    }
-
-    /**
-     * Switch between analysis tabs
-     */
-    function switchTab(tabName) {
-        // Update tab buttons
-        document.querySelectorAll('.analysis-tab').forEach(tab => {
-            if (tab.dataset.tab === tabName) {
-                tab.classList.add('active');
-            } else {
-                tab.classList.remove('active');
-            }
-        });
-
-        // Update tab content
-        document.querySelectorAll('.analysis-tab-content').forEach(content => {
-            content.style.display = 'none';
-        });
-
-        const targetContent = document.getElementById(`tab-${tabName}`);
-        if (targetContent) {
-            targetContent.style.display = 'block';
-        }
-    }
-
-    /**
-     * Export report
-     */
-    function exportReport() {
-        if (typeof showToast === 'function') {
-            showToast('Export feature coming soon', 'info');
-        } else {
-            alert('Export feature coming soon');
-        }
-    }
-
-    /**
-     * Analyze IP - integrates with existing IP analysis modal
-     */
-    window.analyzeEventsIP = function(ip) {
-        if (typeof window.showFullIPAnalysis === 'function') {
-            window.showFullIPAnalysis(ip);
-        } else if (typeof window.showIPAnalysis === 'function') {
-            window.showIPAnalysis(ip);
-        } else {
-            // Fallback: show loading and fetch IP analysis
-            if (typeof showCenteredLoader === 'function') {
-                const loader = showCenteredLoader(`Analyzing ${ip}...`);
-                fetch(`/api/demo/ip-analysis/${encodeURIComponent(ip)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        loader.remove();
-                        if (data.success) {
-                            alert(`IP Analysis for ${ip}:\nRisk Score: ${data.composite_risk?.overall_score || 'N/A'}\nThreat Level: ${data.composite_risk?.threat_level || 'N/A'}`);
-                        } else {
-                            alert('Failed to analyze IP');
-                        }
-                    })
-                    .catch(error => {
-                        loader.remove();
-                        console.error('Error:', error);
-                        alert('Error analyzing IP');
-                    });
-            } else {
-                alert(`Analyzing IP: ${ip}\n(Full analysis feature loading...)`);
-            }
-        }
+    // Export shared state and functions for events_analysis_table.js
+    window.eventsAnalysisState = {
+        get currentPage() { return eventsCurrentPage; },
+        set currentPage(val) { eventsCurrentPage = val; },
+        get currentLimit() { return eventsCurrentLimit; },
+        set currentLimit(val) { eventsCurrentLimit = val; },
+        get filters() { return eventsFilters; },
+        set filters(val) { eventsFilters = val; }
     };
+    window.buildQueryString = buildQueryString;
+
+    // Note: Events table, pagination, and event listeners are now in events_analysis_table.js
 
 })();

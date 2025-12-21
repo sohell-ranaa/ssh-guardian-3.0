@@ -1,0 +1,237 @@
+/**
+ * SSH Guardian v3.0 - UFW Toggle & Sync Indicator Styles
+ * UFW toggle button, global sync overlay
+ */
+
+/* UFW Toggle Button Styles - use #page selector for specificity */
+#page-firewall-simple .ufw-toggle-btn {
+    min-width: 140px;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="active"] {
+    background: linear-gradient(135deg, var(--color-success-dark), var(--color-forest-dark));
+    color: white;
+    border-color: var(--color-forest-darker);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="active"]:hover {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-deep-red));
+    border-color: var(--color-danger-dark);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="active"]:hover .toggle-text::after {
+    content: ' (Click to Disable)';
+    font-size: 9px;
+    opacity: 0.8;
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="inactive"] {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-deep-red));
+    color: white;
+    border-color: var(--color-danger-dark);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="inactive"]:hover {
+    background: linear-gradient(135deg, var(--color-success-dark), var(--color-forest-dark));
+    border-color: var(--color-forest-darker);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="unknown"] {
+    background: var(--color-muted-light);
+    color: white;
+    border-color: var(--text-secondary);
+    cursor: wait;
+}
+
+.ufw-toggle-btn .toggle-icon {
+    font-size: 14px;
+}
+
+.ufw-toggle-btn .toggle-text {
+    font-weight: 600;
+}
+
+/* Global Sync Indicator Styles */
+.global-sync-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.global-sync-overlay.active {
+    opacity: 1;
+}
+
+.global-sync-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 450px;
+    overflow: hidden;
+    animation: syncModalSlideIn 0.3s ease;
+}
+
+@keyframes syncModalSlideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.sync-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, var(--azure-blue), var(--color-azure-dark-alt));
+    color: white;
+}
+
+.sync-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.sync-header-text {
+    flex: 1;
+}
+
+.sync-operation-type {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.sync-operation-message {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.sync-activity-log {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--background);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.sync-log-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+}
+
+.sync-log-entry.info {
+    border-left: 3px solid var(--azure-blue);
+}
+
+.sync-log-entry.success {
+    border-left: 3px solid var(--color-success-light);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.sync-log-entry.error {
+    border-left: 3px solid var(--color-danger);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.sync-log-entry.warning {
+    border-left: 3px solid var(--color-warning-light);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.sync-log-icon {
+    font-size: 14px;
+}
+
+.sync-log-message {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.sync-log-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
+.sync-footer {
+    padding: 12px 24px;
+    text-align: right;
+}
+
+.sync-cancel-btn {
+    padding: 8px 20px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.sync-cancel-btn:hover {
+    background: var(--surface);
+    border-color: var(--text-secondary);
+}
+
+/* Last sync combined display */
+.last-sync-combined {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.last-sync-combined .sync-type-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.last-sync-combined .sync-type-badge.ufw {
+    background: rgba(16, 124, 16, 0.15);
+    color: var(--color-success-dark);
+}
+
+.last-sync-combined .sync-type-badge.fail2ban {
+    background: rgba(0, 120, 212, 0.15);
+    color: var(--azure-blue);
+}
+
+.last-sync-combined .sync-type-badge.agent {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--color-purple);
+}

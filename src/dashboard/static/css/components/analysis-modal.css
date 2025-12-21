@@ -1,0 +1,585 @@
+/**
+ * SSH Guardian v3.0 - Analysis Modal Component CSS
+ * Shared styles for modal analysis sections (.m-*) and history (.h-*)
+ */
+
+/* ========== Stats Grid ========== */
+.m-stats {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.m-stat {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 14px 10px;
+    text-align: center;
+    border: 1px solid var(--border);
+}
+
+.m-stat-val {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.m-stat-val.red {
+    color: var(--color-danger-light);
+}
+
+.m-stat-val.green {
+    color: var(--color-success);
+}
+
+.m-stat-val.blue {
+    color: var(--azure-blue);
+}
+
+.m-stat-lbl {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* ========== Cards Grid ========== */
+.m-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.m-card {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid var(--border);
+}
+
+.m-card h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--azure-blue);
+    text-transform: uppercase;
+    margin: 0 0 12px 0;
+    letter-spacing: 0.5px;
+}
+
+/* ========== Info Rows ========== */
+.m-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    gap: 12px;
+}
+
+.m-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.m-row .l {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.m-row .v {
+    font-weight: 600;
+    text-align: right;
+    word-break: break-all;
+}
+
+/* ========== Sections ========== */
+.m-sec {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+}
+
+.m-sec:last-child {
+    margin-bottom: 0;
+}
+
+.m-sec h4 {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--azure-blue);
+    text-transform: uppercase;
+    margin: 0 0 12px 0;
+    letter-spacing: 0.5px;
+}
+
+/* ========== Risk Meter ========== */
+.m-meter {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.m-meter-bar {
+    flex: 1;
+    height: 10px;
+    background: var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.m-meter-fill {
+    height: 100%;
+    border-radius: 5px;
+}
+
+.m-meter-val {
+    font-size: 20px;
+    font-weight: 700;
+    min-width: 45px;
+    text-align: right;
+}
+
+/* ========== Intel Grid ========== */
+.m-intel {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.m-intel-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+
+.m-intel-item .src {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+
+.m-intel-item .score {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.m-intel-item .det {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* ========== Recommendations ========== */
+.m-recs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.m-rec {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.m-rec.crit {
+    border-color: var(--color-danger-light);
+    background: var(--color-danger-bg-light);
+}
+
+.m-rec.warn {
+    border-color: var(--color-warning-dark);
+    background: var(--color-warning-bg-light);
+}
+
+.m-rec.info {
+    border-color: var(--azure-blue);
+    background: var(--color-info-bg-light);
+}
+
+/* ========== History Overview ========== */
+.h-over {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 16px;
+    background: var(--background);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.h-stat {
+    text-align: center;
+}
+
+.h-stat-val {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.h-stat-val.red {
+    color: var(--color-danger-light);
+}
+
+.h-stat-val.green {
+    color: var(--color-success);
+}
+
+.h-stat-lbl {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+/* ========== History Filters ========== */
+.h-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.h-filters input,
+.h-filters select {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    flex: 1;
+    min-width: 100px;
+    box-sizing: border-box;
+}
+
+.h-filters .clear {
+    padding: 10px 16px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.h-filters .clear:hover {
+    background: var(--surface);
+    border-color: var(--text-secondary);
+}
+
+/* ========== History List ========== */
+.h-wrap {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.h-date {
+    margin-bottom: 12px;
+}
+
+.h-date-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    gap: 10px;
+    transition: background 0.2s;
+}
+
+.h-date-hdr:hover {
+    background: var(--surface);
+}
+
+.h-date-hdr .arrow {
+    margin-right: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    transition: transform 0.2s;
+}
+
+.h-date.expanded .h-date-hdr {
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+}
+
+.h-date.expanded .arrow {
+    transform: rotate(90deg);
+}
+
+.h-date-title {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.h-date-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.h-date-stats .f {
+    color: var(--color-danger-light);
+}
+
+.h-date-stats .s {
+    color: var(--color-success);
+}
+
+.h-date-stats .t {
+    color: var(--text-secondary);
+}
+
+.h-date-body {
+    display: none;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    overflow-x: auto;
+}
+
+.h-date.expanded .h-date-body {
+    display: block;
+}
+
+/* ========== History Table ========== */
+.h-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 420px;
+}
+
+.h-tbl th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--surface);
+    letter-spacing: 0.5px;
+}
+
+.h-tbl td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.h-tbl tr:last-child td {
+    border-bottom: none;
+}
+
+.h-tbl .ip-cell {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 11px;
+    color: var(--azure-blue);
+    white-space: nowrap;
+}
+
+.h-tbl .time-cell {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.h-tbl .time-cell.unusual {
+    color: var(--color-warning-light);
+    font-weight: 600;
+}
+
+.h-tbl .time-cell.unusual::before {
+    content: '\26A0 ';
+    font-size: 10px;
+}
+
+/* ========== Loading State ========== */
+.h-load {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* ========== Responsive ========== */
+@media screen and (max-width: 900px) {
+    .m-stats {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .m-cards {
+        grid-template-columns: 1fr;
+    }
+    .m-intel {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .h-over {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .m-stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .m-stat {
+        padding: 12px 8px;
+    }
+    .m-stat-val {
+        font-size: 18px;
+    }
+    .m-intel {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    .h-over {
+        grid-template-columns: repeat(3, 1fr);
+        padding: 12px;
+    }
+    .h-stat-val {
+        font-size: 18px;
+    }
+    .h-wrap {
+        max-height: 220px;
+    }
+}
+
+@media screen and (max-width: 576px) {
+    .m-stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .m-stat {
+        padding: 10px 6px;
+    }
+    .m-stat-val {
+        font-size: 16px;
+    }
+    .m-stat-lbl {
+        font-size: 9px;
+    }
+    .m-cards {
+        gap: 12px;
+    }
+    .m-card {
+        padding: 14px;
+    }
+    .m-card h4 {
+        font-size: 11px;
+        margin-bottom: 10px;
+    }
+    .m-row {
+        font-size: 12px;
+        padding: 6px 0;
+    }
+    .m-sec {
+        padding: 14px;
+        margin-bottom: 12px;
+    }
+    .m-sec h4 {
+        font-size: 10px;
+        margin-bottom: 10px;
+    }
+    .m-meter-val {
+        font-size: 18px;
+    }
+    .m-intel {
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+    }
+    .m-intel-item {
+        padding: 10px 6px;
+    }
+    .m-intel-item .src {
+        font-size: 9px;
+    }
+    .m-intel-item .score {
+        font-size: 16px;
+    }
+    .m-intel-item .det {
+        font-size: 10px;
+    }
+    .m-rec {
+        padding: 10px;
+        font-size: 12px;
+    }
+    .h-over {
+        grid-template-columns: repeat(3, 1fr);
+        padding: 12px;
+        gap: 8px;
+    }
+    .h-stat-val {
+        font-size: 16px;
+    }
+    .h-filters {
+        gap: 8px;
+    }
+    .h-filters input,
+    .h-filters select {
+        padding: 10px;
+        font-size: 12px;
+        min-width: 0;
+    }
+    .h-wrap {
+        max-height: 200px;
+    }
+    .h-date {
+        margin-bottom: 10px;
+    }
+    .h-date-hdr {
+        padding: 10px 12px;
+    }
+    .h-date-title {
+        font-size: 12px;
+    }
+    .h-date-stats {
+        gap: 8px;
+        font-size: 11px;
+    }
+    .h-tbl {
+        min-width: 380px;
+    }
+    .h-tbl th,
+    .h-tbl td {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+}
+
+@media screen and (max-width: 400px) {
+    .m-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .m-intel {
+        grid-template-columns: 1fr 1fr;
+    }
+    .h-over {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .h-date-stats {
+        display: none;
+    }
+}

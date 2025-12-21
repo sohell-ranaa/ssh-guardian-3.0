@@ -68,11 +68,11 @@ def agent_stats():
         cursor.execute("SELECT COUNT(*) as count FROM agent_log_batches")
         total_batches = cursor.fetchone()['count']
 
-        # Recent batches (last 24h)
+        # Recent batches (last 24h) - v3.1: use created_at instead of received_at
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM agent_log_batches
-            WHERE received_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
         """)
         recent_batches = cursor.fetchone()['count']
 

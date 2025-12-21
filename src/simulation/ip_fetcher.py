@@ -141,7 +141,7 @@ def save_ips_to_pool(ips: List[Dict]) -> int:
     cursor = conn.cursor()
     saved = 0
 
-    # Map categories to pool_type and flags
+    # Map categories to ip_type and flags
     CATEGORY_TO_POOL = {
         'brute_force': ('malicious', False, False, False),
         'tor_exit': ('malicious', True, False, False),
@@ -155,7 +155,7 @@ def save_ips_to_pool(ips: List[Dict]) -> int:
         for ip_data in ips:
             try:
                 category = ip_data.get('category', 'brute_force')
-                pool_type, is_tor, is_vpn, is_proxy = CATEGORY_TO_POOL.get(category, ('malicious', False, False, False))
+                ip_type, is_tor, is_vpn, is_proxy = CATEGORY_TO_POOL.get(category, ('malicious', False, False, False))
 
                 # High abuse score = treat as TOR
                 if ip_data.get('threat_score', 0) >= 90:
@@ -163,23 +163,14 @@ def save_ips_to_pool(ips: List[Dict]) -> int:
 
                 cursor.execute("""
                     INSERT INTO simulation_ip_pool
-                    (ip_address, pool_type, reputation_score, is_tor, is_vpn, is_proxy, source, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (ip_address, ip_type, threat_score)
+                    VALUES (%s, %s, %s)
                     ON DUPLICATE KEY UPDATE
-                    reputation_score = VALUES(reputation_score),
-                    is_tor = VALUES(is_tor),
-                    source = VALUES(source),
-                    notes = VALUES(notes),
-                    updated_at = NOW()
+                    threat_score = VALUES(threat_score)
                 """, (
                     ip_data['ip'],
-                    pool_type,
-                    ip_data.get('threat_score', 75),
-                    1 if is_tor else 0,
-                    1 if is_vpn else 0,
-                    1 if is_proxy else 0,
-                    ip_data.get('source', 'unknown'),
-                    f"Category: {category}"
+                    ip_type,
+                    ip_data.get('threat_score', 75)
                 ))
                 saved += 1
             except Exception as e:
@@ -242,32 +233,32 @@ def get_fresh_ip(category: str = None) -> Optional[str]:
     Falls back to any available malicious IP if category not found.
 
     Category mapping:
-    - 'brute_force', 'scanner', 'ddos_botnet', 'botnet' -> pool_type='malicious'
-    - 'tor_exit' -> pool_type='malicious' AND is_tor=1
+    - 'brute_force', 'scanner', 'ddos_botnet', 'botnet' -> ip_type='malicious'
+    - 'tor_exit' -> ip_type='malicious' (with high threat_score)
     """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
         if category == 'tor_exit':
-            # TOR exit nodes
+            # TOR exit nodes (high threat score)
             cursor.execute("""
                 SELECT ip_address FROM simulation_ip_pool
-                WHERE pool_type = 'malicious' AND is_tor = 1
+                WHERE ip_type = 'malicious' AND threat_score >= 90
                 ORDER BY RAND() LIMIT 1
             """)
         elif category:
-            # Any malicious IP with matching notes
+            # Any malicious IP
             cursor.execute("""
                 SELECT ip_address FROM simulation_ip_pool
-                WHERE pool_type = 'malicious' AND notes LIKE %s
+                WHERE ip_type = 'malicious'
                 ORDER BY RAND() LIMIT 1
-            """, (f'%{category}%',))
+            """)
         else:
             # Any malicious IP
             cursor.execute("""
                 SELECT ip_address FROM simulation_ip_pool
-                WHERE pool_type = 'malicious'
+                WHERE ip_type = 'malicious'
                 ORDER BY RAND() LIMIT 1
             """)
 
@@ -277,7 +268,7 @@ def get_fresh_ip(category: str = None) -> Optional[str]:
         if not row and category:
             cursor.execute("""
                 SELECT ip_address FROM simulation_ip_pool
-                WHERE pool_type = 'malicious'
+                WHERE ip_type = 'malicious'
                 ORDER BY RAND() LIMIT 1
             """)
             row = cursor.fetchone()
@@ -296,24 +287,23 @@ def get_pool_stats() -> Dict:
     try:
         cursor.execute("""
             SELECT
-                pool_type,
-                source,
+                ip_type,
                 COUNT(*) as count,
-                AVG(reputation_score) as avg_score,
-                MAX(updated_at) as last_update
+                AVG(threat_score) as avg_score,
+                MAX(created_at) as last_update
             FROM simulation_ip_pool
-            WHERE pool_type = 'malicious'
-            GROUP BY pool_type, source
+            WHERE ip_type = 'malicious'
+            GROUP BY ip_type
         """)
 
         stats = cursor.fetchall()
 
-        cursor.execute("SELECT COUNT(*) as total FROM simulation_ip_pool WHERE pool_type = 'malicious'")
+        cursor.execute("SELECT COUNT(*) as total FROM simulation_ip_pool WHERE ip_type = 'malicious'")
         total = cursor.fetchone()
 
         return {
             'total_ips': total['total'] if total else 0,
-            'by_source': stats,
+            'by_type': stats,
             'last_refresh': stats[0]['last_update'].isoformat() if stats and stats[0].get('last_update') else None
         }
     finally:

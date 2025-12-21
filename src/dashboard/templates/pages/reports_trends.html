@@ -6,12 +6,9 @@
             <p class="page-subtitle">Historical analysis and trend visualization</p>
         </div>
         <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="trends">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadTrendsReportsPage()" title="Refresh data">↻</button>
-            </div>
+            <button class="refresh-btn" onclick="loadTrendsReportsPage()">
+                <span class="refresh-icon">↻</span> Refresh
+            </button>
         </div>
     </div>
 
@@ -27,8 +24,8 @@
                 <option value="60">Last 60 days</option>
                 <option value="90">Last 90 days</option>
             </select>
-            <button onclick="refreshTrends()" style="padding: 8px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px;">
-                🔄 Refresh
+            <button class="refresh-btn" onclick="refreshTrends()">
+                <span class="refresh-icon">↻</span> Refresh
             </button>
             <div style="flex: 1;"></div>
             <span id="trends-risk-totals" style="font-size: 12px; color: var(--text-secondary);"></span>

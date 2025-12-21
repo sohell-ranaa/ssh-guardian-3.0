@@ -21,6 +21,12 @@ from auth import AuditLogger
 from . import agent_routes
 from .auth import require_api_key
 
+# Import block events logging
+try:
+    from routes.block_events_routes import log_block_event
+except ImportError:
+    log_block_event = None
+
 
 def get_current_user_id():
     """Get current user ID from request context"""
@@ -71,8 +77,20 @@ def sync_ufw_rules():
 
         db_agent_id = agent_row['id']
 
-        # Extract status and rules
+        # Extract status and rules - handle both flat and nested formats
+        # Flat format (from direct sync): ufw_data.ufw_status, ufw_data.default_incoming, etc.
+        # Nested format (legacy): ufw_data.status.status, ufw_data.status.default_incoming, etc.
         status_data = ufw_data.get('status', {})
+
+        # Get ufw_status - check flat format first, then nested
+        ufw_status = ufw_data.get('ufw_status') or status_data.get('status', 'inactive')
+        default_incoming = ufw_data.get('default_incoming') or status_data.get('default_incoming', 'deny')
+        default_outgoing = ufw_data.get('default_outgoing') or status_data.get('default_outgoing', 'allow')
+        default_routed = status_data.get('default_routed', 'disabled')
+        logging_level = status_data.get('logging_level', 'low')
+        ipv6_enabled = status_data.get('ipv6_enabled', True)
+        ufw_version = status_data.get('ufw_version', '')
+
         rules = ufw_data.get('rules', [])
         listening_ports = ufw_data.get('listening_ports', [])
         protected_ports = ufw_data.get('protected_ports', [])
@@ -95,14 +113,14 @@ def sync_ufw_rules():
                 last_sync = NOW()
         """, (
             db_agent_id,
-            status_data.get('status', 'inactive'),
-            status_data.get('default_incoming', 'deny'),
-            status_data.get('default_outgoing', 'allow'),
-            status_data.get('default_routed', 'disabled'),
-            status_data.get('logging_level', 'low'),
-            status_data.get('ipv6_enabled', True),
+            ufw_status,
+            default_incoming,
+            default_outgoing,
+            default_routed,
+            logging_level,
+            ipv6_enabled,
             len(rules),
-            status_data.get('ufw_version', '')
+            ufw_version
         ))
 
         # Store individual rules
@@ -119,12 +137,24 @@ def sync_ufw_rules():
         # Invalidate cache
         cache = get_cache()
         cache.delete_pattern(f'ufw:{db_agent_id}')
+        cache.delete_pattern('blocking')  # Also invalidate blocking cache
+
+        # Reconcile ip_blocks with actual UFW rules
+        # This marks IPs as unblocked if they were removed from UFW externally
+        try:
+            from blocking import reconcile_ufw_with_ip_blocks
+            reconcile_result = reconcile_ufw_with_ip_blocks(db_agent_id)
+            reconciled_count = reconcile_result.get('reconciled_count', 0)
+        except Exception as reconcile_err:
+            print(f"⚠️  UFW reconciliation error: {reconcile_err}")
+            reconciled_count = 0
 
         return jsonify({
             'success': True,
             'message': 'UFW state synced',
             'rules_count': len(rules),
-            'ufw_status': status_data.get('status', 'inactive')
+            'ufw_status': ufw_status,
+            'reconciled_count': reconciled_count
         })
 
     except Exception as e:
@@ -137,35 +167,79 @@ def sync_ufw_rules():
 
 
 def _store_ufw_rules(cursor, agent_id: int, rules: list):
-    """Store UFW rules for querying"""
+    """Store UFW rules for querying, preserving timestamps for existing blocked IPs"""
+
+    # First, get existing DENY rules with their created_at timestamps
+    # to preserve the original block time
+    cursor.execute("""
+        SELECT from_ip, created_at FROM agent_ufw_rules
+        WHERE agent_id = %s AND action = 'DENY' AND from_ip IS NOT NULL
+          AND from_ip != '' AND from_ip != 'Anywhere'
+    """, (agent_id,))
+    existing_blocks = {row['from_ip']: row['created_at'] for row in cursor.fetchall()}
+
     # Clear existing rules for this agent
     cursor.execute("DELETE FROM agent_ufw_rules WHERE agent_id = %s", (agent_id,))
 
     for rule in rules:
-        cursor.execute("""
-            INSERT INTO agent_ufw_rules
-                (agent_id, rule_index, action, direction, from_ip, from_port,
-                 to_ip, to_port, protocol, interface, comment, ipv6, raw_rule)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            agent_id,
-            rule.get('rule_index', 0),
-            rule.get('action', 'ALLOW'),
-            rule.get('direction', 'IN'),
-            rule.get('from_ip', 'Anywhere'),
-            rule.get('from_port', ''),
-            rule.get('to_ip', 'Anywhere'),
-            rule.get('to_port', ''),
-            rule.get('protocol', ''),
-            rule.get('interface', ''),
-            rule.get('comment', ''),
-            rule.get('ipv6', False) or rule.get('is_v6', False),
-            rule.get('raw_rule', '')
-        ))
+        action = rule.get('action', 'ALLOW')
+        from_ip = rule.get('from_ip', 'Anywhere')
+
+        # Preserve original created_at for existing DENY rules (blocked IPs)
+        preserved_time = None
+        if action == 'DENY' and from_ip and from_ip not in ('', 'Anywhere'):
+            preserved_time = existing_blocks.get(from_ip)
+
+        if preserved_time:
+            # Use preserved timestamp for existing blocked IP
+            cursor.execute("""
+                INSERT INTO agent_ufw_rules
+                    (agent_id, rule_index, action, direction, from_ip, from_port,
+                     to_ip, to_port, protocol, interface, comment, is_v6, raw_rule, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                agent_id,
+                rule.get('rule_index', 0),
+                action,
+                rule.get('direction', 'IN'),
+                from_ip,
+                rule.get('from_port', ''),
+                rule.get('to_ip', 'Anywhere'),
+                rule.get('to_port', ''),
+                rule.get('protocol', ''),
+                rule.get('interface', ''),
+                rule.get('comment', ''),
+                rule.get('ipv6', False) or rule.get('is_v6', False),
+                rule.get('raw_rule', ''),
+                preserved_time
+            ))
+        else:
+            # New rule - use default (NOW())
+            cursor.execute("""
+                INSERT INTO agent_ufw_rules
+                    (agent_id, rule_index, action, direction, from_ip, from_port,
+                     to_ip, to_port, protocol, interface, comment, is_v6, raw_rule)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                agent_id,
+                rule.get('rule_index', 0),
+                action,
+                rule.get('direction', 'IN'),
+                from_ip,
+                rule.get('from_port', ''),
+                rule.get('to_ip', 'Anywhere'),
+                rule.get('to_port', ''),
+                rule.get('protocol', ''),
+                rule.get('interface', ''),
+                rule.get('comment', ''),
+                rule.get('ipv6', False) or rule.get('is_v6', False),
+                rule.get('raw_rule', '')
+            ))
 
 
 def _store_listening_ports(cursor, agent_id: int, ports: list):
-    """Store listening ports for an agent"""
+    """Store listening ports for an agent (v3.1: table removed, skip)"""
+    return  # Table not in v3.1 schema
     cursor.execute("DELETE FROM agent_listening_ports WHERE agent_id = %s", (agent_id,))
 
     for port in ports:
@@ -188,7 +262,8 @@ def _store_listening_ports(cursor, agent_id: int, ports: list):
 
 
 def _store_protected_ports(cursor, agent_id: int, protected: list):
-    """Store protected ports configuration"""
+    """Store protected ports configuration (v3.1: table removed, skip)"""
+    return  # Table not in v3.1 schema
     cursor.execute(
         "DELETE FROM agent_protected_ports WHERE agent_id = %s AND is_custom = FALSE",
         (agent_id,)
@@ -248,7 +323,7 @@ def get_pending_ufw_commands():
 
         # Get pending commands
         cursor.execute("""
-            SELECT id, command_uuid, command_type, params_json, ufw_command, created_at
+            SELECT id, command_uuid, command_type, params, ufw_command, created_at
             FROM agent_ufw_commands
             WHERE agent_id = %s AND status = 'pending'
             ORDER BY created_at ASC
@@ -271,11 +346,15 @@ def get_pending_ufw_commands():
         # Format commands for agent
         formatted_commands = []
         for cmd in commands:
+            # params is already JSON type in v3.1 schema - may be dict or string
+            params_val = cmd.get('params') or {}
+            if isinstance(params_val, str):
+                params_val = json.loads(params_val) if params_val else {}
             formatted_commands.append({
                 'id': cmd['command_uuid'],
                 'command_type': cmd['command_type'],
                 'action': cmd['command_type'],  # Alias for compatibility
-                'params': json.loads(cmd['params_json']) if cmd['params_json'] else {},
+                'params': params_val,
                 'ufw_command': cmd['ufw_command'],
                 'created_at': cmd['created_at'].isoformat() if cmd['created_at'] else None
             })
@@ -356,18 +435,242 @@ def report_ufw_command_result():
 # DASHBOARD API ENDPOINTS
 # ============================================================================
 
+@agent_routes.route('/agents/<int:agent_id>/ufw/live', methods=['GET'])
+def get_live_ufw_data(agent_id):
+    """
+    Get LIVE UFW data directly from the agent.
+    For local machines: runs 'ufw status numbered' directly
+    For remote agents: reads from agent_ufw_state/rules tables (synced by agent)
+    """
+    import subprocess
+    import socket
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Verify agent exists and get its info
+        cursor.execute("""
+            SELECT id, hostname, agent_id, ip_address
+            FROM agents WHERE id = %s
+        """, (agent_id,))
+        agent = cursor.fetchone()
+
+        if not agent:
+            return jsonify({'success': False, 'error': 'Agent not found'}), 404
+
+        # Check if this is the local machine
+        local_hostname = socket.gethostname()
+        agent_hostname = agent.get('hostname', '')
+        agent_ip = agent.get('ip_address', '')
+        is_local = (
+            agent_hostname == local_hostname or
+            agent_ip in ('127.0.0.1', '::1', 'localhost') or
+            agent_hostname == 'localhost'
+        )
+
+        rules = []
+        state = {
+            'ufw_status': 'inactive',
+            'default_incoming': 'deny',
+            'default_outgoing': 'allow',
+            'last_sync': datetime.now().isoformat()
+        }
+
+        if is_local:
+            # Get UFW status directly from local machine
+            try:
+                result = subprocess.run(
+                    ['sudo', 'ufw', 'status', 'numbered'],
+                    capture_output=True, text=True, timeout=10
+                )
+
+                if result.returncode == 0:
+                    output = result.stdout
+                    lines = output.strip().split('\n')
+
+                    # Parse status
+                    for line in lines:
+                        if line.startswith('Status:'):
+                            status = line.split(':')[1].strip().lower()
+                            state['ufw_status'] = status
+                        elif 'Default:' in line:
+                            # Parse default policies
+                            if 'deny (incoming)' in line.lower():
+                                state['default_incoming'] = 'deny'
+                            elif 'allow (incoming)' in line.lower():
+                                state['default_incoming'] = 'allow'
+                            if 'allow (outgoing)' in line.lower():
+                                state['default_outgoing'] = 'allow'
+                            elif 'deny (outgoing)' in line.lower():
+                                state['default_outgoing'] = 'deny'
+
+                    # Parse rules
+                    # UFW format: [ 1] To                         Action      From
+                    # Example:    [ 1] 22/tcp                     ALLOW IN    Anywhere
+                    # Example:    [ 2] Anywhere                   DENY IN     192.168.1.1
+                    import re
+                    rule_pattern = re.compile(r'\[\s*(\d+)\]\s+(.+)')
+
+                    for line in lines:
+                        match = rule_pattern.match(line.strip())
+                        if match:
+                            rule_index = int(match.group(1))
+                            rule_text = match.group(2).strip()
+
+                            # Parse the rule text using regex
+                            # Pattern: <to> <action> <direction> <from>
+                            # Where to/from can be port, IP, or "Anywhere"
+                            rule_match = re.match(
+                                r'^(\S+(?:\s+\(v6\))?)\s+(ALLOW|DENY|REJECT|LIMIT)\s+(IN|OUT)\s+(.+)$',
+                                rule_text, re.IGNORECASE
+                            )
+
+                            action = 'ALLOW'
+                            direction = 'IN'
+                            to_port = ''
+                            protocol = ''
+                            from_ip = 'Anywhere'
+                            is_v6 = '(v6)' in rule_text
+
+                            if rule_match:
+                                to_field = rule_match.group(1).replace('(v6)', '').strip()
+                                action = rule_match.group(2).upper()
+                                direction = rule_match.group(3).upper()
+                                from_field = rule_match.group(4).strip()
+
+                                # Parse 'to' field - can be port, port/proto, or "Anywhere"
+                                if to_field.lower() != 'anywhere':
+                                    if '/' in to_field:
+                                        parts = to_field.split('/')
+                                        to_port = parts[0]
+                                        protocol = parts[1].lower() if len(parts) > 1 else ''
+                                    elif to_field.isdigit():
+                                        to_port = to_field
+                                    else:
+                                        to_port = to_field
+
+                                # Parse 'from' field - can be IP, CIDR, or "Anywhere"
+                                from_clean = from_field.replace('(v6)', '').strip()
+                                if from_clean.lower() != 'anywhere':
+                                    from_ip = from_clean
+                            else:
+                                # Fallback: simple split parsing
+                                parts = rule_text.split()
+                                for i, part in enumerate(parts):
+                                    if part.upper() in ('ALLOW', 'DENY', 'REJECT', 'LIMIT'):
+                                        action = part.upper()
+                                        if i > 0:
+                                            to_part = parts[0].replace('(v6)', '').strip()
+                                            if to_part.lower() != 'anywhere':
+                                                if '/' in to_part:
+                                                    to_port, protocol = to_part.split('/', 1)
+                                                    protocol = protocol.lower()
+                                                elif to_part.isdigit():
+                                                    to_port = to_part
+                                        if i + 1 < len(parts) and parts[i + 1].upper() in ('IN', 'OUT'):
+                                            direction = parts[i + 1].upper()
+                                            if i + 2 < len(parts):
+                                                from_part = parts[i + 2].replace('(v6)', '').strip()
+                                                if from_part.lower() != 'anywhere':
+                                                    from_ip = from_part
+                                        break
+
+                            rules.append({
+                                'rule_index': rule_index,
+                                'action': action,
+                                'direction': direction,
+                                'to_port': to_port,
+                                'protocol': protocol,
+                                'from_ip': from_ip,
+                                'is_v6': is_v6,
+                                'raw_rule': rule_text
+                            })
+
+            except subprocess.TimeoutExpired:
+                print("[UFW Live] Timeout running ufw status")
+            except Exception as e:
+                print(f"[UFW Live] Error running ufw status: {e}")
+                # Fall back to database
+                is_local = False
+
+        if not is_local:
+            # Get from database (synced by remote agent)
+            cursor.execute("""
+                SELECT * FROM agent_ufw_state
+                WHERE agent_id = %s
+            """, (agent_id,))
+            db_state = cursor.fetchone()
+
+            if db_state:
+                state = {
+                    'ufw_status': db_state.get('ufw_status', 'inactive'),
+                    'default_incoming': db_state.get('default_incoming', 'deny'),
+                    'default_outgoing': db_state.get('default_outgoing', 'allow'),
+                    'last_sync': db_state['last_sync'].isoformat() if db_state.get('last_sync') else None
+                }
+
+            cursor.execute("""
+                SELECT * FROM agent_ufw_rules
+                WHERE agent_id = %s
+                ORDER BY rule_index ASC
+            """, (agent_id,))
+            rules = cursor.fetchall()
+
+        if not rules and not is_local:
+            return jsonify({
+                'success': True,
+                'has_data': False,
+                'message': 'No UFW data available - waiting for agent sync',
+                'agent_hostname': agent.get('hostname')
+            })
+
+        # Count allow/deny rules
+        allow_count = sum(1 for r in rules if r.get('action') == 'ALLOW')
+        deny_count = sum(1 for r in rules if r.get('action') in ('DENY', 'REJECT'))
+
+        return jsonify({
+            'success': True,
+            'has_data': True,
+            'agent_hostname': agent.get('hostname'),
+            'state': state,
+            'rules': rules,
+            'listening_ports': [],
+            'total_rules': len(rules),
+            'allow_count': allow_count,
+            'deny_count': deny_count,
+            'source': 'live' if is_local else 'database'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @agent_routes.route('/agents/<int:agent_id>/ufw', methods=['GET'])
 def get_agent_ufw(agent_id):
-    """Get UFW state for an agent (dashboard endpoint)"""
+    """Get UFW state for an agent (dashboard endpoint) - includes templates and command history"""
     try:
+        # Check for force refresh parameter
+        force_refresh = request.args.get('force', '').lower() in ('true', '1', 'yes')
+
         cache = get_cache()
         cache_k = cache_key('ufw', str(agent_id), 'state')
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            cached['from_cache'] = True
-            return jsonify(cached)
+        # Try cache first (unless force refresh)
+        if not force_refresh:
+            cached = cache.get(cache_k)
+            if cached is not None:
+                cached['from_cache'] = True
+                return jsonify(cached)
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -396,21 +699,9 @@ def get_agent_ufw(agent_id):
         """, (agent_id,))
         rules = cursor.fetchall()
 
-        # Get listening ports
-        cursor.execute("""
-            SELECT * FROM agent_listening_ports
-            WHERE agent_id = %s
-            ORDER BY port
-        """, (agent_id,))
-        listening_ports = cursor.fetchall()
-
-        # Get protected ports
-        cursor.execute("""
-            SELECT * FROM agent_protected_ports
-            WHERE agent_id = %s
-            ORDER BY port
-        """, (agent_id,))
-        protected_ports = cursor.fetchall()
+        # Listening ports and protected ports tables removed in v3.1
+        listening_ports = []
+        protected_ports = []
 
         # Get recent commands
         cursor.execute("""
@@ -424,7 +715,7 @@ def get_agent_ufw(agent_id):
         # Get rule templates
         cursor.execute("""
             SELECT * FROM ufw_rule_templates
-            ORDER BY category, name
+            ORDER BY category, display_order, template_name
         """)
         templates = cursor.fetchall()
 
@@ -440,8 +731,10 @@ def get_agent_ufw(agent_id):
             state['updated_at'] = state['updated_at'].isoformat()
 
         for cmd in commands:
-            if cmd.get('params_json'):
-                cmd['params'] = json.loads(cmd['params_json'])
+            # params is already JSON type in v3.1 schema
+            params_val = cmd.get('params')
+            if params_val and isinstance(params_val, str):
+                cmd['params'] = json.loads(params_val)
             for field in ['created_at', 'sent_at', 'executed_at']:
                 if cmd.get(field):
                     cmd[field] = cmd[field].isoformat()
@@ -451,11 +744,8 @@ def get_agent_ufw(agent_id):
                 port['last_seen'] = port['last_seen'].isoformat()
 
         for tpl in templates:
-            if tpl.get('params_schema'):
-                tpl['params_schema'] = json.loads(tpl['params_schema'])
-            for field in ['created_at', 'updated_at']:
-                if tpl.get(field):
-                    tpl[field] = tpl[field].isoformat()
+            if tpl.get('created_at'):
+                tpl['created_at'] = tpl['created_at'].isoformat()
 
         result = {
             'success': True,
@@ -515,7 +805,7 @@ def create_ufw_command(agent_id):
 
         cursor.execute("""
             INSERT INTO agent_ufw_commands
-                (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at, created_by)
+                (agent_id, command_uuid, command_type, params, ufw_command, status, created_at, created_by)
             VALUES (%s, %s, %s, %s, %s, 'pending', NOW(), %s)
         """, (
             agent_id,
@@ -530,9 +820,59 @@ def create_ufw_command(agent_id):
         cursor.close()
         conn.close()
 
+        # If this is an IP block (deny from IP), also create an ip_blocks record
+        # so the IP appears in "Currently Blocked IPs"
+        block_id = None
+        from_ip = params.get('from_ip')
+        is_escalation = data.get('from_fail2ban', False) or data.get('escalation', False)
+
+        if command_type == 'deny' and from_ip and from_ip.lower() not in ['anywhere', 'any', '']:
+            escalation_text = ' (escalated from Fail2ban)' if is_escalation else ''
+            try:
+                from blocking_engine import block_ip_manual
+                block_result = block_ip_manual(
+                    ip_address=from_ip,
+                    reason=f'UFW block from dashboard{escalation_text}',
+                    user_id=get_current_user_id(),
+                    duration_minutes=0,  # Permanent (UFW blocks don't auto-expire)
+                    agent_id=agent_id
+                )
+                if block_result.get('success'):
+                    block_id = block_result.get('block_id')
+            except Exception as block_err:
+                # Log but don't fail - UFW command is already created
+                print(f"Warning: Failed to create ip_blocks record for UFW deny: {block_err}")
+
+            # Log block event - track escalations properly
+            if log_block_event:
+                event_type = 'escalate' if is_escalation else 'block'
+                reason = 'Escalated from Fail2ban to permanent UFW block' if is_escalation else 'UFW deny rule from dashboard'
+                log_block_event(
+                    ip_address=from_ip,
+                    event_type=event_type,
+                    block_source='ufw',
+                    agent_id=agent_id,
+                    reason=reason,
+                    triggered_by='dashboard_manual',
+                    user_id=get_current_user_id()
+                )
+
+        # Log delete command as unblock
+        if command_type in ('delete', 'delete_by_rule') and from_ip and log_block_event:
+            log_block_event(
+                ip_address=from_ip,
+                event_type='unblock',
+                block_source='ufw',
+                agent_id=agent_id,
+                reason='UFW rule deleted from dashboard',
+                triggered_by='dashboard_manual',
+                user_id=get_current_user_id()
+            )
+
         # Invalidate cache
         cache = get_cache()
         cache.delete_pattern(f'ufw:{agent_id}')
+        cache.delete_pattern('blocking')  # Also invalidate blocking cache
 
         # Audit log
         AuditLogger.log_action(
@@ -549,7 +889,8 @@ def create_ufw_command(agent_id):
             'success': True,
             'message': 'UFW command created',
             'command_id': command_uuid,
-            'ufw_command': ufw_command
+            'ufw_command': ufw_command,
+            'block_id': block_id
         })
 
     except Exception as e:
@@ -659,7 +1000,7 @@ def request_ufw_sync(agent_id):
 
         cursor.execute("""
             INSERT INTO agent_ufw_commands
-                (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at)
+                (agent_id, command_uuid, command_type, params, ufw_command, status, created_at)
             VALUES (%s, %s, 'sync_now', '{}', '# Sync request', 'pending', NOW())
         """, (agent_id, command_uuid))
 
@@ -751,8 +1092,10 @@ def get_ufw_command_history(agent_id):
 
         # Format timestamps and parse JSON
         for cmd in commands:
-            if cmd.get('params_json'):
-                cmd['params'] = json.loads(cmd['params_json'])
+            # params is already JSON type in v3.1 schema
+            params_val = cmd.get('params')
+            if params_val and isinstance(params_val, str):
+                cmd['params'] = json.loads(params_val)
             for field in ['created_at', 'sent_at', 'executed_at']:
                 if cmd.get(field):
                     cmd[field] = cmd[field].isoformat()
@@ -783,7 +1126,7 @@ def get_ufw_templates(agent_id):
             query += " WHERE category = %s"
             params.append(category)
 
-        query += " ORDER BY category, name"
+        query += " ORDER BY category, display_order, template_name"
 
         cursor.execute(query, params)
         templates = cursor.fetchall()
@@ -791,10 +1134,10 @@ def get_ufw_templates(agent_id):
         cursor.close()
         conn.close()
 
-        # Parse JSON
+        # Format timestamps
         for tpl in templates:
-            if tpl.get('params_schema'):
-                tpl['params_schema'] = json.loads(tpl['params_schema'])
+            if tpl.get('created_at'):
+                tpl['created_at'] = tpl['created_at'].isoformat()
 
         return jsonify({
             'success': True,
@@ -880,7 +1223,7 @@ def reorder_ufw_rules(agent_id):
 
         cursor.execute("""
             INSERT INTO agent_ufw_commands
-                (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at, created_by)
+                (agent_id, command_uuid, command_type, params, ufw_command, status, created_at, created_by)
             VALUES (%s, %s, 'reorder', %s, %s, 'pending', NOW(), %s)
         """, (
             agent_id,
@@ -921,7 +1264,14 @@ def reorder_ufw_rules(agent_id):
 
 @agent_routes.route('/agents/<int:agent_id>/ufw/quick-action', methods=['POST'])
 def ufw_quick_action(agent_id):
-    """Execute a quick UFW action (allow/deny port, block IP, etc.)"""
+    """
+    Execute a quick UFW action (allow/deny port, block IP, etc.)
+    For local machines: executes command directly via subprocess
+    For remote agents: queues command for agent to pick up
+    """
+    import subprocess
+    import socket
+
     try:
         data = request.get_json()
 
@@ -953,12 +1303,18 @@ def ufw_quick_action(agent_id):
                 return jsonify({'success': False, 'error': 'IP address required'}), 400
             command_type = 'deny'
             params = {'from_ip': ip}
+            if port:
+                params['port'] = port
+                params['protocol'] = protocol
 
         elif action_type == 'allow_ip':
             if not ip:
                 return jsonify({'success': False, 'error': 'IP address required'}), 400
             command_type = 'allow'
             params = {'from_ip': ip}
+            if port:
+                params['port'] = port
+                params['protocol'] = protocol
 
         elif action_type == 'limit_port':
             if not port:
@@ -982,34 +1338,138 @@ def ufw_quick_action(agent_id):
         else:
             return jsonify({'success': False, 'error': f'Unknown action type: {action_type}'}), 400
 
-        # Build and create command
+        # Build UFW command
         ufw_command = _build_ufw_command(command_type, params)
-
-        conn = get_connection()
-        cursor = conn.cursor()
-
         command_uuid = str(uuid.uuid4())
 
+        # Check if this is a local machine
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
         cursor.execute("""
-            INSERT INTO agent_ufw_commands
-                (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at, created_by)
-            VALUES (%s, %s, %s, %s, %s, 'pending', NOW(), %s)
-        """, (
-            agent_id,
-            command_uuid,
-            command_type,
-            json.dumps(params),
-            ufw_command,
-            get_current_user_id()
-        ))
+            SELECT id, hostname, agent_id, ip_address
+            FROM agents WHERE id = %s
+        """, (agent_id,))
+        agent = cursor.fetchone()
+
+        if not agent:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Agent not found'}), 404
+
+        local_hostname = socket.gethostname()
+        agent_hostname = agent.get('hostname', '')
+        agent_ip = agent.get('ip_address', '')
+        is_local = (
+            agent_hostname == local_hostname or
+            agent_ip in ('127.0.0.1', '::1', 'localhost') or
+            agent_hostname == 'localhost'
+        )
+
+        executed = False
+        result_message = ''
+
+        if is_local:
+            # Execute directly on local machine
+            try:
+                # Build the actual shell command
+                shell_cmd = f"sudo {ufw_command}"
+                if command_type == 'delete':
+                    shell_cmd = f"sudo ufw --force delete {params.get('rule_number')}"
+                elif command_type in ('enable', 'disable'):
+                    shell_cmd = f"echo 'y' | sudo ufw {command_type}"
+
+                result = subprocess.run(
+                    shell_cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+
+                executed = result.returncode == 0
+                result_message = result.stdout.strip() if executed else result.stderr.strip()
+
+                # Log to database for history
+                cursor.execute("""
+                    INSERT INTO agent_ufw_commands
+                        (agent_id, command_uuid, command_type, params, ufw_command, status,
+                         result_message, executed_at, created_at, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
+                """, (
+                    agent_id,
+                    command_uuid,
+                    command_type,
+                    json.dumps(params),
+                    ufw_command,
+                    'completed' if executed else 'failed',
+                    result_message,
+                    get_current_user_id()
+                ))
+
+            except subprocess.TimeoutExpired:
+                result_message = 'Command timed out'
+                executed = False
+            except Exception as e:
+                result_message = str(e)
+                executed = False
+        else:
+            # Queue for remote agent
+            cursor.execute("""
+                INSERT INTO agent_ufw_commands
+                    (agent_id, command_uuid, command_type, params, ufw_command, status, created_at, created_by)
+                VALUES (%s, %s, %s, %s, %s, 'pending', NOW(), %s)
+            """, (
+                agent_id,
+                command_uuid,
+                command_type,
+                json.dumps(params),
+                ufw_command,
+                get_current_user_id()
+            ))
+            result_message = 'Command queued for agent'
 
         conn.commit()
+
+        # If this is an IP block (block_ip action), also create an ip_blocks record
+        block_id = None
+        is_escalation = data.get('from_fail2ban', False) or data.get('escalation', False)
+
+        if action_type == 'block_ip' and ip and (executed or not is_local):
+            try:
+                from blocking_engine import block_ip_manual
+                block_result = block_ip_manual(
+                    ip_address=ip,
+                    reason='UFW block from dashboard',
+                    user_id=get_current_user_id(),
+                    duration_minutes=0,
+                    agent_id=agent_id
+                )
+                if block_result.get('success'):
+                    block_id = block_result.get('block_id')
+            except Exception as block_err:
+                print(f"Warning: Failed to create ip_blocks record: {block_err}")
+
+            if log_block_event:
+                event_type = 'escalate' if is_escalation else 'block'
+                reason = 'Escalated from Fail2ban to permanent UFW block' if is_escalation else 'UFW block from dashboard'
+                log_block_event(
+                    ip_address=ip,
+                    event_type=event_type,
+                    block_source='ufw',
+                    agent_id=agent_id,
+                    reason=reason,
+                    triggered_by='dashboard_manual',
+                    user_id=get_current_user_id()
+                )
+
         cursor.close()
         conn.close()
 
         # Invalidate cache
         cache = get_cache()
         cache.delete_pattern(f'ufw:{agent_id}')
+        cache.delete_pattern('blocking')
 
         # Audit log
         AuditLogger.log_action(
@@ -1017,17 +1477,37 @@ def ufw_quick_action(agent_id):
             action='ufw_quick_action',
             resource_type='ufw',
             resource_id=str(agent_id),
-            details={'action_type': action_type, 'command_id': command_uuid, 'ufw_command': ufw_command},
+            details={
+                'action_type': action_type,
+                'command_id': command_uuid,
+                'ufw_command': ufw_command,
+                'executed': executed,
+                'is_local': is_local
+            },
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent')
         )
 
-        return jsonify({
-            'success': True,
-            'message': f'UFW command queued: {ufw_command}',
-            'command_id': command_uuid,
-            'ufw_command': ufw_command
-        })
+        if is_local:
+            return jsonify({
+                'success': executed,
+                'executed': True,
+                'message': result_message or ('Command executed successfully' if executed else 'Command failed'),
+                'command_id': command_uuid,
+                'ufw_command': ufw_command,
+                'block_id': block_id
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'executed': False,
+                'message': f'UFW command queued: {ufw_command}',
+                'command_id': command_uuid,
+                'ufw_command': ufw_command,
+                'block_id': block_id
+            })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

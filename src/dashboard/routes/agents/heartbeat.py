@@ -3,7 +3,7 @@ SSH Guardian v3.0 - Agent Heartbeat
 Handles heartbeat monitoring from agents
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import request, jsonify
 import sys
 from pathlib import Path
@@ -39,31 +39,29 @@ def agent_heartbeat():
                 SET last_heartbeat = NOW(),
                     status = %s,
                     health_status = %s,
-                    consecutive_missed_heartbeats = 0,
                     updated_at = NOW()
                 WHERE id = %s
             """, (status, health_status, agent['id']))
 
-            # Insert heartbeat record
+            # Insert heartbeat record (v3.1 schema)
             cursor.execute("""
                 INSERT INTO agent_heartbeats (
                     agent_id, heartbeat_timestamp,
-                    cpu_usage_percent, memory_usage_percent, disk_usage_percent,
-                    events_processed_last_minute, health_status
-                ) VALUES (%s, NOW(), %s, %s, %s, %s, %s)
+                    cpu_usage, memory_usage, disk_usage,
+                    uptime_seconds
+                ) VALUES (%s, NOW(), %s, %s, %s, %s)
             """, (agent['id'],
-                 metrics.get('cpu_usage_percent'),
-                 metrics.get('memory_usage_percent'),
-                 metrics.get('disk_usage_percent'),
-                 metrics.get('events_processed_last_minute', 0),
-                 health_status))
+                 metrics.get('cpu_usage') or metrics.get('cpu_usage_percent'),
+                 metrics.get('memory_usage') or metrics.get('memory_usage_percent'),
+                 metrics.get('disk_usage') or metrics.get('disk_usage_percent'),
+                 metrics.get('uptime_seconds', 0)))
 
             conn.commit()
 
             return jsonify({
                 'success': True,
                 'message': 'Heartbeat received',
-                'server_time': datetime.now().isoformat()
+                'server_time': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
             })
 
         finally:

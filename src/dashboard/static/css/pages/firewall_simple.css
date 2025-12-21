@@ -1,0 +1,1822 @@
+/**
+ * SSH Guardian v3.0 - Firewall Simple Base Styles
+ * Tabs, quick actions, log entries, clickable IP, spinner
+ */
+
+/* Tab styles */
+.fw-tabs {
+    background: var(--surface);
+    border-radius: 4px 4px 0 0;
+}
+
+.fw-tab {
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.fw-tab:hover {
+    color: var(--text-primary);
+    background: var(--background);
+}
+
+.fw-tab.active {
+    color: var(--azure-blue);
+    border-bottom-color: var(--azure-blue);
+    background: var(--surface);
+}
+
+.fw-tab-content {
+    border-top: none;
+}
+
+/* Quick action small buttons */
+.quick-action-sm {
+    padding: 8px 14px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.quick-action-sm:hover {
+    border-color: var(--azure-blue);
+    background: rgba(0, 120, 212, 0.05);
+}
+
+.quick-action-sm.success {
+    border-color: rgba(46, 164, 79, 0.3);
+    background: var(--color-success-bg);
+}
+
+.quick-action-sm.success:hover {
+    border-color: var(--color-success);
+}
+
+.quick-action-sm.danger {
+    border-color: rgba(209, 52, 56, 0.3);
+    background: var(--color-danger-bg);
+}
+
+.quick-action-sm.danger:hover {
+    border-color: var(--color-danger);
+}
+
+/* Log entry styles */
+.log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-icon {
+    font-size: 14px;
+    width: 20px;
+    text-align: center;
+}
+
+.log-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.log-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.log-action {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+.log-action.failed {
+    background: rgba(209, 52, 56, 0.1);
+    color: var(--color-danger);
+}
+
+.log-action.success {
+    background: rgba(16, 124, 16, 0.1);
+    color: var(--color-success);
+}
+
+.log-meta {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.log-time {
+    color: var(--text-secondary);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+/* Clickable IP */
+.clickable-ip {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 3px;
+    transition: background 0.15s;
+}
+
+.clickable-ip:hover {
+    background: rgba(0, 120, 212, 0.1);
+}
+
+.ip-details-hint {
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.clickable-ip:hover .ip-details-hint {
+    opacity: 0.7;
+}
+
+/* Loading spinner */
+.ip-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--azure-blue);
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+/**
+ * SSH Guardian v3.0 - Rule Card Styles
+ * Simple rule cards and rule categories
+ */
+
+/* Rule card styles */
+.simple-rule-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    transition: border-color 0.15s;
+}
+
+.simple-rule-card:hover {
+    border-color: var(--azure-blue);
+}
+
+.rule-icon {
+    font-size: 18px;
+    width: 28px;
+    text-align: center;
+}
+
+.rule-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.rule-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.rule-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.rule-badge {
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.rule-badge.allow {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.rule-badge.block, .rule-badge.deny {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
+.rule-delete-btn {
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.rule-delete-btn:hover {
+    background: var(--color-danger-bg);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+/* Rule Category Card */
+.rule-category-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.rule-category-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.rule-category-header:hover {
+    background: var(--background);
+}
+
+.rule-category-icon {
+    font-size: 20px;
+}
+
+.rule-category-info {
+    flex: 1;
+}
+
+.rule-category-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.rule-category-info p {
+    margin: 2px 0 0 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.rule-category-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+.rule-category-toggle {
+    color: var(--text-secondary);
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+.rule-category-card.expanded .rule-category-toggle {
+    transform: rotate(180deg);
+}
+
+.rule-category-content {
+    border-top: 1px solid var(--border);
+    padding: 8px;
+    background: var(--background);
+}
+
+/* Rule Item */
+.rule-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.rule-item:last-child {
+    margin-bottom: 0;
+}
+
+.rule-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.rule-status.active {
+    background: var(--color-success-light);
+}
+
+.rule-status.inactive {
+    background: var(--color-gray-cool);
+}
+
+.rule-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rule-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.rule-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.rule-action {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-purple);
+    background: rgba(99, 102, 241, 0.1);
+    padding: 3px 8px;
+    border-radius: 3px;
+}
+
+/* Rule name tooltip styles */
+.rule-tooltip-container {
+    position: fixed;
+    z-index: 10000;
+    max-width: 420px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, var(--terminal-bg-dark) 0%, #16213e 100%);
+    color: var(--color-gray-light);
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.rule-tooltip-container.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.rule-tooltip-container::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 20px;
+    width: 12px;
+    height: 12px;
+    background: var(--terminal-bg-dark);
+    transform: rotate(45deg);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rule-name-tooltip {
+    position: relative;
+}
+
+.rule-name-tooltip:hover {
+    color: var(--azure-blue);
+}
+/**
+ * SSH Guardian v3.0 - Fail2ban Styles
+ * Ban cards, stats, history, threat cards
+ */
+
+/* Fail2ban ban card styles */
+.f2b-ban-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.f2b-ban-card:hover {
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.f2b-ban-icon {
+    font-size: 18px;
+}
+
+.f2b-ban-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.f2b-ban-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-danger);
+}
+
+.f2b-ban-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Fail2ban timing display */
+.f2b-ban-timing {
+    margin-top: 6px;
+}
+
+.f2b-remaining {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.f2b-time-safe {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success-light);
+}
+
+.f2b-time-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning-light);
+}
+
+.f2b-time-critical {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-danger);
+    animation: pulse-critical 1s ease-in-out infinite;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.f2b-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.f2b-unban-btn {
+    padding: 5px 12px;
+    background: var(--color-success);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.f2b-unban-btn:hover {
+    background: var(--color-success-dark);
+}
+
+/* Fail2ban Stats */
+.f2b-stat-card {
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.f2b-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.f2b-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* Fail2ban Sub-tabs */
+.f2b-subtab {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.f2b-subtab:hover {
+    color: var(--text-primary);
+}
+
+.f2b-subtab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* Ban Duration Badge */
+.f2b-duration {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-danger);
+}
+
+.f2b-duration.expiring-soon {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning);
+}
+
+/* History Item */
+.f2b-history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.f2b-history-item.ban {
+    border-left: 3px solid var(--color-danger);
+}
+
+.f2b-history-item.unban {
+    border-left: 3px solid var(--color-success-light);
+}
+
+.f2b-history-icon {
+    font-size: 16px;
+}
+
+.f2b-history-details {
+    flex: 1;
+}
+
+.f2b-history-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.f2b-history-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.f2b-history-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+/* Threat Card */
+.f2b-threat-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.f2b-threat-card.critical {
+    border-left: 3px solid var(--color-danger-light);
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.f2b-threat-card.high {
+    border-left: 3px solid var(--color-warning-light);
+    background: rgba(245, 158, 11, 0.05);
+}
+
+.f2b-threat-card.medium {
+    border-left: 3px solid var(--azure-blue);
+}
+
+.f2b-threat-score {
+    min-width: 44px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.f2b-threat-score.critical {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--color-danger);
+}
+
+.f2b-threat-score.high {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning);
+}
+
+.f2b-threat-score.medium {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--color-blue-bright);
+}
+
+.f2b-threat-details {
+    flex: 1;
+}
+
+.f2b-threat-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.f2b-threat-factors {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+
+.f2b-escalate-btn {
+    padding: 6px 10px;
+    background: var(--color-danger-light);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.f2b-escalate-btn:hover {
+    background: var(--color-red-700);
+}
+
+/* Fail2ban IP Detail Modal Styles */
+.f2b-risk-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.f2b-risk-badge.critical {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(220, 38, 38, 0.05));
+    border-color: rgba(220, 38, 38, 0.3);
+    color: var(--color-danger-light);
+}
+
+.f2b-risk-badge.high {
+    background: linear-gradient(135deg, rgba(234, 88, 12, 0.15), rgba(234, 88, 12, 0.05));
+    border-color: rgba(234, 88, 12, 0.3);
+    color: var(--color-orange-600);
+}
+
+.f2b-risk-badge.moderate {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+    border-color: rgba(245, 158, 11, 0.3);
+    color: var(--color-warning-light);
+}
+
+.f2b-risk-badge.low {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--color-success-light);
+}
+
+/* Stat boxes */
+.f2b-stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+}
+
+/* Threat tags */
+.f2b-threat-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.f2b-threat-tag.tor {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--color-purple);
+}
+
+.f2b-threat-tag.vpn {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--azure-blue);
+}
+
+.f2b-threat-tag.datacenter {
+    background: rgba(107, 114, 128, 0.15);
+    color: var(--color-muted-light);
+}
+
+.f2b-threat-tag.repeat {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--color-danger-light);
+}
+
+.f2b-threat-tag.abuse {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning-light);
+}
+
+.f2b-threat-tag.clean {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success-light);
+}
+
+/* Clickable IP styling */
+.f2b-ban-ip.clickable-ip,
+.f2b-history-ip.clickable-ip {
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.f2b-ban-ip.clickable-ip:hover,
+.f2b-history-ip.clickable-ip:hover {
+    color: var(--azure-blue);
+    text-decoration: underline;
+}
+
+.f2b-ban-ip.clickable-ip:hover .ip-details-hint,
+.f2b-history-ip.clickable-ip:hover .ip-details-hint {
+    opacity: 1;
+}
+/**
+ * SSH Guardian v3.0 - Modal Styles
+ * Modal overlay, rich IP modal, activity panel
+ */
+
+/* Modal */
+.fw-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: modalFade 0.15s ease;
+}
+
+@keyframes modalFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fw-modal {
+    background: var(--card-bg, #fff);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    width: 400px;
+    max-width: 92vw;
+    overflow: hidden;
+    animation: modalSlide 0.2s ease;
+}
+
+@keyframes modalSlide {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.fw-modal-header {
+    padding: 14px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.fw-modal-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'SF Mono', Monaco, monospace;
+    color: var(--text-primary);
+}
+
+.fw-modal-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 4px;
+}
+
+.fw-modal-close:hover {
+    background: var(--background);
+    color: var(--text-primary);
+}
+
+.fw-modal-body {
+    padding: 16px 18px 18px;
+}
+
+/* Rich IP Modal */
+.ip-modal-rich {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Risk Header */
+.ip-risk-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--background);
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.ip-risk-score {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.ip-risk-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ip-risk-level {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.ip-risk-level.critical { color: var(--color-danger); }
+.ip-risk-level.warning { color: var(--color-warning-light); }
+.ip-risk-level.low { color: var(--color-success-light); }
+
+.ip-threat-type {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Stats Grid */
+.ip-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.ip-stat-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.ip-stat-icon {
+    font-size: 16px;
+}
+
+.ip-stat-info {
+    min-width: 0;
+}
+
+.ip-stat-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ip-stat-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+/* Threat Indicators */
+.ip-indicators {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ip-tag {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.ip-tag.danger {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--color-danger);
+}
+
+.ip-tag.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-warning);
+}
+
+.ip-tag.neutral {
+    background: var(--background);
+    color: var(--text-secondary);
+}
+
+/* Behavior Section */
+.ip-behavior {
+    padding: 10px 12px;
+    background: var(--background);
+    border-radius: 6px;
+}
+
+.ip-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.ip-behavior-text {
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* ISP Info */
+.ip-isp {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding-top: 4px;
+}
+
+.ip-isp-label {
+    color: var(--text-secondary);
+}
+
+.ip-isp-value {
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ip-asn {
+    background: var(--background);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+/* Actions */
+.ip-modal-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 6px;
+}
+
+.ip-btn-unban {
+    flex: 1;
+    padding: 10px 16px;
+    background: var(--color-success-light);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ip-btn-unban:hover {
+    background: var(--color-success-dark);
+}
+
+.ip-btn-close {
+    padding: 10px 16px;
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ip-btn-close:hover {
+    background: var(--background);
+}
+
+/* Activity Toggle Button */
+.activity-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.activity-toggle-btn:hover {
+    border-color: var(--azure-blue);
+    background: rgba(0, 120, 212, 0.05);
+}
+
+/* Slide-out Panel */
+.activity-slide-panel {
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 380px;
+    height: 100vh;
+    background: var(--card-bg, #fff);
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    transition: right 0.3s ease;
+}
+
+.activity-slide-panel.open {
+    right: 0;
+}
+
+.activity-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.activity-panel-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.activity-panel-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.activity-panel-close:hover {
+    background: var(--background);
+    color: var(--text-primary);
+}
+
+.activity-panel-filters {
+    display: flex;
+    gap: 8px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.activity-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px;
+}
+
+/* Activity Panel Backdrop */
+.activity-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.activity-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+/**
+ * SSH Guardian v3.0 - Blocked IPs Table Styles
+ * Table layout, columns, badges, empty/error states
+ */
+
+.blocked-ips-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.blocked-ips-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+}
+
+.blocked-ips-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.blocked-ips-count {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.blocked-ips-filter {
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.blocked-ips-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Blocked IP Table Header */
+.blocked-ip-header {
+    display: grid;
+    grid-template-columns: 180px 100px 120px 1fr 90px;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--background);
+    border-bottom: 2px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Blocked IP Row */
+.blocked-ip-row {
+    display: grid;
+    grid-template-columns: 180px 100px 120px 1fr 90px;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    align-items: center;
+}
+
+.blocked-ip-row:last-child {
+    border-bottom: none;
+}
+
+.blocked-ip-row:hover {
+    background: rgba(0, 120, 212, 0.04);
+    border-left: 3px solid var(--azure-blue);
+    padding-left: 13px;
+}
+
+/* Column: IP Address */
+.blocked-col-ip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.blocked-ip-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.blocked-ip-icon.ufw {
+    background: linear-gradient(135deg, rgba(16, 124, 16, 0.15), rgba(16, 124, 16, 0.08));
+}
+
+.blocked-ip-icon.fail2ban {
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.15), rgba(0, 120, 212, 0.08));
+}
+
+.blocked-ip-icon.rule_based {
+    background: linear-gradient(135deg, rgba(209, 52, 56, 0.15), rgba(209, 52, 56, 0.08));
+}
+
+.blocked-ip-icon.ml_behavioral,
+.blocked-ip-icon.ml_model {
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.15), rgba(147, 51, 234, 0.08));
+}
+
+.blocked-ip-icon.manual {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.08));
+}
+
+.blocked-ip-address {
+    font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Column: Source Badge */
+.blocked-col-source {
+    display: flex;
+    align-items: center;
+}
+
+.blocked-source-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.blocked-source-badge.ufw {
+    background: linear-gradient(135deg, var(--color-success-dark) 0%, var(--color-success-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(16, 124, 16, 0.25);
+}
+
+.blocked-source-badge.fail2ban {
+    background: linear-gradient(135deg, var(--azure-blue) 0%, var(--azure-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 120, 212, 0.25);
+}
+
+.blocked-source-badge.rule_based {
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(209, 52, 56, 0.25);
+}
+
+.blocked-source-badge.ml_behavioral,
+.blocked-source-badge.ml_model {
+    background: linear-gradient(135deg, var(--color-purple-dark) 0%, var(--color-purple-gradient) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(147, 51, 234, 0.25);
+}
+
+.blocked-source-badge.manual {
+    background: linear-gradient(135deg, var(--color-purple) 0%, var(--color-indigo) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
+}
+
+.blocked-source-badge.unknown {
+    background: linear-gradient(135deg, var(--color-gray-muted) 0%, var(--color-gray-600) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(107, 114, 128, 0.25);
+}
+
+/* Column: Server */
+.blocked-col-server {
+    display: flex;
+    align-items: center;
+}
+
+.blocked-server-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Column: Reason */
+.blocked-col-reason {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.blocked-reason-text {
+    font-size: 12px;
+    color: var(--text-primary);
+    background: rgba(255, 183, 77, 0.12);
+    padding: 6px 10px;
+    border-radius: 4px;
+    border-left: 3px solid var(--color-warning-light);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* Column: Time */
+.blocked-col-time {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.blocked-time-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* Legacy support for old card layout */
+.blocked-ip-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.blocked-ip-card:hover {
+    background: var(--background);
+}
+
+/* Empty state */
+.blocked-empty-state {
+    padding: 48px 20px;
+    text-align: center;
+}
+
+.blocked-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.blocked-empty-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.blocked-empty-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Error state */
+.blocked-ip-error {
+    padding: 20px;
+    text-align: center;
+    color: var(--color-danger);
+    background: var(--color-danger-bg);
+    border-radius: 6px;
+    margin: 12px;
+}
+/**
+ * SSH Guardian v3.0 - UFW Toggle & Sync Indicator Styles
+ * UFW toggle button, global sync overlay
+ */
+
+/* UFW Toggle Button Styles - use #page selector for specificity */
+#page-firewall-simple .ufw-toggle-btn {
+    min-width: 140px;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="active"] {
+    background: linear-gradient(135deg, var(--color-success-dark), var(--color-forest-dark));
+    color: white;
+    border-color: var(--color-forest-darker);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="active"]:hover {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-deep-red));
+    border-color: var(--color-danger-dark);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="active"]:hover .toggle-text::after {
+    content: ' (Click to Disable)';
+    font-size: 9px;
+    opacity: 0.8;
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="inactive"] {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-deep-red));
+    color: white;
+    border-color: var(--color-danger-dark);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="inactive"]:hover {
+    background: linear-gradient(135deg, var(--color-success-dark), var(--color-forest-dark));
+    border-color: var(--color-forest-darker);
+}
+
+#page-firewall-simple .ufw-toggle-btn[data-status="unknown"] {
+    background: var(--color-muted-light);
+    color: white;
+    border-color: var(--text-secondary);
+    cursor: wait;
+}
+
+.ufw-toggle-btn .toggle-icon {
+    font-size: 14px;
+}
+
+.ufw-toggle-btn .toggle-text {
+    font-weight: 600;
+}
+
+/* Global Sync Indicator Styles */
+.global-sync-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.global-sync-overlay.active {
+    opacity: 1;
+}
+
+.global-sync-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 450px;
+    overflow: hidden;
+    animation: syncModalSlideIn 0.3s ease;
+}
+
+@keyframes syncModalSlideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.sync-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, var(--azure-blue), var(--color-azure-dark-alt));
+    color: white;
+}
+
+.sync-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.sync-header-text {
+    flex: 1;
+}
+
+.sync-operation-type {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.sync-operation-message {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.sync-activity-log {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--background);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.sync-log-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+}
+
+.sync-log-entry.info {
+    border-left: 3px solid var(--azure-blue);
+}
+
+.sync-log-entry.success {
+    border-left: 3px solid var(--color-success-light);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.sync-log-entry.error {
+    border-left: 3px solid var(--color-danger);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.sync-log-entry.warning {
+    border-left: 3px solid var(--color-warning-light);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.sync-log-icon {
+    font-size: 14px;
+}
+
+.sync-log-message {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.sync-log-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
+.sync-footer {
+    padding: 12px 24px;
+    text-align: right;
+}
+
+.sync-cancel-btn {
+    padding: 8px 20px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.sync-cancel-btn:hover {
+    background: var(--surface);
+    border-color: var(--text-secondary);
+}
+
+/* Last sync combined display */
+.last-sync-combined {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.last-sync-combined .sync-type-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.last-sync-combined .sync-type-badge.ufw {
+    background: rgba(16, 124, 16, 0.15);
+    color: var(--color-success-dark);
+}
+
+.last-sync-combined .sync-type-badge.fail2ban {
+    background: rgba(0, 120, 212, 0.15);
+    color: var(--azure-blue);
+}
+
+.last-sync-combined .sync-type-badge.agent {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--color-purple);
+}
+/**
+ * SSH Guardian v3.0 - Firewall Simple Responsive Styles
+ * All responsive breakpoints for firewall page
+ */
+
+/* Main page responsive */
+@media (max-width: 1000px) {
+    #page-firewall-simple #firewallContent > div:nth-child(2) {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Blocked IPs table responsive */
+@media (max-width: 1100px) {
+    .blocked-ip-header,
+    .blocked-ip-row {
+        grid-template-columns: 160px 90px 100px 1fr 80px;
+        gap: 8px;
+    }
+}
+
+@media (max-width: 900px) {
+    .blocked-ip-header,
+    .blocked-ip-row {
+        grid-template-columns: 150px 80px 1fr 70px;
+        gap: 8px;
+    }
+
+    .blocked-col-server {
+        display: none;
+    }
+
+    .blocked-ip-header .blocked-col-server {
+        display: none;
+    }
+}
+
+@media (max-width: 700px) {
+    .blocked-ip-header,
+    .blocked-ip-row {
+        grid-template-columns: 1fr 80px;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .blocked-col-source,
+    .blocked-col-reason,
+    .blocked-ip-header .blocked-col-source,
+    .blocked-ip-header .blocked-col-reason {
+        display: none;
+    }
+
+    .blocked-ip-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 500px) {
+    .blocked-ip-header {
+        display: none;
+    }
+
+    .blocked-ip-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+        padding: 12px;
+    }
+
+    .blocked-col-ip {
+        justify-content: space-between;
+    }
+
+    .blocked-col-time {
+        justify-content: flex-start;
+    }
+
+    .blocked-time-text {
+        font-size: 10px;
+    }
+
+    .blocked-ips-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+
+    .blocked-ips-filter {
+        width: 100%;
+    }
+}

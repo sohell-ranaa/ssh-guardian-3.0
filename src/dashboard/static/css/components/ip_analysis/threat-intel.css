@@ -1,0 +1,251 @@
+/* ====== Threat Intel Tab ====== */
+.intel-card-large {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.intel-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.intel-logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 11px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.intel-logo.abuseipdb { background: linear-gradient(135deg, var(--color-orange-dark), var(--color-orange)); }
+.intel-logo.virustotal { background: linear-gradient(135deg, var(--azure-blue), var(--color-teal)); }
+.intel-logo.shodan { background: linear-gradient(135deg, var(--color-danger-dark), var(--color-danger)); }
+
+.intel-title { flex: 1; }
+
+.intel-title h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 2px 0;
+}
+
+.intel-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.intel-score-large {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.intel-score-large span {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.intel-score-large.danger { color: var(--color-orange-dark); }
+.intel-score-large.warning { color: var(--color-orange); }
+.intel-score-large.safe { color: var(--color-success-dark); }
+
+.intel-body {
+    padding: 14px 16px;
+    background: var(--background);
+}
+
+.intel-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.intel-stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.intel-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.intel-bar-container { margin-top: 8px; }
+
+.intel-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.intel-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.intel-bar-fill.danger { background: var(--color-orange-dark); }
+.intel-bar-fill.warning { background: var(--color-orange); }
+.intel-bar-fill.safe { background: var(--color-success-dark); }
+
+.intel-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-hint);
+    margin-top: 4px;
+}
+
+/* Shodan */
+.shodan-section {
+    margin-bottom: 12px;
+}
+
+.shodan-section:last-child { margin-bottom: 0; }
+
+.shodan-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.shodan-label.danger { color: var(--color-orange-dark); }
+
+.shodan-ports, .shodan-vulns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.port-chip {
+    padding: 3px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+}
+
+.port-more {
+    padding: 3px 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.vuln-chip {
+    padding: 3px 8px;
+    background: rgba(216, 59, 1, 0.1);
+    color: var(--color-orange-dark);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+/* Network Grid */
+.network-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.network-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.network-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.network-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* ====== Behavioral Tab ====== */
+.behavioral-hero {
+    background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(255, 185, 0, 0.08) 100%);
+    border: 1px solid rgba(255, 140, 0, 0.15);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.pattern-display {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.pattern-icon {
+    font-size: 32px;
+}
+
+.pattern-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.pattern-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.metric-card {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+
+.metric-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.metric-value.danger { color: var(--color-orange-dark); }
+.metric-value.warning { color: var(--color-orange); }
+.metric-value.safe { color: var(--color-success-dark); }
+.metric-value.info { color: var(--azure-blue); }
+
+.metric-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-top: 4px;
+}
+
+.metric-sublabel {
+    font-size: 10px;
+    color: var(--text-hint);
+    margin-top: 2px;
+}
+

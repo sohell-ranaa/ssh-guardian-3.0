@@ -892,7 +892,7 @@ class MigrationAPI:
         self.log(f"Live simulation runs: {count}", 'OK')
 
     def migrate_system_settings(self):
-        """Migrate system_settings + system_config + cache_settings"""
+        """Migrate system_settings + system_config (cache_settings removed)"""
         self.log("Migrating system_settings (consolidated)...")
         src = self.get_cursor(source=True)
         tgt = self.get_cursor(source=False)
@@ -932,25 +932,7 @@ class MigrationAPI:
             except Error as e:
                 pass
 
-        # From cache_settings
-        src.execute("SELECT * FROM cache_settings")
-        for row in src.fetchall():
-            try:
-                cache_value = json.dumps({
-                    'ttl_seconds': row.get('ttl_seconds'),
-                    'enabled': row.get('is_enabled'),
-                    'priority': row.get('priority')
-                })
-                tgt.execute("""
-                    INSERT INTO system_settings (setting_key, setting_value, value_type, category,
-                        description, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (f"cache.{row['endpoint_key']}", cache_value, 'json', 'cache',
-                      row.get('endpoint_description'),
-                      row.get('created_at') or datetime.now(), row.get('updated_at') or datetime.now()))
-                count += 1
-            except Error as e:
-                pass
+        # Note: cache_settings is no longer migrated - caching now uses hardcoded values in code
 
         self.target_conn.commit()
         self.results['system_settings'] = count

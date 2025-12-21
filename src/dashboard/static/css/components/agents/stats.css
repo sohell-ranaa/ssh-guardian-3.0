@@ -1,0 +1,68 @@
+/**
+ * SSH Guardian v3.0 - Agents Module Styles
+ * Unified styles for agents page, cards, search, and details modal
+ * Uses global variables from variables.css and shared button/modal styles
+ */
+
+/* ========================================
+   AGENT STATISTICS CARDS
+   ======================================== */
+
+.agent-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.agent-stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.agent-stat-card:hover {
+    border-color: var(--azure-blue);
+    box-shadow: 0 2px 8px rgba(0, 120, 212, 0.08);
+}
+
+.agent-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+.agent-stat-value.success { color: var(--color-success); }
+.agent-stat-value.info { color: var(--azure-blue); }
+.agent-stat-value.warning { color: var(--color-warning); }
+.agent-stat-value.purple { color: var(--color-purple); }
+
+.agent-stat-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.agent-stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.agent-stat-icon.blue { background: linear-gradient(135deg, var(--azure-blue), var(--azure-dark)); }
+.agent-stat-icon.green { background: linear-gradient(135deg, var(--color-success-light), var(--color-success-dark)); }
+.agent-stat-icon.purple { background: linear-gradient(135deg, var(--color-purple), var(--color-violet)); }
+.agent-stat-icon.amber { background: linear-gradient(135deg, var(--color-warning-light), var(--color-warning-dark)); }
+

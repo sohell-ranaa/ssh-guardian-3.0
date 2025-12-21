@@ -1,28 +1,173 @@
+/* CSS Variables & Base Reset */
 * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        :root {
-            --azure-blue: #0078D4;
-            --azure-dark: #004C87;
-            --azure-hover: #106EBE;
-            --background: #F3F2F1;
-            --surface: #FFFFFF;
-            --border: #EDEBE9;
-            --text-primary: #323130;
-            --text-secondary: #605E5C;
-            --text-hint: #A19F9D;
-            --sidebar-width: 240px;
-            --topbar-height: 48px;
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
+:root {
+    /* Brand */
+    --azure-blue: #0078D4;
+    --azure-dark: #004C87;
+    --azure-hover: #106EBE;
+    --azure-light: rgba(0, 120, 212, 0.08);
 
-        body {
-            font-family: var(--font-family);
-            background: var(--background);
-            color: var(--text-primary);
-            overflow: hidden;
-        }
+    /* Layout */
+    --background: #F3F2F1;
+    --surface: #FFFFFF;
+    --border: #EDEBE9;
 
+    /* Text */
+    --text-primary: #323130;
+    --text-secondary: #605E5C;
+    --text-tertiary: #8A8886;
+    --text-hint: #A19F9D;
+
+    /* Semantic Colors - Primary */
+    --color-success: #2EA44F;
+    --color-success-dark: #107C10;
+    --color-success-light: #10b981;
+    --color-success-bg: rgba(46, 164, 79, 0.1);
+
+    --color-danger: #D13438;
+    --color-danger-dark: #A80000;
+    --color-danger-light: #dc2626;
+    --color-danger-bg: rgba(209, 52, 56, 0.1);
+
+    --color-warning: #E6A502;
+    --color-warning-dark: #CC9400;
+    --color-warning-light: #f59e0b;
+    --color-warning-bg: rgba(230, 165, 2, 0.1);
+
+    --color-info: #0078D4;
+    --color-info-bg: rgba(0, 120, 212, 0.1);
+
+    --color-muted: #605E5C;
+    --color-muted-light: #6b7280;
+    --color-muted-bg: rgba(96, 94, 92, 0.1);
+
+    /* Extended Palette */
+    --color-orange: #FF8C00;
+    --color-orange-dark: #D83B01;
+    --color-orange-bg: rgba(255, 140, 0, 0.1);
+
+    --color-purple: #8764B8;
+    --color-purple-dark: #5C2D91;
+    --color-purple-bg: rgba(135, 100, 184, 0.1);
+
+    --color-gold: #FFB900;
+    --color-gold-bg: rgba(255, 185, 0, 0.1);
+
+    --color-teal: #00B7C3;
+    --color-teal-bg: rgba(0, 183, 195, 0.1);
+
+    --color-pink: #C239B3;
+    --color-pink-bg: rgba(194, 57, 179, 0.1);
+
+    /* Light semantic backgrounds (for badges, pills) */
+    --color-danger-bg-light: #fef2f2;
+    --color-warning-bg-light: #fffbeb;
+    --color-info-bg-light: #eff6ff;
+    --color-success-bg-light: #f0fdf4;
+    --color-purple-bg-light: #ede9fe;
+
+    /* Terminal/Console colors */
+    --terminal-bg: #1e1e1e;
+    --terminal-bg-dark: #1a1a2e;
+
+    /* Gradient endpoints */
+    --color-violet: #7c3aed;
+    --color-indigo: #4f46e5;
+    --color-blue-bright: #2563eb;
+    --color-purple-gradient: #7928ca;
+    --color-rust: #c8503c;
+    --color-deep-red: #b92d31;
+    --color-azure-dark-alt: #0066b8;
+    --color-burnt-orange: #9A3C0C;
+    --color-olive-dark: #8A6D00;
+    --color-forest-dark: #0e6b0e;
+    --color-forest-darker: #0a5a0a;
+    --color-gray-cool: #9ca3af;
+    --color-gray-500: #71717a;
+    --color-gray-400: #a1a1aa;
+    --color-gray-300: #d1d5db;
+    --color-gray-600: #4B5563;
+    --color-gray-muted: #6B7280;
+
+    /* Code syntax highlighting */
+    --syntax-cyan: #9cdcfe;
+
+    /* Warning variants */
+    --color-amber-100: #fef3c7;
+    --color-blue-100: #dbeafe;
+    --color-green-500: #22c55e;
+    --color-red-800: #991b1b;
+    --color-red-700: #b91c1c;
+    --color-red-900: #b71c1c;
+    --color-amber-700: #b8860b;
+    --color-orange-700: #e65100;
+    --color-orange-600: #ea580c;
+    --color-green-700: #268f42;
+    --color-amber-600: #cc9302;
+    --color-gray-light: #e8e8e8;
+
+    /* Terminal log colors */
+    --terminal-text: #d4d4d4;
+    --terminal-text-muted: #6B6B6B;
+    --terminal-border: #333;
+    --terminal-timestamp: #888;
+    --terminal-info: #4fc3f7;
+    --terminal-success: #81c784;
+    --terminal-warning: #ffb74d;
+    --terminal-error: #e57373;
+
+    /* Shorthand aliases */
+    --success: var(--color-success);
+    --danger: var(--color-danger);
+    --warning: var(--color-warning);
+    --info-bg: var(--azure-light);
+    --info-border: rgba(0, 120, 212, 0.25);
+    --warning-bg: var(--color-warning-bg);
+
+    /* Surface and border variants */
+    --surface-alt: #F9F9F8;
+    --border-light: #E8E6E3;
+
+    /* Hover and card backgrounds */
+    --hover-bg: rgba(0, 120, 212, 0.04);
+    --card-bg: var(--surface);
+    --card-bg-hover: var(--background);
+    --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+    /* Sizing */
+    --sidebar-width: 240px;
+    --topbar-height: 48px;
+    --border-radius: 6px;
+    --border-radius-sm: 4px;
+    --border-radius-lg: 12px;
+
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'SF Mono', 'Consolas', 'Monaco', monospace;
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.2s ease;
+}
+
+body {
+    font-family: var(--font-family);
+    background: var(--background);
+    color: var(--text-primary);
+    overflow: hidden;
+    line-height: 1.5;
+}
+
+a {
+    color: var(--azure-blue);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}

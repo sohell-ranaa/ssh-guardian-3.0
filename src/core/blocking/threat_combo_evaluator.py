@@ -24,7 +24,9 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
         "min_shodan_vulns": 3,           # Shodan vulnerabilities threshold
         "is_tor": true,                  # Require Tor exit
         "is_proxy": true,                # Require proxy/VPN
-        "require_failed_login": true     # Require failed login
+        "require_failed_login": true,    # Require failed login
+        "is_greynoise_scanner": true,    # Require GreyNoise scanner (noise=True)
+        "exclude_greynoise_benign": true # Exclude GreyNoise benign services (riot=True)
     }
 
     Returns:
@@ -34,7 +36,9 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
             'combo_factors': list,
             'abuseipdb_score': int,
             'virustotal_positives': int,
-            'shodan_vulns': int
+            'shodan_vulns': int,
+            'greynoise_noise': bool,
+            'greynoise_riot': bool
         }
     """
     try:
@@ -47,6 +51,8 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
         require_tor = conditions.get('is_tor', False)
         require_proxy = conditions.get('is_proxy', False)
         require_failed = conditions.get('require_failed_login', False)
+        require_greynoise_scanner = conditions.get('is_greynoise_scanner', False)
+        exclude_greynoise_benign = conditions.get('exclude_greynoise_benign', False)
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -73,9 +79,9 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
                 except:
                     shodan_vulns = 0
 
-            # Get geo flags
+            # Get geo flags and GreyNoise data
             cursor.execute("""
-                SELECT is_tor, is_proxy, is_vpn
+                SELECT is_tor, is_proxy, is_vpn, greynoise_noise, greynoise_riot
                 FROM ip_geolocation
                 WHERE ip_address_text = %s
             """, (ip_address,))
@@ -83,6 +89,8 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
             geo_data = cursor.fetchone()
             is_tor = geo_data and geo_data.get('is_tor', False)
             is_proxy = geo_data and (geo_data.get('is_proxy', False) or geo_data.get('is_vpn', False))
+            greynoise_noise = geo_data and geo_data.get('greynoise_noise', False)
+            greynoise_riot = geo_data and geo_data.get('greynoise_riot', False)
 
             # Check failed login if required
             if require_failed:
@@ -102,7 +110,9 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
                             'combo_factors': [],
                             'abuseipdb_score': abuseipdb_score,
                             'virustotal_positives': vt_positives,
-                            'shodan_vulns': shodan_vulns
+                            'shodan_vulns': shodan_vulns,
+                            'greynoise_noise': greynoise_noise,
+                            'greynoise_riot': greynoise_riot
                         }
 
             # Check combo conditions
@@ -144,6 +154,26 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
                 else:
                     all_conditions_met = False
 
+            # GreyNoise scanner check
+            if require_greynoise_scanner:
+                if greynoise_noise:
+                    combo_factors.append("GreyNoise:Scanner")
+                else:
+                    all_conditions_met = False
+
+            # GreyNoise benign exclusion (if riot=True, skip blocking)
+            if exclude_greynoise_benign and greynoise_riot:
+                return {
+                    'triggered': False,
+                    'reason': 'Excluded: GreyNoise identifies this as a benign service (CDN, search engine, etc.)',
+                    'combo_factors': combo_factors,
+                    'abuseipdb_score': abuseipdb_score,
+                    'virustotal_positives': vt_positives,
+                    'shodan_vulns': shodan_vulns,
+                    'greynoise_noise': greynoise_noise,
+                    'greynoise_riot': greynoise_riot
+                }
+
             if all_conditions_met and combo_factors:
                 return {
                     'triggered': True,
@@ -151,7 +181,9 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
                     'combo_factors': combo_factors,
                     'abuseipdb_score': abuseipdb_score,
                     'virustotal_positives': vt_positives,
-                    'shodan_vulns': shodan_vulns
+                    'shodan_vulns': shodan_vulns,
+                    'greynoise_noise': greynoise_noise,
+                    'greynoise_riot': greynoise_riot
                 }
 
             return {
@@ -160,7 +192,9 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
                 'combo_factors': combo_factors,
                 'abuseipdb_score': abuseipdb_score,
                 'virustotal_positives': vt_positives,
-                'shodan_vulns': shodan_vulns
+                'shodan_vulns': shodan_vulns,
+                'greynoise_noise': greynoise_noise,
+                'greynoise_riot': greynoise_riot
             }
 
         finally:
@@ -175,7 +209,82 @@ def evaluate_threat_combo_rule(rule, ip_address, event_type=None):
             'combo_factors': [],
             'abuseipdb_score': 0,
             'virustotal_positives': 0,
-            'shodan_vulns': 0
+            'shodan_vulns': 0,
+            'greynoise_noise': False,
+            'greynoise_riot': False
+        }
+
+
+def evaluate_greynoise_rule(rule, ip_address):
+    """
+    Evaluate GreyNoise rule.
+
+    Rule conditions:
+    {
+        "is_scanner": true,          # Block known scanners (noise=True)
+        "exclude_benign": true       # Exclude known benign services (riot=True)
+    }
+    """
+    try:
+        conditions = rule['conditions']
+        require_scanner = conditions.get('is_scanner', True)
+        exclude_benign = conditions.get('exclude_benign', True)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT greynoise_noise, greynoise_riot, greynoise_classification
+                FROM ip_geolocation
+                WHERE ip_address_text = %s
+            """, (ip_address,))
+
+            data = cursor.fetchone()
+            greynoise_noise = data and data.get('greynoise_noise', False)
+            greynoise_riot = data and data.get('greynoise_riot', False)
+            classification = data.get('greynoise_classification', 'unknown') if data else 'unknown'
+
+            # Exclude benign services (CDNs, search engines, etc.)
+            if exclude_benign and greynoise_riot:
+                return {
+                    'triggered': False,
+                    'reason': f"Excluded: GreyNoise identifies as benign service",
+                    'greynoise_noise': greynoise_noise,
+                    'greynoise_riot': greynoise_riot,
+                    'classification': classification
+                }
+
+            # Block known scanners
+            if require_scanner and greynoise_noise:
+                return {
+                    'triggered': True,
+                    'reason': f"GreyNoise: Known internet scanner/noise (classification: {classification})",
+                    'greynoise_noise': greynoise_noise,
+                    'greynoise_riot': greynoise_riot,
+                    'classification': classification
+                }
+
+            return {
+                'triggered': False,
+                'reason': f"GreyNoise: Not identified as scanner",
+                'greynoise_noise': greynoise_noise,
+                'greynoise_riot': greynoise_riot,
+                'classification': classification
+            }
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"Error evaluating GreyNoise rule: {e}")
+        return {
+            'triggered': False,
+            'reason': f"Error: {str(e)}",
+            'greynoise_noise': False,
+            'greynoise_riot': False,
+            'classification': 'unknown'
         }
 
 

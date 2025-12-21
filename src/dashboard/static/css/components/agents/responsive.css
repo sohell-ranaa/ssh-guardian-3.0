@@ -1,0 +1,219 @@
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+    .agent-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .agent-filters-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .agent-search-wrapper {
+        min-width: 100%;
+    }
+
+    .agent-filter-select {
+        width: 100%;
+    }
+
+    .agents-grid {
+        grid-template-columns: 1fr;
+        padding: 12px;
+        gap: 12px;
+    }
+
+    /* Modal mobile fixes */
+    #agent-details-modal {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .agent-modal-container {
+        width: 100%;
+        max-width: 100%;
+        max-height: 90vh;
+        border-radius: 16px 16px 0 0;
+        margin: 0;
+    }
+
+    .agent-modal-header {
+        padding: 14px 16px;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .agent-modal-body {
+        padding: 16px;
+    }
+
+    .agent-detail-header {
+        flex-direction: column;
+        gap: 12px;
+        padding-bottom: 16px;
+        margin-bottom: 16px;
+    }
+
+    .agent-detail-info {
+        gap: 12px;
+    }
+
+    .agent-detail-avatar {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+    }
+
+    .agent-detail-name {
+        font-size: 18px;
+    }
+
+    .agent-detail-meta {
+        flex-wrap: wrap;
+        font-size: 12px;
+    }
+
+    .agent-detail-badges {
+        align-self: flex-start;
+    }
+
+    .agent-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .agent-metric-card {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .agent-metric-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    .agent-metric-value {
+        font-size: 16px;
+    }
+
+    .agent-info-grid,
+    .agent-info-grid.cols-2 {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .agent-info-item {
+        padding: 10px;
+    }
+
+    .agent-section {
+        margin-bottom: 16px;
+    }
+
+    .agent-section-title {
+        font-size: 12px;
+        margin-bottom: 10px;
+    }
+
+    .agent-apikey-box {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .agent-apikey-box code {
+        font-size: 11px;
+    }
+
+    .agent-table-scroll {
+        margin: 0 -16px;
+        padding: 0 16px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .agent-data-table th,
+    .agent-data-table td {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .agent-danger-zone {
+        padding: 12px;
+    }
+
+    /* Delete modal mobile */
+    .agent-delete-modal {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .agent-delete-content {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .agent-delete-header {
+        padding: 14px 16px;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .agent-delete-body {
+        padding: 16px;
+    }
+
+    .agent-delete-footer {
+        padding: 12px 16px;
+    }
+
+    .agent-delete-name {
+        font-size: 14px;
+        padding: 12px;
+    }
+
+    /* Toast mobile */
+    .agent-toast {
+        left: 10px;
+        right: 10px;
+        top: auto;
+        bottom: 20px;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .agent-stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .agent-stat-card {
+        padding: 16px;
+    }
+
+    .agent-stat-value {
+        font-size: 24px;
+    }
+
+    .agent-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .agent-metric-card {
+        flex-direction: row;
+        justify-content: flex-start;
+    }
+
+    .agent-card-footer {
+        flex-wrap: wrap;
+    }
+
+    .agent-card-footer .btn {
+        min-width: calc(50% - 4px);
+    }
+}

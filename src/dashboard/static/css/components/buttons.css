@@ -1,9 +1,6 @@
-/**
- * Buttons Component Styles
- * Azure/Fluent Design inspired button styles
- */
+/* SSH Guardian v3.0 - Buttons */
 
-/* Base button styles */
+/* Base button */
 .btn {
     display: inline-flex;
     align-items: center;
@@ -23,7 +20,7 @@
 }
 
 .btn:focus {
-    outline: 2px solid #0078D4;
+    outline: 2px solid var(--azure-blue);
     outline-offset: 2px;
 }
 
@@ -32,100 +29,100 @@
     cursor: not-allowed;
 }
 
-/* Primary button - Azure blue */
+/* Primary */
 .btn-primary {
-    background: #0078D4;
-    color: #ffffff;
-    border-color: #0078D4;
+    background: var(--azure-blue);
+    color: var(--surface);
+    border-color: var(--azure-blue);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #106EBE;
-    border-color: #106EBE;
+    background: var(--azure-hover);
+    border-color: var(--azure-hover);
 }
 
 .btn-primary:active:not(:disabled) {
-    background: #005A9E;
-    border-color: #005A9E;
+    background: var(--azure-dark);
+    border-color: var(--azure-dark);
 }
 
-/* Secondary button - outline style */
+/* Secondary */
 .btn-secondary {
-    background: #FFFFFF;
-    color: #323130;
-    border-color: #EDEBE9;
+    background: var(--surface);
+    color: var(--text-primary);
+    border-color: var(--border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: #F3F2F1;
-    border-color: #605E5C;
+    background: var(--background);
+    border-color: var(--text-hint);
 }
 
 .btn-secondary:active:not(:disabled) {
-    background: #EDEBE9;
+    background: var(--border);
 }
 
-/* Success button - green */
+/* Success */
 .btn-success {
-    background: #107C10;
-    color: #ffffff;
-    border-color: #107C10;
+    background: var(--color-success);
+    color: var(--surface);
+    border-color: var(--color-success);
 }
 
 .btn-success:hover:not(:disabled) {
-    background: #0F6D0F;
-    border-color: #0F6D0F;
+    background: var(--color-success-dark);
+    border-color: var(--color-success-dark);
 }
 
-/* Danger button - red */
+/* Danger */
 .btn-danger {
-    background: #D13438;
-    color: #ffffff;
-    border-color: #D13438;
+    background: var(--color-danger);
+    color: var(--surface);
+    border-color: var(--color-danger);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: #A80000;
-    border-color: #A80000;
+    background: var(--color-danger-dark);
+    border-color: var(--color-danger-dark);
 }
 
-/* Warning button - orange */
+/* Warning */
 .btn-warning {
-    background: #FF8C00;
-    color: #ffffff;
-    border-color: #FF8C00;
+    background: var(--color-warning);
+    color: var(--surface);
+    border-color: var(--color-warning);
 }
 
 .btn-warning:hover:not(:disabled) {
-    background: #D83B01;
-    border-color: #D83B01;
+    background: var(--color-warning-dark);
+    border-color: var(--color-warning-dark);
 }
 
-/* Ghost/text button */
+/* Ghost */
 .btn-ghost {
     background: transparent;
-    color: #323130;
+    color: var(--text-primary);
     border-color: transparent;
 }
 
 .btn-ghost:hover:not(:disabled) {
-    background: #F3F2F1;
+    background: var(--background);
 }
 
-/* Link button */
+/* Link */
 .btn-link {
     background: transparent;
-    color: #0078D4;
+    color: var(--azure-blue);
     border-color: transparent;
     padding: 0;
 }
 
 .btn-link:hover:not(:disabled) {
-    color: #106EBE;
+    color: var(--azure-hover);
     text-decoration: underline;
 }
 
-/* Button sizes */
+/* Sizes */
 .btn-sm {
     padding: 6px 12px;
     font-size: 12px;
@@ -136,7 +133,7 @@
     font-size: 16px;
 }
 
-/* Icon-only button */
+/* Icon button */
 .btn-icon {
     padding: 8px;
     min-width: 36px;
@@ -152,7 +149,6 @@
 /* Button group */
 .btn-group {
     display: inline-flex;
-    gap: 0;
 }
 
 .btn-group .btn {
@@ -171,10 +167,11 @@
     border-right: none;
 }
 
-/* Loading state */
+/* Loading */
 .btn-loading {
     position: relative;
     color: transparent !important;
+    pointer-events: none;
 }
 
 .btn-loading::after {
@@ -185,30 +182,20 @@
     border: 2px solid currentColor;
     border-right-color: transparent;
     border-radius: 50%;
-    animation: btn-spin 0.75s linear infinite;
-}
-
-.btn-primary.btn-loading::after {
-    border-color: rgba(255, 255, 255, 0.3);
-    border-right-color: transparent;
+    animation: btn-spin 0.6s linear infinite;
 }
 
 @keyframes btn-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
 }
 
-/* Full width button */
+/* Block */
 .btn-block {
     display: flex;
     width: 100%;
 }
 
-/* Responsive adjustments */
+/* Mobile */
 @media (max-width: 768px) {
     .btn {
         padding: 8px 16px;
@@ -219,4 +206,51 @@
         padding: 12px 24px;
         font-size: 14px;
     }
+}
+
+/* Refresh Button - Standard across all pages */
+.refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.refresh-btn:hover:not(:disabled) {
+    background: var(--background);
+    border-color: var(--azure-blue);
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.refresh-btn .refresh-icon {
+    display: inline-block;
+    font-size: 14px;
+    transition: transform 0.3s ease;
+}
+
+.refresh-btn.loading {
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.refresh-btn.loading .refresh-icon {
+    animation: refresh-spin 1s linear infinite;
+}
+
+@keyframes refresh-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }

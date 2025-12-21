@@ -7,11 +7,10 @@ const Overview = {
     // State
     currentTab: 'guide',
     currentStep: 1,
-    totalSteps: 6,
+    totalSteps: 8,
     guideData: null,
     thesisData: null,
     isLoading: false,
-    statsLoaded: false,
     initialized: false,
 
     // API Endpoints
@@ -30,80 +29,182 @@ const Overview = {
         THESIS_TIME_KEY: 'overview_thesis_cached_at',
         GUIDE_KEY: 'overview_guide_content',
         GUIDE_TIME_KEY: 'overview_guide_cached_at',
-        TTL: 86400000 // 24 hours in milliseconds
+        TTL: 86400000 // 24 hours
     },
+
+    // DOM element references (cached for performance)
+    els: {},
 
     /**
      * Initialize the overview module
      */
     init() {
         if (this.initialized) {
-            // Just reload stats if already initialized
             this.loadHeroStats();
             return;
         }
 
-        console.log('Overview: Initializing...');
+        this.cacheElements();
         this.loadHeroStats();
         this.loadGuide();
         this.renderWizardDots();
+        this.initQuickNav();
         this.initialized = true;
     },
 
     /**
-     * Check if cache is valid
+     * Cache DOM element references for better performance
      */
-    isCacheValid(timeKey) {
-        const cachedAt = localStorage.getItem(timeKey);
-        if (!cachedAt) return false;
-        return (Date.now() - parseInt(cachedAt)) < this.CACHE.TTL;
+    cacheElements() {
+        this.els = {
+            // Wizard elements
+            wizardIcon: document.getElementById('overview-wizard-icon'),
+            wizardTitle: document.getElementById('overview-wizard-title'),
+            wizardSubtitle: document.getElementById('overview-wizard-subtitle'),
+            wizardBody: document.getElementById('overview-wizard-content-body'),
+            wizardDots: document.getElementById('overview-wizard-dots'),
+            wizardStepsGrid: document.getElementById('overview-wizard-steps-grid'),
+            wizardPrevBtn: document.getElementById('overview-wizard-prev'),
+            wizardNextBtn: document.getElementById('overview-wizard-next'),
+            wizardProgress: document.getElementById('overview-wizard-progress-fill'),
+            currentStepEl: document.getElementById('overview-current-step'),
+            totalStepsEl: document.getElementById('overview-total-steps'),
+            wizardSection: document.getElementById('wizard-section'),
+            wizardContentPanel: document.querySelector('.wizard-content-panel'),
+            // Stats elements
+            statEvents: document.getElementById('overview-stat-events'),
+            statAgents: document.getElementById('overview-stat-agents'),
+            statBlocked: document.getElementById('overview-stat-blocked'),
+            statThreats: document.getElementById('overview-stat-threats'),
+            // TOC elements
+            thesisToc: document.getElementById('overview-thesis-toc'),
+            tocOverlay: document.querySelector('.thesis-toc-overlay')
+        };
     },
 
     /**
-     * Get cached data
+     * Initialize quick navigation bar with scroll spy
      */
+    initQuickNav() {
+        const navBar = document.getElementById('quickNavBar');
+        if (!navBar) {
+            console.log('Overview: quickNavBar not found');
+            return;
+        }
+
+        const navItems = navBar.querySelectorAll('.quick-nav-item');
+        const sectionIds = ['quick-actions-section', 'tech-stack-section', 'wizard-section'];
+        const self = this;
+
+        console.log('Overview: Initializing quick nav with', navItems.length, 'items');
+
+        // Smooth scroll on click
+        navItems.forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetId = this.getAttribute('href')?.substring(1);
+                console.log('Overview: Quick nav clicked, target:', targetId);
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) {
+                    // Update active state immediately
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                    // Scroll to element
+                    self.scrollToElement(targetEl);
+                } else {
+                    console.log('Overview: Target element not found:', targetId);
+                }
+            });
+        });
+
+        // Scroll spy using IntersectionObserver
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const sectionId = entry.target.id;
+                    navItems.forEach(item => {
+                        const targetId = item.getAttribute('href')?.substring(1);
+                        item.classList.toggle('active', targetId === sectionId);
+                    });
+                }
+            });
+        }, { rootMargin: '-100px 0px -50% 0px', threshold: 0 });
+
+        sectionIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) observer.observe(el);
+        });
+    },
+
+    /**
+     * Scroll to element with offset for sticky headers
+     */
+    scrollToElement(element, offset = 100) {
+        if (!element) {
+            console.log('Overview: scrollToElement - element is null');
+            return;
+        }
+
+        // Find the scrollable container (.main-content)
+        const scrollContainer = document.querySelector('.main-content');
+        if (scrollContainer) {
+            // Calculate position relative to scroll container
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const elementRect = element.getBoundingClientRect();
+            const scrollTop = scrollContainer.scrollTop + (elementRect.top - containerRect.top) - offset;
+
+            console.log('Overview: scrolling .main-content to', scrollTop);
+            scrollContainer.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
+        } else {
+            // Fallback to scrollIntoView
+            console.log('Overview: using scrollIntoView fallback');
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    },
+
+    // =========================================
+    // CACHE HELPERS
+    // =========================================
+
+    isCacheValid(timeKey) {
+        const cachedAt = localStorage.getItem(timeKey);
+        return cachedAt && (Date.now() - parseInt(cachedAt)) < this.CACHE.TTL;
+    },
+
     getFromCache(key, timeKey) {
         if (!this.isCacheValid(timeKey)) return null;
-        const data = localStorage.getItem(key);
-        if (!data) return null;
         try {
-            return JSON.parse(data);
-        } catch (e) {
+            return JSON.parse(localStorage.getItem(key));
+        } catch {
             return null;
         }
     },
 
-    /**
-     * Save to cache
-     */
     saveToCache(key, timeKey, data) {
         try {
             localStorage.setItem(key, JSON.stringify(data));
             localStorage.setItem(timeKey, Date.now().toString());
         } catch (e) {
-            console.warn('Failed to save to cache:', e);
+            console.warn('Cache save failed:', e);
         }
     },
 
-    /**
-     * Clear all overview caches
-     */
     clearCache() {
-        localStorage.removeItem(this.CACHE.THESIS_KEY);
-        localStorage.removeItem(this.CACHE.THESIS_TIME_KEY);
-        localStorage.removeItem(this.CACHE.GUIDE_KEY);
-        localStorage.removeItem(this.CACHE.GUIDE_TIME_KEY);
+        ['THESIS_KEY', 'THESIS_TIME_KEY', 'GUIDE_KEY', 'GUIDE_TIME_KEY'].forEach(k => {
+            localStorage.removeItem(this.CACHE[k]);
+        });
         this.guideData = null;
         this.thesisData = null;
         console.log('Overview: Cache cleared');
     },
 
-    /**
-     * Load hero section live statistics
-     */
+    // =========================================
+    // HERO STATS
+    // =========================================
+
     async loadHeroStats() {
         try {
-            // Fetch stats in parallel using correct API endpoints
             const [eventsRes, agentsRes, blocksRes, summaryRes] = await Promise.all([
                 fetch(`${this.API.events}?limit=1`).catch(() => null),
                 fetch(this.API.agents).catch(() => null),
@@ -111,114 +212,77 @@ const Overview = {
                 fetch(this.API.eventsSummary).catch(() => null)
             ]);
 
-            // Total events - response: { events, pagination: { total }, success }
-            let totalEvents = '--';
+            const fmt = window.formatNumber || (n => n);
+
+            // Total events
             if (eventsRes?.ok) {
-                const eventsData = await eventsRes.json();
-                totalEvents = eventsData.pagination?.total || '0';
+                const data = await eventsRes.json();
+                this.updateStat('statEvents', fmt(data.pagination?.total || 0));
             }
 
-            // Active agents - response: { agents: [], total, success }
-            let activeAgents = '--';
+            // Active agents
             if (agentsRes?.ok) {
-                const agentsData = await agentsRes.json();
-                const agents = agentsData.agents || [];
-                activeAgents = agents.filter(a => a.is_approved).length || agents.length;
+                const data = await agentsRes.json();
+                const agents = data.agents || [];
+                this.updateStat('statAgents', agents.filter(a => a.is_approved).length || agents.length);
             }
 
-            // Blocked IPs - response: { blocks: [], pagination, success }
-            let blockedIPs = '--';
+            // Blocked IPs
             if (blocksRes?.ok) {
-                const blocksData = await blocksRes.json();
-                const blocks = blocksData.blocks || [];
-                // Count active blocks
-                blockedIPs = blocks.filter(b => b.is_active).length;
+                const data = await blocksRes.json();
+                this.updateStat('statBlocked', fmt((data.blocks || []).filter(b => b.is_active).length));
             }
 
-            // Threats detected - response: { data: { summary: { failed_count } } }
-            let threatsDetected = '--';
+            // Threats detected
             if (summaryRes?.ok) {
-                const summaryData = await summaryRes.json();
-                // Use failed count from summary
-                threatsDetected = summaryData.data?.summary?.failed_count ||
-                                  summaryData.data?.events_by_type?.failed ||
-                                  '0';
+                const data = await summaryRes.json();
+                const threats = data.data?.summary?.failed_count || data.data?.events_by_type?.failed || 0;
+                this.updateStat('statThreats', fmt(threats));
             }
-
-            // Update UI
-            const eventsEl = document.getElementById('overview-stat-events');
-            const agentsEl = document.getElementById('overview-stat-agents');
-            const blockedEl = document.getElementById('overview-stat-blocked');
-            const threatsEl = document.getElementById('overview-stat-threats');
-
-            if (eventsEl) eventsEl.textContent = this.formatNumber(totalEvents);
-            if (agentsEl) agentsEl.textContent = activeAgents;
-            if (blockedEl) blockedEl.textContent = this.formatNumber(blockedIPs);
-            if (threatsEl) threatsEl.textContent = this.formatNumber(threatsDetected);
-
-            this.statsLoaded = true;
-            console.log('Overview: Hero stats loaded', { totalEvents, activeAgents, blockedIPs, threatsDetected });
         } catch (error) {
-            console.error('Error loading hero stats:', error);
+            console.error('Error loading stats:', error);
         }
     },
 
-    /**
-     * Format large numbers
-     */
-    formatNumber(num) {
-        if (num === '--' || num === undefined || num === null) return '--';
-        const n = parseInt(num);
-        if (isNaN(n)) return num;
-        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-        return n.toString();
+    updateStat(key, value) {
+        if (this.els[key]) this.els[key].textContent = value;
     },
 
-    /**
-     * Switch between tabs
-     */
+    // =========================================
+    // TAB SWITCHING
+    // =========================================
+
     switchTab(tab) {
         if (this.currentTab === tab) return;
 
-        // Update tab buttons
         document.querySelectorAll('.overview-tab').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
 
-        // Update tab content
         document.querySelectorAll('.overview-tab-content').forEach(content => {
             content.classList.toggle('active', content.id === `overview-tab-${tab}`);
         });
 
         this.currentTab = tab;
 
-        // Load content if needed
-        if (tab === 'guide' && !this.guideData) {
-            this.loadGuide();
-        } else if (tab === 'thesis' && !this.thesisData) {
-            this.loadThesis();
-        }
+        if (tab === 'guide' && !this.guideData) this.loadGuide();
+        else if (tab === 'thesis' && !this.thesisData) this.loadThesis();
     },
 
     // =========================================
-    // GUIDE WIZARD FUNCTIONS
+    // GUIDE WIZARD
     // =========================================
 
-    /**
-     * Load guide content from cache or API
-     */
     async loadGuide() {
         if (this.isLoading) return;
 
-        // Try cache first
+        // Always use 8 steps (our built-in guide)
+        this.totalSteps = 8;
+        if (this.els.totalStepsEl) this.els.totalStepsEl.textContent = this.totalSteps;
+
         const cached = this.getFromCache(this.CACHE.GUIDE_KEY, this.CACHE.GUIDE_TIME_KEY);
         if (cached) {
-            console.log('Overview: Loading guide from cache');
             this.guideData = cached;
-            this.totalSteps = cached.total_steps || cached.steps?.length || 6;
-            const totalStepsEl = document.getElementById('overview-total-steps');
-            if (totalStepsEl) totalStepsEl.textContent = this.totalSteps;
             this.renderGuideStep(this.currentStep);
             return;
         }
@@ -231,18 +295,9 @@ const Overview = {
 
             if (result.success && result.data) {
                 this.guideData = result.data;
-                this.totalSteps = result.data.total_steps || result.data.steps?.length || 6;
-                const totalStepsEl = document.getElementById('overview-total-steps');
-                if (totalStepsEl) totalStepsEl.textContent = this.totalSteps;
-
-                // Save to cache
                 this.saveToCache(this.CACHE.GUIDE_KEY, this.CACHE.GUIDE_TIME_KEY, result.data);
-
-                this.renderGuideStep(this.currentStep);
-            } else {
-                // Use default content
-                this.renderGuideStep(this.currentStep);
             }
+            this.renderGuideStep(this.currentStep);
         } catch (error) {
             console.error('Error loading guide:', error);
             this.renderGuideStep(this.currentStep);
@@ -251,50 +306,28 @@ const Overview = {
         }
     },
 
-    /**
-     * Render wizard step dots
-     */
     renderWizardDots() {
-        const container = document.getElementById('overview-wizard-dots');
-        if (!container) return;
+        if (!this.els.wizardDots) return;
 
-        let html = '';
-        for (let i = 1; i <= this.totalSteps; i++) {
+        this.els.wizardDots.innerHTML = Array.from({ length: this.totalSteps }, (_, i) => {
+            const step = i + 1;
             const classes = ['wizard-dot'];
-            if (i === this.currentStep) classes.push('active');
-            if (i < this.currentStep) classes.push('completed');
-            html += `<div class="${classes.join(' ')}" onclick="Overview.goToStep(${i})"></div>`;
-        }
-        container.innerHTML = html;
+            if (step === this.currentStep) classes.push('active');
+            if (step < this.currentStep) classes.push('completed');
+            return `<div class="${classes.join(' ')}" onclick="Overview.goToStep(${step})"></div>`;
+        }).join('');
     },
 
-    /**
-     * Render current guide step content
-     */
     renderGuideStep(stepNum) {
-        // Get step data from API or use default
-        let step;
-        if (this.guideData?.steps?.length) {
-            step = this.guideData.steps.find(s => s.step_number === stepNum);
-        }
+        let step = this.guideData?.steps?.find(s => s.step_number === stepNum);
+        if (!step) step = this.getDefaultStep(stepNum);
 
-        if (!step) {
-            step = this.getDefaultStep(stepNum);
-        }
+        if (this.els.wizardIcon) this.els.wizardIcon.innerHTML = step.icon || '&#128214;';
+        if (this.els.wizardTitle) this.els.wizardTitle.textContent = step.title;
+        if (this.els.wizardSubtitle) this.els.wizardSubtitle.textContent = step.subtitle || '';
 
-        // Update header
-        const iconEl = document.getElementById('overview-wizard-icon');
-        const titleEl = document.getElementById('overview-wizard-title');
-        const subtitleEl = document.getElementById('overview-wizard-subtitle');
-
-        if (iconEl) iconEl.innerHTML = step.icon || '&#128214;';
-        if (titleEl) titleEl.textContent = step.title;
-        if (subtitleEl) subtitleEl.textContent = step.subtitle || '';
-
-        // Update content body
-        const bodyEl = document.getElementById('overview-wizard-content-body');
-        if (bodyEl) {
-            bodyEl.innerHTML = `
+        if (this.els.wizardBody) {
+            this.els.wizardBody.innerHTML = `
                 <div class="wizard-step-content">
                     ${step.content_html}
                     ${step.tips_html ? `
@@ -310,268 +343,462 @@ const Overview = {
         this.updateWizardUI();
     },
 
-    /**
-     * Get default step content
-     */
-    getDefaultStep(stepNum) {
-        const steps = {
-            1: {
-                icon: '&#128737;',
-                title: 'Welcome to SSH Guardian',
-                subtitle: 'A Research Project for SME Cybersecurity',
-                content_html: `
-                    <p>SSH Guardian is a <strong>lightweight SSH anomaly detection agent</strong> designed specifically for Small and Medium Enterprises (SMEs) operating on limited cloud infrastructure.</p>
-                    <p>This project is part of a Masters-level research thesis at <strong>Asia Pacific University of Technology & Innovation</strong>.</p>
-                    <h3>Key Features</h3>
-                    <ul>
-                        <li><strong>Real-time Monitoring</strong> - Track SSH authentication events as they happen</li>
-                        <li><strong>ML-Based Detection</strong> - Isolation Forest algorithm for anomaly detection</li>
-                        <li><strong>Threat Intelligence</strong> - Integration with AbuseIPDB and VirusTotal</li>
-                        <li><strong>Automated Response</strong> - Rule-based IP blocking via UFW</li>
-                        <li><strong>Resource Efficient</strong> - Minimal CPU/RAM footprint for SME servers</li>
-                    </ul>
-                `,
-                tips_html: 'Use the Quick Actions cards above to jump directly to key features, or continue through this guide to learn about each component.'
-            },
-            2: {
-                icon: '&#127959;',
-                title: 'System Architecture',
-                subtitle: '5-Layer Security Pipeline',
-                content_html: `
-                    <p>SSH Guardian uses a <strong>multi-layered architecture</strong> to process and analyze authentication events efficiently:</p>
-                    <h3>Architecture Layers</h3>
-                    <ol>
-                        <li><strong>Data Collection Layer</strong> - Agent monitors SSH auth logs using inotify for real-time detection</li>
-                        <li><strong>Processing Layer</strong> - Events parsed, normalized, and enriched with GeoIP data</li>
-                        <li><strong>Analysis Layer</strong> - ML model + threat intelligence APIs evaluate risk score</li>
-                        <li><strong>Alert Layer</strong> - Notifications via Telegram, email, or webhooks</li>
-                        <li><strong>Storage Layer</strong> - MySQL database for events, statistics, and audit trail</li>
-                    </ol>
-                    <h3>Composite Risk Scoring</h3>
-                    <ul>
-                        <li><strong>35%</strong> - Threat Intelligence (AbuseIPDB, VirusTotal)</li>
-                        <li><strong>30%</strong> - ML Anomaly Score (Isolation Forest)</li>
-                        <li><strong>25%</strong> - Behavioral Patterns (velocity, uniqueness)</li>
-                        <li><strong>10%</strong> - Geographic Risk (high-risk regions)</li>
-                    </ul>
-                `,
-                tips_html: 'The architecture is designed for horizontal scalability - deploy multiple agents while centralizing monitoring in this dashboard.'
-            },
-            3: {
-                icon: '&#128640;',
-                title: 'Agent Deployment',
-                subtitle: 'Install Monitoring Agents on Your Servers',
-                content_html: `
-                    <p>Deploy SSH Guardian agents on your cloud servers to start monitoring SSH authentication events.</p>
-                    <h3>Quick Installation</h3>
-                    <div style="background: var(--background); padding: 16px; border-radius: 8px; margin: 16px 0; overflow-x: auto; border: 1px solid var(--border);">
-                        <code style="color: var(--azure-blue); font-family: monospace;">curl -sSL https://ssh-guardian.rpu.solutions/install.sh | sudo bash</code>
-                    </div>
-                    <h3>Registration Process</h3>
-                    <ol>
-                        <li>Run the installer on your target server</li>
-                        <li>Agent generates a unique UUID and registers with this dashboard</li>
-                        <li>Navigate to <strong>Agents</strong> page and approve the new agent</li>
-                        <li>Agent begins sending real-time authentication events</li>
-                    </ol>
-                    <h3>System Requirements</h3>
-                    <ul>
-                        <li>Linux server (Ubuntu 20.04+, Debian 11+, CentOS 8+)</li>
-                        <li>Python 3.8 or higher</li>
-                        <li>Read access to /var/log/auth.log</li>
-                        <li>HTTPS access to dashboard API</li>
-                    </ul>
-                `,
-                tips_html: 'After installation, the agent appears in "Pending Approval" on the Agents page. Approve it to start receiving events.'
-            },
-            4: {
-                icon: '&#128200;',
-                title: 'Live Events Monitoring',
-                subtitle: 'Real-time Authentication Event Stream',
-                content_html: `
-                    <p>The <strong>Live Events</strong> page shows all SSH authentication attempts across your monitored servers in real-time.</p>
-                    <h3>Event Types</h3>
-                    <ul>
-                        <li><span style="color: #ef4444; font-weight: bold;">Failed</span> - Invalid password or public key rejected</li>
-                        <li><span style="color: #10b981; font-weight: bold;">Successful</span> - Authenticated login session</li>
-                        <li><span style="color: #f59e0b; font-weight: bold;">Invalid User</span> - Username does not exist</li>
-                    </ul>
-                    <h3>Threat Analysis</h3>
-                    <p>Click <strong>"View Details"</strong> on any event to see:</p>
-                    <ul>
-                        <li>GeoIP location with map visualization</li>
-                        <li>AbuseIPDB reputation score and reports</li>
-                        <li>VirusTotal detection results</li>
-                        <li>ML anomaly assessment and confidence</li>
-                        <li>Historical patterns for this IP</li>
-                    </ul>
-                    <h3>Quick Actions</h3>
-                    <ul>
-                        <li><strong>Block IP</strong> - Add to UFW deny list immediately</li>
-                        <li><strong>Watchlist</strong> - Monitor future activity closely</li>
-                        <li><strong>Whitelist</strong> - Mark as trusted (excludes from blocking)</li>
-                        <li><strong>Report</strong> - Generate detailed threat analysis PDF</li>
-                    </ul>
-                `,
-                tips_html: 'Use filters to narrow events by date, type, agent, or risk level. High-risk events (score > 80) are highlighted.'
-            },
-            5: {
-                icon: '&#128274;',
-                title: 'Firewall Management',
-                subtitle: 'UFW Integration and IP Blocking',
-                content_html: `
-                    <p>SSH Guardian integrates directly with <strong>UFW (Uncomplicated Firewall)</strong> for automated threat response.</p>
-                    <h3>Automatic Blocking Rules</h3>
-                    <p>Configure rules in <strong>Settings > Blocking Rules</strong> to automatically block IPs:</p>
-                    <ul>
-                        <li><strong>Failed Attempts</strong> - e.g., 5 failures in 10 minutes</li>
-                        <li><strong>ML Risk Score</strong> - Block when score exceeds threshold</li>
-                        <li><strong>AbuseIPDB Score</strong> - Block IPs with high abuse confidence</li>
-                        <li><strong>Geographic Restrictions</strong> - Block entire countries</li>
-                    </ul>
-                    <h3>Firewall Page Features</h3>
-                    <ul>
-                        <li>View all active blocks with expiration countdown</li>
-                        <li>Manually block/unblock individual IPs or CIDR ranges</li>
-                        <li>Configure UFW port rules (allow/deny services)</li>
-                        <li>Set block durations (15 min to permanent)</li>
-                    </ul>
-                    <h3>Audit Trail</h3>
-                    <p>Every action is logged with timestamp, IP, reason, and trigger source (rule/manual/system).</p>
-                `,
-                tips_html: 'Enable Auto-Unblock with shorter durations (1-24 hours) to prevent permanent lockouts from legitimate users.'
-            },
-            6: {
-                icon: '&#129302;',
-                title: 'Threat Intelligence & ML',
-                subtitle: 'Advanced Detection Capabilities',
-                content_html: `
-                    <p>SSH Guardian combines multiple detection methods for comprehensive threat assessment.</p>
-                    <h3>Threat Intelligence APIs</h3>
-                    <ul>
-                        <li><strong>AbuseIPDB</strong> - Crowdsourced IP reputation with abuse confidence scores</li>
-                        <li><strong>VirusTotal</strong> - Multi-engine malware and malicious URL detection</li>
-                        <li><strong>FreeIPAPI</strong> - Geolocation, VPN detection, and proxy identification</li>
-                    </ul>
-                    <h3>Machine Learning Detection</h3>
-                    <p>The <strong>Isolation Forest</strong> algorithm detects anomalies based on:</p>
-                    <ul>
-                        <li><strong>Time Patterns</strong> - Unusual hours of activity</li>
-                        <li><strong>Geographic Anomalies</strong> - Login from new countries</li>
-                        <li><strong>Volume Patterns</strong> - Sudden spikes in attempts</li>
-                        <li><strong>Target Diversity</strong> - Multiple usernames from same IP</li>
-                    </ul>
-                    <h3>Model Management</h3>
-                    <p>Navigate to <strong>ML Intelligence</strong> to:</p>
-                    <ul>
-                        <li>View current model performance metrics</li>
-                        <li>Trigger retraining with recent data</li>
-                        <li>Adjust anomaly sensitivity threshold</li>
-                    </ul>
-                `,
-                tips_html: 'The ML model learns your environment\'s baseline over time. Allow 1-2 weeks of data before relying heavily on ML scores.'
-            }
-        };
-
-        return steps[stepNum] || steps[1];
-    },
-
-    /**
-     * Update wizard UI state
-     */
     updateWizardUI() {
-        // Update step counter
-        const currentStepEl = document.getElementById('overview-current-step');
-        if (currentStepEl) currentStepEl.textContent = this.currentStep;
+        if (this.els.currentStepEl) this.els.currentStepEl.textContent = this.currentStep;
 
-        // Update progress bar
-        const progressFill = document.getElementById('overview-wizard-progress-fill');
-        if (progressFill) {
-            const progress = (this.currentStep / this.totalSteps) * 100;
-            progressFill.style.width = `${progress}%`;
+        if (this.els.wizardProgress) {
+            this.els.wizardProgress.style.width = `${(this.currentStep / this.totalSteps) * 100}%`;
         }
 
-        // Update navigation buttons
-        const prevBtn = document.getElementById('overview-wizard-prev');
-        const nextBtn = document.getElementById('overview-wizard-next');
-
-        if (prevBtn) prevBtn.disabled = this.currentStep <= 1;
-        if (nextBtn) {
-            nextBtn.disabled = this.currentStep >= this.totalSteps;
-            nextBtn.innerHTML = this.currentStep >= this.totalSteps
-                ? 'Complete &#10003;'
-                : 'Next &#8594;';
+        if (this.els.wizardPrevBtn) this.els.wizardPrevBtn.disabled = this.currentStep <= 1;
+        if (this.els.wizardNextBtn) {
+            this.els.wizardNextBtn.disabled = this.currentStep >= this.totalSteps;
+            this.els.wizardNextBtn.innerHTML = this.currentStep >= this.totalSteps ? 'Complete &#10003;' : 'Next &#8594;';
         }
 
-        // Update step cards
-        const stepsGrid = document.getElementById('overview-wizard-steps-grid');
-        if (stepsGrid) {
-            stepsGrid.querySelectorAll('.wizard-step-card').forEach(card => {
+        if (this.els.wizardStepsGrid) {
+            this.els.wizardStepsGrid.querySelectorAll('.wizard-step-card').forEach(card => {
                 const step = parseInt(card.dataset.step);
                 card.classList.toggle('active', step === this.currentStep);
                 card.classList.toggle('completed', step < this.currentStep);
-
-                const numberEl = card.querySelector('.wizard-step-number');
-                if (numberEl) {
-                    numberEl.innerHTML = step < this.currentStep ? '&#10003;' : step;
-                }
+                const numEl = card.querySelector('.wizard-step-number');
+                if (numEl) numEl.innerHTML = step < this.currentStep ? '&#10003;' : step;
             });
         }
 
-        // Update dots
         this.renderWizardDots();
     },
 
-    /**
-     * Navigate to next step
-     */
+    // Navigation methods
     nextStep() {
         if (this.currentStep < this.totalSteps) {
             this.currentStep++;
             this.renderGuideStep(this.currentStep);
+            this.scrollToWizardContent();
         }
     },
 
-    /**
-     * Navigate to previous step
-     */
     prevStep() {
         if (this.currentStep > 1) {
             this.currentStep--;
             this.renderGuideStep(this.currentStep);
+            this.scrollToWizardContent();
+        }
+    },
+
+    goToStep(stepNum) {
+        if (stepNum >= 1 && stepNum <= this.totalSteps && stepNum !== this.currentStep) {
+            this.currentStep = stepNum;
+            this.renderGuideStep(this.currentStep);
+            this.scrollToWizardContent();
         }
     },
 
     /**
-     * Go to specific step
+     * Scroll to wizard content panel header
      */
-    goToStep(stepNum) {
-        if (stepNum >= 1 && stepNum <= this.totalSteps) {
-            this.currentStep = stepNum;
-            this.renderGuideStep(this.currentStep);
-        }
+    scrollToWizardContent() {
+        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+        requestAnimationFrame(() => {
+            const target = this.els.wizardContentPanel || document.querySelector('.wizard-content-panel');
+            if (target) {
+                this.scrollToElement(target, 70);
+            }
+        });
+    },
+
+    // =========================================
+    // DEFAULT STEP CONTENT
+    // =========================================
+
+    getDefaultStep(stepNum) {
+        const steps = {
+            1: {
+                icon: '&#128737;',
+                title: 'What is SSH Guardian?',
+                subtitle: 'An Open-Source Enhancement for Fail2ban',
+                content_html: `
+                    <p>SSH Guardian is an <strong>open-source security tool</strong> that enhances fail2ban with Machine Learning capabilities and third-party threat intelligence integrations.</p>
+
+                    <h3>Why SSH Guardian?</h3>
+                    <p>While fail2ban is excellent at reactive blocking, SSH Guardian adds:</p>
+                    <ul>
+                        <li><strong>Proactive Threat Detection</strong> - Block known bad IPs on first attempt using AbuseIPDB & VirusTotal</li>
+                        <li><strong>ML-Based Anomaly Detection</strong> - Identify sophisticated attacks that bypass simple rules</li>
+                        <li><strong>Centralized Dashboard</strong> - Monitor single or multiple servers from one interface</li>
+                        <li><strong>Smart Escalation</strong> - Automatically escalate repeat offenders from fail2ban to permanent UFW blocks</li>
+                    </ul>
+
+                    <h3>Deployment Modes</h3>
+                    <div class="deployment-modes">
+                        <div class="mode-card">
+                            <strong>&#128421; Single Server</strong>
+                            <p>Dashboard + Agent on same machine. Perfect for standalone VPS or cloud instances.</p>
+                        </div>
+                        <div class="mode-card">
+                            <strong>&#127760; Distributed</strong>
+                            <p>Central dashboard coordinating multiple agents across your infrastructure.</p>
+                        </div>
+                    </div>
+
+                    <h3>Supported Platforms</h3>
+                    <ul>
+                        <li><strong>Ubuntu 22.04+</strong> (Tested & Recommended)</li>
+                        <li>Debian 11+ (Compatible)</li>
+                        <li>Any systemd-based Linux with Python 3.8+</li>
+                    </ul>
+                `,
+                tips_html: 'SSH Guardian works alongside fail2ban, not as a replacement. It adds intelligence to your existing security stack.'
+            },
+            2: {
+                icon: '&#127959;',
+                title: 'System Architecture',
+                subtitle: 'How Components Work Together',
+                content_html: `
+                    <p>SSH Guardian uses a <strong>distributed agent-server architecture</strong> with a 10-stage event processing pipeline.</p>
+
+                    <h3>Core Components</h3>
+                    <table class="arch-table">
+                        <tr><td><strong>Dashboard Server</strong></td><td>Central Flask API + Web UI (Port 8081)</td></tr>
+                        <tr><td><strong>Remote Agents</strong></td><td>Python service on each monitored server</td></tr>
+                        <tr><td><strong>Database</strong></td><td>MySQL 8.0+ or SQLite3 for storage</td></tr>
+                        <tr><td><strong>Cache</strong></td><td>Redis for high-speed caching (optional)</td></tr>
+                    </table>
+
+                    <h3>Event Processing Pipeline</h3>
+                    <ol>
+                        <li><strong>Log Collection</strong> - Agent monitors /var/log/auth.log in real-time</li>
+                        <li><strong>Event Parsing</strong> - Extract IP, username, timestamp, auth method</li>
+                        <li><strong>GeoIP Enrichment</strong> - Add country, city, coordinates, ISP</li>
+                        <li><strong>Threat Intel Lookup</strong> - Query AbuseIPDB, VirusTotal, Shodan</li>
+                        <li><strong>ML Prediction</strong> - Generate risk score using trained model</li>
+                        <li><strong>Rule Evaluation</strong> - Check against 10+ blocking rule types</li>
+                        <li><strong>Block Decision</strong> - Determine if block is needed</li>
+                        <li><strong>Command Dispatch</strong> - Queue UFW/fail2ban commands to agent</li>
+                        <li><strong>Notification</strong> - Alert via Telegram/Email if configured</li>
+                        <li><strong>Audit Logging</strong> - Record all actions for compliance</li>
+                    </ol>
+
+                    <h3>Agent-Server Communication</h3>
+                    <ul>
+                        <li><strong>Heartbeat</strong> - Every 60 seconds (CPU, memory, disk usage)</li>
+                        <li><strong>Log Submission</strong> - Batch of 100 events per request</li>
+                        <li><strong>Firewall Sync</strong> - Every 5 minutes (UFW rules sync)</li>
+                        <li><strong>Command Polling</strong> - Every 30 seconds (pending blocks/unblocks)</li>
+                    </ul>
+                `,
+                tips_html: 'The architecture supports horizontal scaling - add as many agents as needed without dashboard changes.'
+            },
+            3: {
+                icon: '&#128640;',
+                title: 'Dashboard Installation',
+                subtitle: 'Set Up the Central Server',
+                content_html: `
+                    <p>The dashboard is your central control panel. Install it on a server that all agents can reach.</p>
+
+                    <h3>Prerequisites</h3>
+                    <ul>
+                        <li>Ubuntu 22.04+ server</li>
+                        <li>Python 3.10 or higher</li>
+                        <li>2GB RAM minimum (4GB recommended)</li>
+                        <li>Open port 8081 for dashboard access</li>
+                    </ul>
+
+                    <h3>Database Options</h3>
+                    <p>During installation, you'll choose between:</p>
+                    <table class="arch-table">
+                        <tr>
+                            <td><strong>SQLite3</strong></td>
+                            <td>Zero configuration, perfect for single-server setups or testing</td>
+                        </tr>
+                        <tr>
+                            <td><strong>MySQL 8.0+</strong></td>
+                            <td>Recommended for production and multi-agent deployments</td>
+                        </tr>
+                    </table>
+
+                    <h3>Installation Steps</h3>
+                    <div class="code-block">
+                        <code># Clone the repository</code><br>
+                        <code>git clone https://github.com/yourusername/ssh-guardian.git</code><br>
+                        <code>cd ssh-guardian</code><br><br>
+                        <code># Run the installer</code><br>
+                        <code>sudo ./install.sh</code>
+                    </div>
+
+                    <h3>Installer Prompts</h3>
+                    <ol>
+                        <li><strong>Database Type</strong> - Choose SQLite3 or MySQL</li>
+                        <li><strong>MySQL Credentials</strong> - If MySQL selected, provide host/user/password</li>
+                        <li><strong>Admin Account</strong> - Create your dashboard login</li>
+                        <li><strong>API Keys</strong> - Optionally configure AbuseIPDB/VirusTotal keys</li>
+                        <li><strong>Port</strong> - Default 8081 (can customize)</li>
+                    </ol>
+
+                    <p>After installation, access the dashboard at: <code>http://your-server-ip:8081</code></p>
+                `,
+                tips_html: 'For production, use MySQL with Redis caching. SQLite3 is great for testing or single-server deployments under 1000 events/day.'
+            },
+            4: {
+                icon: '&#128421;',
+                title: 'Agent Deployment',
+                subtitle: 'Install Agents on Monitored Servers',
+                content_html: `
+                    <p>Deploy agents on each server you want to monitor. Agents are lightweight and run as a systemd service.</p>
+
+                    <h3>Quick Installation</h3>
+                    <div class="code-block">
+                        <code># Download and run the agent installer</code><br>
+                        <code>curl -sSL https://your-dashboard:8081/install-agent.sh | sudo bash</code>
+                    </div>
+
+                    <h3>Interactive Configuration</h3>
+                    <p>The installer will prompt for:</p>
+                    <table class="arch-table">
+                        <tr><td><strong>Dashboard URL</strong></td><td>e.g., http://192.168.1.100:8081</td></tr>
+                        <tr><td><strong>Agent ID</strong></td><td>Auto-generated: hostname-mac (customizable)</td></tr>
+                        <tr><td><strong>Fail2ban Integration</strong></td><td>Yes/No - sync with existing fail2ban</td></tr>
+                    </table>
+
+                    <h3>What Gets Installed</h3>
+                    <ul>
+                        <li><code>/opt/ssh-guardian-agent/</code> - Agent scripts</li>
+                        <li><code>/etc/ssh-guardian/agent.json</code> - Configuration file</li>
+                        <li><code>/var/lib/ssh-guardian/</code> - State persistence</li>
+                        <li><code>ssh-guardian-agent.service</code> - Systemd service</li>
+                    </ul>
+
+                    <h3>Agent Approval Workflow</h3>
+                    <ol>
+                        <li>Agent starts and sends registration request</li>
+                        <li>Dashboard shows agent in <strong>"Pending Approval"</strong> state</li>
+                        <li>Admin reviews and clicks <strong>"Approve"</strong></li>
+                        <li>Agent receives API key and begins sending events</li>
+                    </ol>
+
+                    <h3>Verify Agent Status</h3>
+                    <div class="code-block">
+                        <code>sudo systemctl status ssh-guardian-agent</code><br>
+                        <code>sudo journalctl -u ssh-guardian-agent -f</code>
+                    </div>
+                `,
+                tips_html: 'Enable fail2ban integration if you have existing fail2ban rules. SSH Guardian will coordinate with fail2ban rather than conflict.'
+            },
+            5: {
+                icon: '&#128200;',
+                title: 'Real-Time Monitoring',
+                subtitle: 'Track Authentication Events Live',
+                content_html: `
+                    <p>Once agents are deployed, the <strong>Live Events</strong> page shows all SSH activity across your infrastructure.</p>
+
+                    <h3>Event Types</h3>
+                    <ul>
+                        <li><span class="event-badge failed">Failed</span> Invalid password or rejected public key</li>
+                        <li><span class="event-badge success">Successful</span> Authenticated login session</li>
+                        <li><span class="event-badge invalid">Invalid User</span> Username does not exist on system</li>
+                        <li><span class="event-badge disconnect">Disconnect</span> Session ended (normal or forced)</li>
+                    </ul>
+
+                    <h3>Event Details Include</h3>
+                    <table class="arch-table">
+                        <tr><td><strong>Source IP</strong></td><td>Attacker's IP address</td></tr>
+                        <tr><td><strong>GeoIP Data</strong></td><td>Country, city, ISP, VPN/Tor detection</td></tr>
+                        <tr><td><strong>Risk Score</strong></td><td>0-100 ML-generated threat score</td></tr>
+                        <tr><td><strong>AbuseIPDB</strong></td><td>Reputation score and abuse reports</td></tr>
+                        <tr><td><strong>VirusTotal</strong></td><td>Malware detection results</td></tr>
+                        <tr><td><strong>Agent</strong></td><td>Which server received the attempt</td></tr>
+                    </table>
+
+                    <h3>Filtering & Search</h3>
+                    <ul>
+                        <li>Filter by date range, event type, agent, country</li>
+                        <li>Search by IP address or username</li>
+                        <li>Sort by timestamp, risk score, or event count</li>
+                        <li>Export filtered results to CSV</li>
+                    </ul>
+
+                    <h3>Quick Actions</h3>
+                    <p>From any event, you can:</p>
+                    <ul>
+                        <li><strong>Block IP</strong> - Immediately add to UFW deny list</li>
+                        <li><strong>Whitelist</strong> - Mark as trusted (never block)</li>
+                        <li><strong>View History</strong> - See all events from this IP</li>
+                        <li><strong>Generate Report</strong> - Export detailed threat analysis</li>
+                    </ul>
+                `,
+                tips_html: 'The dashboard auto-refreshes every 30 seconds. High-risk events (score > 70) are highlighted in red.'
+            },
+            6: {
+                icon: '&#128274;',
+                title: 'Fail2ban & UFW Integration',
+                subtitle: 'Hybrid Blocking Strategy',
+                content_html: `
+                    <p>SSH Guardian works <strong>alongside fail2ban</strong>, adding intelligence without replacing your existing setup.</p>
+
+                    <h3>How They Work Together</h3>
+                    <table class="arch-table">
+                        <tr>
+                            <td><strong>Fail2ban</strong></td>
+                            <td>Reactive - blocks after X failed attempts in Y minutes</td>
+                        </tr>
+                        <tr>
+                            <td><strong>SSH Guardian</strong></td>
+                            <td>Proactive - blocks known bad IPs on first attempt</td>
+                        </tr>
+                        <tr>
+                            <td><strong>UFW</strong></td>
+                            <td>Permanent blocks for high-threat IPs and repeat offenders</td>
+                        </tr>
+                    </table>
+
+                    <h3>Smart Escalation</h3>
+                    <p>Based on threat score, SSH Guardian escalates blocking:</p>
+                    <ol>
+                        <li><strong>Score 0-30:</strong> Standard fail2ban (1 hour ban)</li>
+                        <li><strong>Score 30-60:</strong> Extended fail2ban (6 hours)</li>
+                        <li><strong>Score 60-80:</strong> Extended fail2ban (24 hours)</li>
+                        <li><strong>Score 80+:</strong> Permanent UFW block</li>
+                        <li><strong>3rd offense:</strong> Auto-escalate to UFW regardless of score</li>
+                    </ol>
+
+                    <h3>UFW Management Features</h3>
+                    <ul>
+                        <li>View all UFW rules synced from agents</li>
+                        <li>Add/remove rules from dashboard (pushed to agents)</li>
+                        <li>Protected ports: 22, 80, 443, 8081 (never auto-blocked)</li>
+                        <li>Rule templates for common configurations</li>
+                    </ul>
+
+                    <h3>Fail2ban Sync</h3>
+                    <p>When fail2ban bans an IP:</p>
+                    <ol>
+                        <li>Agent detects ban via fail2ban database</li>
+                        <li>Reports to dashboard with jail name and ban time</li>
+                        <li>Dashboard runs threat analysis on the IP</li>
+                        <li>If high-risk, escalates to UFW permanent block</li>
+                    </ol>
+                `,
+                tips_html: 'The Firewall page shows both fail2ban temporary bans and UFW permanent blocks. You can unblock from either directly.'
+            },
+            7: {
+                icon: '&#129302;',
+                title: 'ML & Threat Intelligence',
+                subtitle: 'Advanced Detection Capabilities',
+                content_html: `
+                    <p>SSH Guardian uses <strong>Machine Learning</strong> combined with <strong>3rd-party threat intelligence</strong> for comprehensive threat assessment.</p>
+
+                    <h3>Machine Learning Models</h3>
+                    <p>Supports 4 algorithms (configurable):</p>
+                    <table class="arch-table">
+                        <tr><td><strong>Random Forest</strong></td><td>Default - balanced performance (300 trees)</td></tr>
+                        <tr><td><strong>Isolation Forest</strong></td><td>Unsupervised anomaly detection</td></tr>
+                        <tr><td><strong>XGBoost</strong></td><td>High-performance gradient boosting</td></tr>
+                        <tr><td><strong>Gradient Boosting</strong></td><td>Sequential error correction</td></tr>
+                    </table>
+
+                    <h3>42 Features Analyzed</h3>
+                    <ul>
+                        <li><strong>Temporal:</strong> Hour, day of week, business hours, night time</li>
+                        <li><strong>Behavioral:</strong> Failed attempts (24h), success rate, attack velocity</li>
+                        <li><strong>Geographic:</strong> Country, coordinates, VPN/Tor/datacenter flags</li>
+                        <li><strong>Username:</strong> Is root, is system account, entropy, frequency</li>
+                        <li><strong>Network:</strong> Private IP, bogon, reserved ranges</li>
+                        <li><strong>Reputation:</strong> AbuseIPDB score, VirusTotal detections</li>
+                    </ul>
+
+                    <h3>Threat Intelligence APIs</h3>
+                    <table class="arch-table">
+                        <tr><td><strong>AbuseIPDB</strong></td><td>IP reputation (0-100), abuse reports, categories</td></tr>
+                        <tr><td><strong>VirusTotal</strong></td><td>Multi-vendor malware detection</td></tr>
+                        <tr><td><strong>Shodan</strong></td><td>Open ports, vulnerabilities (optional)</td></tr>
+                        <tr><td><strong>GeoIP</strong></td><td>Location, ISP, VPN/proxy detection</td></tr>
+                    </table>
+
+                    <h3>Model Training</h3>
+                    <p>From the ML page, you can:</p>
+                    <ul>
+                        <li>Trigger model retraining with recent data</li>
+                        <li>View training metrics (accuracy, F1, precision, recall)</li>
+                        <li>Compare algorithm performance</li>
+                        <li>Adjust anomaly sensitivity threshold</li>
+                    </ul>
+                `,
+                tips_html: 'API results are cached for 7 days to reduce costs. Configure your API keys in Settings > Integrations.'
+            },
+            8: {
+                icon: '&#9889;',
+                title: 'Auto-Blocking Rules',
+                subtitle: 'Configure Automated Threat Response',
+                content_html: `
+                    <p>SSH Guardian supports <strong>10+ rule types</strong> for automated blocking. Configure them in <strong>Settings > Blocking Rules</strong>.</p>
+
+                    <h3>Available Rule Types</h3>
+                    <table class="arch-table">
+                        <tr><td><strong>Brute Force</strong></td><td>X failed attempts in Y minutes</td></tr>
+                        <tr><td><strong>ML Threshold</strong></td><td>Block when risk_score exceeds value</td></tr>
+                        <tr><td><strong>AbuseIPDB Score</strong></td><td>Block IPs with high abuse confidence</td></tr>
+                        <tr><td><strong>Credential Stuffing</strong></td><td>Multiple usernames from same IP</td></tr>
+                        <tr><td><strong>Velocity</strong></td><td>High-frequency attacks (>10/minute)</td></tr>
+                        <tr><td><strong>Impossible Travel</strong></td><td>Same user from distant locations</td></tr>
+                        <tr><td><strong>Tor/VPN Detection</strong></td><td>Block anonymous access sources</td></tr>
+                        <tr><td><strong>Geographic</strong></td><td>Block specific countries</td></tr>
+                        <tr><td><strong>Off-Hours</strong></td><td>Block logins outside business hours</td></tr>
+                        <tr><td><strong>Threat Combo</strong></td><td>Multiple indicators combined</td></tr>
+                    </table>
+
+                    <h3>Rule Configuration</h3>
+                    <p>Each rule has:</p>
+                    <ul>
+                        <li><strong>Enabled/Disabled</strong> - Toggle without deleting</li>
+                        <li><strong>Priority</strong> - Order of evaluation (1-100)</li>
+                        <li><strong>Block Duration</strong> - 15min, 1hr, 24hr, permanent</li>
+                        <li><strong>Conditions</strong> - Thresholds and parameters</li>
+                        <li><strong>Scope</strong> - All agents or specific agents</li>
+                    </ul>
+
+                    <h3>Example Configurations</h3>
+                    <div class="code-block" style="font-size: 12px;">
+                        <code><strong># Brute Force Rule</strong></code><br>
+                        <code>Type: brute_force</code><br>
+                        <code>Threshold: 5 failures in 10 minutes</code><br>
+                        <code>Block Duration: 1 hour</code><br><br>
+                        <code><strong># High-Risk IP Rule</strong></code><br>
+                        <code>Type: ml_threshold</code><br>
+                        <code>Threshold: risk_score > 80</code><br>
+                        <code>Block Duration: Permanent</code>
+                    </div>
+
+                    <h3>Notifications</h3>
+                    <p>Get alerted when rules trigger:</p>
+                    <ul>
+                        <li><strong>Telegram</strong> - Instant bot notifications</li>
+                        <li><strong>Email</strong> - Detailed threat reports</li>
+                        <li><strong>Webhook</strong> - Custom integrations (Slack, Discord, etc.)</li>
+                    </ul>
+                `,
+                tips_html: 'Start with conservative thresholds and tighten over time. Monitor the Audit Log to see which rules trigger most often.'
+            }
+        };
+        return steps[stepNum] || steps[1];
     },
 
     // =========================================
     // THESIS FUNCTIONS
     // =========================================
 
-    /**
-     * Load thesis content from cache or API
-     */
     async loadThesis() {
         if (this.isLoading) return;
 
-        // Try cache first
         const cached = this.getFromCache(this.CACHE.THESIS_KEY, this.CACHE.THESIS_TIME_KEY);
-        if (cached) {
-            console.log('Overview: Loading thesis from cache');
+        if (cached?.sections?.length >= 10) {
             this.thesisData = cached;
-            this.renderThesisHeader();
-            this.renderThesisTOC();
-            this.renderThesisSections();
-            this.initScrollSpy();
+            this.renderThesis();
             return;
+        }
+
+        if (cached) {
+            localStorage.removeItem(this.CACHE.THESIS_KEY);
+            localStorage.removeItem(this.CACHE.THESIS_TIME_KEY);
         }
 
         this.isLoading = true;
@@ -582,232 +809,102 @@ const Overview = {
 
             if (result.success && result.data) {
                 this.thesisData = result.data;
-
-                // Save to cache
                 this.saveToCache(this.CACHE.THESIS_KEY, this.CACHE.THESIS_TIME_KEY, result.data);
-
-                this.renderThesisHeader();
-                this.renderThesisTOC();
-                this.renderThesisSections();
-                this.initScrollSpy();
+                this.renderThesis();
             } else {
-                this.renderDefaultThesis();
+                OverviewThesis.renderDefaultThesis();
             }
         } catch (error) {
             console.error('Error loading thesis:', error);
-            this.renderDefaultThesis();
+            OverviewThesis.renderDefaultThesis();
         } finally {
             this.isLoading = false;
         }
     },
 
-    /**
-     * Render thesis header
-     */
-    renderThesisHeader() {
-        const meta = this.thesisData?.metadata || {};
-
-        const titleEl = document.getElementById('overview-thesis-title-text');
-        if (titleEl) {
-            titleEl.textContent = meta.title || 'Research Thesis';
-        }
-
-        const metaGrid = document.getElementById('overview-thesis-meta-grid');
-        if (metaGrid) {
-            metaGrid.innerHTML = `
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Student</div>
-                    <div class="thesis-meta-value">${meta.student_name || 'Md Sohel Rana'} (${meta.student_id || 'TP086217'})</div>
-                </div>
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Institution</div>
-                    <div class="thesis-meta-value">${meta.institution || 'Asia Pacific University of Technology & Innovation'}</div>
-                </div>
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Supervisor</div>
-                    <div class="thesis-meta-value">${meta.supervisor || 'N/A'}</div>
-                </div>
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Module</div>
-                    <div class="thesis-meta-value">${meta.module_code || 'CT095-6-M RMCE'} ${meta.module_name || ''}</div>
-                </div>
-            `;
-        }
+    renderThesis() {
+        OverviewThesis.renderThesisHeader();
+        OverviewThesis.renderThesisTOC();
+        OverviewThesis.renderThesisSections();
+        OverviewThesis.initScrollSpy();
     },
 
-    /**
-     * Render table of contents
-     */
-    renderThesisTOC() {
-        const container = document.getElementById('overview-toc-list');
-        if (!container) return;
-
-        const toc = this.thesisData?.toc || [];
-
-        if (toc.length === 0) {
-            container.innerHTML = '<li class="toc-item"><span class="toc-link">No content available</span></li>';
-            return;
-        }
-
-        container.innerHTML = toc.map(item => `
-            <li class="toc-item level-${item.toc_level || 1}">
-                <a class="toc-link" href="#overview-section-${item.section_key}" onclick="Overview.scrollToSection('${item.section_key}'); return false;">
-                    ${item.chapter_number ? `<span class="toc-chapter-num">${item.chapter_number}</span>` : ''}
-                    ${item.title}
-                </a>
-            </li>
-        `).join('');
-    },
-
-    /**
-     * Render thesis sections
-     */
-    renderThesisSections() {
-        const container = document.getElementById('overview-thesis-sections');
-        if (!container) return;
-
-        const sections = this.thesisData?.sections || [];
-
-        if (sections.length === 0) {
-            this.renderDefaultThesis();
-            return;
-        }
-
-        container.innerHTML = sections.map(section => `
-            <section class="thesis-section" id="overview-section-${section.section_key}">
-                <div class="thesis-section-header">
-                    ${section.chapter_number ? `<span class="thesis-section-number">${section.chapter_number}</span>` : ''}
-                    <h2 class="thesis-section-title">${section.title}</h2>
-                </div>
-                <div class="thesis-section-content">
-                    ${section.content_html}
-                </div>
-            </section>
-        `).join('');
-    },
-
-    /**
-     * Render default thesis content
-     */
-    renderDefaultThesis() {
-        const titleEl = document.getElementById('overview-thesis-title-text');
-        if (titleEl) {
-            titleEl.textContent = 'Design and Evaluation of a Lightweight SSH Access Behavior Profiling and Anomaly Alerting Agent';
-        }
-
-        const metaGrid = document.getElementById('overview-thesis-meta-grid');
-        if (metaGrid) {
-            metaGrid.innerHTML = `
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Student</div>
-                    <div class="thesis-meta-value">Md Sohel Rana (TP086217)</div>
-                </div>
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Institution</div>
-                    <div class="thesis-meta-value">Asia Pacific University of Technology & Innovation</div>
-                </div>
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Module</div>
-                    <div class="thesis-meta-value">CT095-6-M RMCE</div>
-                </div>
-                <div class="thesis-meta-item">
-                    <div class="thesis-meta-label">Year</div>
-                    <div class="thesis-meta-value">2025</div>
-                </div>
-            `;
-        }
-
-        const tocContainer = document.getElementById('overview-toc-list');
-        if (tocContainer) {
-            tocContainer.innerHTML = `
-                <li class="toc-item"><a class="toc-link active" href="#overview-section-abstract" onclick="Overview.scrollToSection('abstract'); return false;"><span class="toc-chapter-num">-</span> Abstract</a></li>
-                <li class="toc-item"><a class="toc-link" href="#overview-section-intro" onclick="Overview.scrollToSection('intro'); return false;"><span class="toc-chapter-num">1</span> Introduction</a></li>
-                <li class="toc-item"><a class="toc-link" href="#overview-section-methodology" onclick="Overview.scrollToSection('methodology'); return false;"><span class="toc-chapter-num">3</span> Methodology</a></li>
-            `;
-        }
-
-        const sectionsContainer = document.getElementById('overview-thesis-sections');
-        if (sectionsContainer) {
-            sectionsContainer.innerHTML = `
-                <section class="thesis-section" id="overview-section-abstract">
-                    <div class="thesis-section-header">
-                        <span class="thesis-section-number">Abstract</span>
-                        <h2 class="thesis-section-title">Abstract</h2>
-                    </div>
-                    <div class="thesis-section-content">
-                        <p>This research presents the design, implementation, and evaluation of SSH Guardian, a lightweight SSH access behavior profiling and anomaly alerting agent for Small and Medium Enterprises (SMEs).</p>
-                        <p>The system employs Isolation Forest machine learning for unsupervised anomaly detection, integrated with threat intelligence services to provide comprehensive risk assessment.</p>
-                        <p><strong>Keywords:</strong> SSH Security, Anomaly Detection, Machine Learning, SME Cybersecurity</p>
-                    </div>
-                </section>
-                <section class="thesis-section" id="overview-section-intro">
-                    <div class="thesis-section-header">
-                        <span class="thesis-section-number">Chapter 1</span>
-                        <h2 class="thesis-section-title">Introduction</h2>
-                    </div>
-                    <div class="thesis-section-content">
-                        <h3>1.1 Background</h3>
-                        <p>The Secure Shell (SSH) protocol remains the primary method for remote server administration. However, SSH services face constant attack attempts including brute force attacks, credential stuffing, and targeted intrusions.</p>
-                        <h3>1.2 Problem Statement</h3>
-                        <p>Current SSH security solutions present challenges for SMEs: enterprise solutions are cost-prohibitive, manual analysis is error-prone, and traditional detection misses sophisticated patterns.</p>
-                    </div>
-                </section>
-                <section class="thesis-section" id="overview-section-methodology">
-                    <div class="thesis-section-header">
-                        <span class="thesis-section-number">Chapter 3</span>
-                        <h2 class="thesis-section-title">Methodology</h2>
-                    </div>
-                    <div class="thesis-section-content">
-                        <h3>3.1 System Architecture</h3>
-                        <p>SSH Guardian employs a five-layer architecture: Data Collection, Processing, Analysis, Alert, and Storage layers designed to balance accuracy with resource efficiency.</p>
-                        <p>Content is loaded from the database. Use the API to add full thesis content.</p>
-                    </div>
-                </section>
-            `;
-        }
-    },
-
-    /**
-     * Scroll to thesis section
-     */
     scrollToSection(sectionKey) {
-        const element = document.getElementById(`overview-section-${sectionKey}`);
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        OverviewThesis.scrollToSection(sectionKey);
+        this.closeMobileTOC();
+    },
 
-            // Update active TOC link
-            document.querySelectorAll('#overview-toc-list .toc-link').forEach(link => {
-                link.classList.toggle('active', link.href?.includes(sectionKey) || link.getAttribute('href')?.includes(sectionKey));
-            });
+    // =========================================
+    // MOBILE TOC
+    // =========================================
+
+    toggleMobileTOC() {
+        const toc = this.els.thesisToc || document.getElementById('overview-thesis-toc');
+        const overlay = this.els.tocOverlay || document.querySelector('.thesis-toc-overlay');
+        if (!toc) return;
+
+        if (toc.classList.contains('mobile-open')) {
+            this.closeMobileTOC();
+        } else {
+            toc.classList.add('mobile-open');
+            overlay?.classList.add('visible');
+            document.body.style.overflow = 'hidden';
         }
     },
 
-    /**
-     * Initialize scroll spy for TOC
-     */
-    initScrollSpy() {
-        const sections = document.querySelectorAll('#overview-thesis-sections .thesis-section');
-        const tocLinks = document.querySelectorAll('#overview-toc-list .toc-link');
+    closeMobileTOC() {
+        const toc = this.els.thesisToc || document.getElementById('overview-thesis-toc');
+        const overlay = this.els.tocOverlay || document.querySelector('.thesis-toc-overlay');
+        toc?.classList.remove('mobile-open');
+        overlay?.classList.remove('visible');
+        document.body.style.overflow = '';
+    },
 
-        if (sections.length === 0) return;
+    // =========================================
+    // DOCX EXPORT
+    // =========================================
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const sectionKey = entry.target.id.replace('overview-section-', '');
-                    tocLinks.forEach(link => {
-                        const href = link.href || link.getAttribute('href') || '';
-                        link.classList.toggle('active', href.includes(sectionKey));
-                    });
-                }
+    exportThesisDocx() {
+        const btn = document.querySelector('.btn-export-docx');
+        if (!btn) return;
+
+        const originalHTML = btn.innerHTML;
+        btn.classList.add('loading');
+        btn.innerHTML = '<span class="export-icon">&#8987;</span><span class="export-text">Exporting...</span>';
+
+        fetch('/api/dashboard/content/thesis/export/docx')
+            .then(response => {
+                if (!response.ok) throw new Error('Export failed');
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'SSH_Guardian_Thesis.docx';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+                btn.innerHTML = '<span class="export-icon">&#10004;</span><span class="export-text">Downloaded!</span>';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('loading');
+                }, 2000);
+            })
+            .catch(error => {
+                console.error('Export error:', error);
+                btn.innerHTML = '<span class="export-icon">&#10060;</span><span class="export-text">Error</span>';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('loading');
+                }, 3000);
             });
-        }, { threshold: 0.2, rootMargin: '-100px 0px -50% 0px' });
-
-        sections.forEach(section => observer.observe(section));
     }
 };
 
-// Navigation helper function for action cards
+// Navigation helper for action cards
 function navigateTo(page) {
     window.location.hash = page;
 }
@@ -819,7 +916,7 @@ function loadOverviewPage() {
     }
 }
 
-// Also listen for hash changes
+// Listen for hash changes
 window.addEventListener('hashchange', () => {
     if (window.location.hash === '#overview' && document.getElementById('page-overview')) {
         Overview.init();

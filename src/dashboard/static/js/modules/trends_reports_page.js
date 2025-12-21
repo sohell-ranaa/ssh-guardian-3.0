@@ -155,16 +155,16 @@
                     {
                         label: 'Failed',
                         data: timeline.map(d => d.failed),
-                        borderColor: '#D13438',
-                        backgroundColor: 'rgba(209, 52, 56, 0.1)',
+                        borderColor: TC.danger,
+                        backgroundColor: TC.dangerBg,
                         fill: true,
                         tension: 0.3
                     },
                     {
                         label: 'Successful',
                         data: timeline.map(d => d.successful),
-                        borderColor: '#2EA44F',
-                        backgroundColor: 'rgba(46, 164, 79, 0.1)',
+                        borderColor: TC.success,
+                        backgroundColor: TC.successBg,
                         fill: true,
                         tension: 0.3
                     }
@@ -214,7 +214,7 @@
 
         const renderChange = (change) => {
             const icon = change >= 0 ? '↑' : '↓';
-            const color = change >= 0 ? '#D13438' : '#2EA44F';
+            const color = change >= 0 ? TC.danger : TC.success;
             return `<span style="color: ${color};">${icon} ${Math.abs(change)}%</span>`;
         };
 
@@ -227,17 +227,17 @@
                 </div>
                 <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 4px;">
                     <div style="font-size: 11px; color: var(--text-secondary);">Failed</div>
-                    <div style="font-size: 20px; font-weight: 600; color: #D13438;">${formatNumber(comparison.current_period.failed_events)}</div>
+                    <div style="font-size: 20px; font-weight: 600; color: ${TC.danger};">${formatNumber(comparison.current_period.failed_events)}</div>
                     <div style="font-size: 11px;">${renderChange(comparison.changes.failed_events)}</div>
                 </div>
                 <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 4px;">
                     <div style="font-size: 11px; color: var(--text-secondary);">Unique IPs</div>
-                    <div style="font-size: 20px; font-weight: 600; color: #E6A502;">${formatNumber(comparison.current_period.unique_ips)}</div>
+                    <div style="font-size: 20px; font-weight: 600; color: ${TC.warning};">${formatNumber(comparison.current_period.unique_ips)}</div>
                     <div style="font-size: 11px;">${renderChange(comparison.changes.unique_ips)}</div>
                 </div>
                 <div style="text-align: center; padding: 12px; background: var(--background); border-radius: 4px;">
                     <div style="font-size: 11px; color: var(--text-secondary);">High Risk</div>
-                    <div style="font-size: 20px; font-weight: 600; color: #D13438;">${formatNumber(comparison.current_period.high_risk)}</div>
+                    <div style="font-size: 20px; font-weight: 600; color: ${TC.danger};">${formatNumber(comparison.current_period.high_risk)}</div>
                     <div style="font-size: 11px;">${renderChange(comparison.changes.high_risk)}</div>
                 </div>
             </div>
@@ -282,7 +282,7 @@
             <tr>
                 <td><span class="badge badge-secondary">#${index + 1}</span></td>
                 <td>
-                    <code style="color: #0078D4;">${attacker.ip}</code>
+                    <code style="color: ${TC.primary};">${attacker.ip}</code>
                     ${attacker.country ? `<br><small style="color: var(--text-hint);">${attacker.country}</small>` : ''}
                 </td>
                 <td><strong>${formatNumber(attacker.total_attempts)}</strong></td>
@@ -324,8 +324,8 @@
         if (countries.length === 0) return;
 
         const colors = [
-            '#0078D4', '#D13438', '#E6A502', '#2EA44F', '#8764B8',
-            '#00B7C3', '#F7630C', '#107C10'
+            TC.primary, TC.danger, TC.warning, TC.success, TC.purple,
+            TC.teal, TC.orange, TC.successDark
         ];
 
         countryChart = new Chart(ctx, {
@@ -464,25 +464,25 @@
                     {
                         label: 'Critical',
                         data: dailyData.map(d => d.critical),
-                        backgroundColor: '#D13438',
+                        backgroundColor: TC.danger,
                         stack: 'risk'
                     },
                     {
                         label: 'High',
                         data: dailyData.map(d => d.high),
-                        backgroundColor: '#E6A502',
+                        backgroundColor: TC.warning,
                         stack: 'risk'
                     },
                     {
                         label: 'Medium',
                         data: dailyData.map(d => d.medium),
-                        backgroundColor: '#0078D4',
+                        backgroundColor: TC.primary,
                         stack: 'risk'
                     },
                     {
                         label: 'Low',
                         data: dailyData.map(d => d.low),
-                        backgroundColor: '#2EA44F',
+                        backgroundColor: TC.success,
                         stack: 'risk'
                     }
                 ]

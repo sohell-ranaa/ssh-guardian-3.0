@@ -1,0 +1,181 @@
+/* Network Flags */
+.network-flags {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.network-flag {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+}
+
+.network-flag.tor { background: var(--color-purple); }
+.network-flag.vpn { background: var(--azure-blue); }
+.network-flag.proxy { background: var(--color-warning); }
+.network-flag.datacenter { background: var(--text-secondary); }
+
+/* ====== Section Card ====== */
+.section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.section-card:last-child { margin-bottom: 0; }
+
+.section-card.subtle {
+    background: var(--background);
+    border: none;
+}
+
+.section-header-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.section-header-row h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    flex: 1;
+}
+
+.section-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: white;
+}
+
+.section-icon.blue { background: var(--azure-blue); }
+.section-icon.green { background: var(--color-success-dark); }
+.section-icon.orange { background: var(--color-orange); }
+.section-icon.purple { background: var(--color-purple); }
+.section-icon.gray { background: var(--text-secondary); }
+
+.factor-count {
+    font-size: 11px;
+    color: var(--text-hint);
+    background: var(--background);
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+/* ====== Breakdown Grid ====== */
+.breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.breakdown-card {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.breakdown-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+}
+
+.breakdown-card.threat-intel::before { background: linear-gradient(90deg, var(--color-orange-dark), var(--color-orange)); }
+.breakdown-card.ml::before { background: linear-gradient(90deg, var(--azure-blue), var(--color-teal)); }
+.breakdown-card.behavioral::before { background: linear-gradient(90deg, var(--color-orange), var(--color-gold)); }
+.breakdown-card.geographic::before { background: linear-gradient(90deg, var(--color-purple), var(--color-purple)); }
+
+.breakdown-score {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.breakdown-card.threat-intel .breakdown-score { color: var(--color-orange-dark); }
+.breakdown-card.ml .breakdown-score { color: var(--azure-blue); }
+.breakdown-card.behavioral .breakdown-score { color: var(--color-orange); }
+.breakdown-card.geographic .breakdown-score { color: var(--color-purple); }
+
+.breakdown-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.breakdown-weight {
+    font-size: 9px;
+    color: var(--text-hint);
+    margin-top: 3px;
+}
+
+.breakdown-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.breakdown-bar-fill {
+    height: 100%;
+    background: var(--azure-blue);
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+.breakdown-card.threat-intel .breakdown-bar-fill { background: var(--color-orange-dark); }
+.breakdown-card.ml .breakdown-bar-fill { background: var(--azure-blue); }
+.breakdown-card.behavioral .breakdown-bar-fill { background: var(--color-orange); }
+.breakdown-card.geographic .breakdown-bar-fill { background: var(--color-purple); }
+
+/* ====== Stats Row ====== */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.stat-box {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-value.danger { color: var(--color-orange-dark); }
+.stat-value.success { color: var(--color-success-dark); }
+.stat-value.warning { color: var(--color-orange); }
+.stat-value.info { color: var(--azure-blue); }
+
+.stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+

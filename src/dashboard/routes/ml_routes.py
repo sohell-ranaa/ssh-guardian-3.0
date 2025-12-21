@@ -142,13 +142,14 @@ def get_predictions_timeline():
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # v3.1: Use auth_events_ml instead of ml_predictions
             cursor.execute("""
                 SELECT
                     DATE(created_at) as date,
                     COUNT(*) as predictions,
                     SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies,
                     AVG(risk_score) as avg_risk
-                FROM ml_predictions
+                FROM auth_events_ml
                 WHERE created_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
                 GROUP BY DATE(created_at)
                 ORDER BY date
@@ -157,11 +158,12 @@ def get_predictions_timeline():
             timeline = cursor.fetchall()
 
             # Format for charts
+            # v3.1: risk_score is now decimal(5,4) so multiply by 100 for percentage
             formatted = [{
                 'date': str(row['date']),
                 'predictions': int(row['predictions']),
                 'anomalies': int(row['anomalies'] or 0),
-                'avg_risk': round(float(row['avg_risk'] or 0), 1)
+                'avg_risk': round(float(row['avg_risk'] or 0) * 100, 1)
             } for row in timeline]
 
             # Cache the result
@@ -208,12 +210,12 @@ def list_models():
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # v3.1: Updated column names (auc_roc, predictions_count, promoted_at)
             query = """
                 SELECT
                     id, model_uuid, model_name, algorithm, version, status, is_active,
-                    accuracy, precision_score, recall_score, f1_score, roc_auc,
-                    training_samples, test_samples, predictions_made,
-                    training_completed_at, promoted_to_production_at, created_at
+                    accuracy, precision_score, recall_score, f1_score, auc_roc,
+                    predictions_count, promoted_at, created_at
                 FROM ml_models
             """
 
@@ -243,12 +245,12 @@ def list_models():
                         'precision': float(m['precision_score']) if m['precision_score'] else None,
                         'recall': float(m['recall_score']) if m['recall_score'] else None,
                         'f1_score': float(m['f1_score']) if m['f1_score'] else None,
-                        'roc_auc': float(m['roc_auc']) if m['roc_auc'] else None
+                        'roc_auc': float(m['auc_roc']) if m['auc_roc'] else None
                     },
-                    'training_samples': m['training_samples'],
-                    'test_samples': m['test_samples'],
-                    'predictions_made': m['predictions_made'],
-                    'trained_at': m['training_completed_at'].isoformat() if m['training_completed_at'] else None,
+                    'training_samples': None,  # v3.1: Not in this table
+                    'test_samples': None,       # v3.1: Not in this table
+                    'predictions_made': m['predictions_count'],
+                    'trained_at': m['promoted_at'].isoformat() if m['promoted_at'] else None,
                     'created_at': m['created_at'].isoformat() if m['created_at'] else None
                 })
 
@@ -287,12 +289,13 @@ def get_model(model_id):
             if not model:
                 return jsonify({'success': False, 'error': 'Model not found'}), 404
 
-            # Parse JSON fields
+            # v3.1: Parse JSON fields (updated field names)
             import json
-            for field in ['hyperparameters', 'feature_names', 'confusion_matrix', 'feature_importance']:
+            for field in ['hyperparameters', 'feature_config']:
                 if model.get(field):
                     try:
-                        model[field] = json.loads(model[field])
+                        if isinstance(model[field], str):
+                            model[field] = json.loads(model[field])
                     except Exception:
                         pass
 
@@ -835,6 +838,7 @@ def list_predictions():
         cursor_id = request.args.get('cursor')
         anomaly_only = request.args.get('anomaly_only', 'false').lower() == 'true'
         min_risk = int(request.args.get('min_risk', 0))
+        ip_filter = request.args.get('ip_filter')
 
         # Convert cursor to int if provided
         cursor_id = int(cursor_id) if cursor_id else None
@@ -849,7 +853,8 @@ def list_predictions():
                 limit=limit,
                 cursor_id=cursor_id,
                 anomaly_only=anomaly_only,
-                min_risk=min_risk
+                min_risk=min_risk,
+                ip_filter=ip_filter
             )
 
             return jsonify({
@@ -890,8 +895,9 @@ def submit_feedback(prediction_id):
         cursor = conn.cursor()
 
         try:
+            # v3.1: auth_events_ml instead of ml_predictions
             cursor.execute("""
-                UPDATE ml_predictions
+                UPDATE auth_events_ml
                 SET manual_feedback = %s, feedback_notes = %s, feedback_at = NOW()
                 WHERE id = %s
             """, (feedback, notes, prediction_id))

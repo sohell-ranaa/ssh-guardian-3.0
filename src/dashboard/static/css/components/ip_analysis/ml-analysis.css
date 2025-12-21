@@ -1,0 +1,184 @@
+/* ====== ML Analysis Tab ====== */
+.ml-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.08) 0%, rgba(135, 100, 184, 0.08) 100%);
+    border: 1px solid rgba(0, 120, 212, 0.15);
+    border-radius: 10px;
+    margin-bottom: 16px;
+}
+
+.ml-score-display {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.ml-circle {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 3px solid;
+}
+
+.ml-circle.danger { border-color: var(--color-orange-dark); }
+.ml-circle.warning { border-color: var(--color-orange); }
+.ml-circle.moderate { border-color: var(--color-gold); }
+.ml-circle.safe { border-color: var(--color-success-dark); }
+
+.ml-score-value {
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.ml-circle.danger .ml-score-value { color: var(--color-orange-dark); }
+.ml-circle.warning .ml-score-value { color: var(--color-orange); }
+.ml-circle.moderate .ml-score-value { color: var(--color-warning-dark); }
+.ml-circle.safe .ml-score-value { color: var(--color-success-dark); }
+
+.ml-score-meta { text-align: left; }
+
+.ml-score-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ml-confidence {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.ml-classification { text-align: right; }
+
+.classification-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.classification-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.anomaly-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--color-orange-dark);
+    color: white;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+/* ML Factors */
+.ml-factors-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ml-factor-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 12px;
+    background: var(--background);
+    border-radius: 8px;
+    gap: 12px;
+}
+
+.factor-info {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+}
+
+.factor-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.factor-details { flex: 1; }
+
+.factor-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.factor-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.factor-score {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.factor-score.danger { background: rgba(216, 59, 1, 0.1); color: var(--color-orange-dark); }
+.factor-score.warning { background: rgba(255, 140, 0, 0.1); color: var(--color-orange); }
+.factor-score.moderate { background: rgba(255, 185, 0, 0.1); color: var(--color-warning-dark); }
+.factor-score.safe { background: rgba(16, 124, 16, 0.1); color: var(--color-success-dark); }
+
+.empty-state {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-secondary);
+}
+
+.empty-state .empty-icon {
+    font-size: 24px;
+    display: block;
+    margin-bottom: 8px;
+    color: var(--color-success-dark);
+}
+
+/* Indicators */
+.indicators-grid, .indicators-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.indicator-chip, .indicator-tag {
+    padding: 5px 12px;
+    background: rgba(255, 140, 0, 0.1);
+    color: var(--color-warning);
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.indicator-tag.clean {
+    background: rgba(16, 124, 16, 0.1);
+    color: var(--color-success-dark);
+}
+
+/* Model Info */
+.model-info {
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--text-hint);
+    justify-content: center;
+}
+

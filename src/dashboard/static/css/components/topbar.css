@@ -1,99 +1,121 @@
-        /* Top Bar */
-        .topbar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: var(--topbar-height);
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 16px;
-            z-index: 1000;
-        }
+/* Top Bar */
+.topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--topbar-height);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 1000;
+}
 
-        .topbar-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
-        .menu-toggle {
-            width: 32px;
-            height: 32px;
-            border: none;
-            background: transparent;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 2px;
-            color: var(--text-primary);
-        }
+.menu-toggle {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 18px;
+    transition: background 0.15s;
+}
 
-        .menu-toggle:hover {
-            background: var(--background);
-        }
+.menu-toggle:hover {
+    background: var(--background);
+}
 
-        .logo {
-            width: 28px;
-            height: 28px;
-            background: var(--azure-blue);
-            border-radius: 2px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 14px;
-        }
+/* Logo styles are in logo.css */
 
-        .app-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
-        .topbar-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
 
-        .user-menu {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 8px;
-            border-radius: 2px;
-            cursor: pointer;
-        }
+.user-menu:hover {
+    background: var(--background);
+}
 
-        .user-menu:hover {
-            background: var(--background);
-        }
+.user-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
-        .user-name {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
+.btn-logout {
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
 
-        .btn-logout {
-            height: 28px;
-            padding: 0 12px;
-            border: 1px solid var(--border);
-            background: var(--surface);
-            color: var(--text-primary);
-            font-size: 12px;
-            font-weight: 600;
-            border-radius: 2px;
-            cursor: pointer;
-        }
+.btn-logout:hover {
+    background: var(--background);
+    border-color: var(--text-hint);
+}
 
-        .btn-logout:hover {
-            background: var(--background);
-        }
+/* Mobile Topbar */
+@media (max-width: 768px) {
+    .topbar {
+        padding: 0 12px;
+    }
 
+    .topbar-left {
+        gap: 8px;
+    }
+
+    .user-name {
+        display: none;
+    }
+
+    .user-menu {
+        display: none;
+    }
+
+    .btn-logout {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-title {
+        display: none;
+    }
+}

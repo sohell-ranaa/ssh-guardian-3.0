@@ -1,19 +1,70 @@
-<!-- SSH Guardian v3.0 - Notification Channels Page -->
+<!-- SSH Guardian v3.1 - Notification Channels Page -->
 <div id="page-notif-channels" class="page-content" style="display: none;">
+    <!-- Page Header -->
     <div class="page-header">
         <div>
-            <h1 class="page-title">Notification Channels</h1>
-            <p class="page-subtitle">Configure Telegram, Email, and other notification channels</p>
+            <h2 class="page-title">Notification Channels</h2>
+            <p class="page-subtitle">Configure Telegram, Email, and Webhook notification channels</p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button id="notif-channels-refresh-btn" class="btn btn-secondary">
-                Refresh
-            </button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="refresh-btn" onclick="loadNotificationChannelsPage()"><span class="refresh-icon">↻</span> Refresh</button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #0078D4, #005A9E);">
+                <span>📡</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Total Channels</div>
+                <div class="stat-value" id="stat-channels-total">3</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                <span>✓</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Active</div>
+                <div class="stat-value" id="stat-channels-active">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <span>⚙️</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Configured</div>
+                <div class="stat-value" id="stat-channels-configured">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                <span>⚠</span>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Errors</div>
+                <div class="stat-value" id="stat-channels-errors">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="info-banner" style="margin-bottom: 20px;">
+        <span class="info-banner-icon">💡</span>
+        <div class="info-banner-text">
+            Configure at least one notification channel to receive alerts.
+            Use <a href="#email-routing" style="color: var(--azure-blue);">Email Routing</a> to send different alerts to different email addresses.
         </div>
     </div>
 
     <!-- Channels Container -->
-    <div id="notif-channels-container" style="margin-top: 24px;">
-        <!-- Channels will be loaded here -->
+    <div id="notif-channels-container">
+        <div class="loading-placeholder" style="padding: 60px;">
+            <div class="loading-spinner"></div>
+            <span>Loading channels...</span>
+        </div>
     </div>
 </div>

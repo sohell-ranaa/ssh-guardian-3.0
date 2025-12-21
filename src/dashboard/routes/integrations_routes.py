@@ -1,6 +1,8 @@
 """
-Integrations Routes - API endpoints for third-party service integrations
+SSH Guardian v3.1 - Integrations Routes
+API endpoints for third-party service integrations
 Manages configuration for Telegram, AbuseIPDB, VirusTotal, Shodan, SMTP, etc.
+Updated for v3.1 schema with JSON config/credentials columns
 """
 import sys
 from pathlib import Path
@@ -17,7 +19,8 @@ from integrations_config import (
     get_integration_config_value,
     update_integration_config,
     set_integration_enabled,
-    update_test_result
+    update_test_result,
+    update_last_used
 )
 from cache import get_cache, cache_key
 
@@ -58,20 +61,20 @@ def list_integrations():
         }), 500
 
 
-@integrations_routes.route('/<integration_id>', methods=['GET'])
-def get_integration_details(integration_id):
+@integrations_routes.route('/<integration_type>', methods=['GET'])
+def get_integration_details(integration_type):
     """Get details for a specific integration"""
     try:
         # Try to get from cache
         cache = get_cache()
-        key = cache_key('integrations', integration_id)
+        key = cache_key('integrations', integration_type)
         cached_data = cache.get(key)
 
         if cached_data is not None:
             return jsonify(cached_data)
 
         # Fetch from database
-        integration = get_integration(integration_id)
+        integration = get_integration(integration_type)
 
         if not integration:
             return jsonify({
@@ -96,8 +99,8 @@ def get_integration_details(integration_id):
         }), 500
 
 
-@integrations_routes.route('/<integration_id>/configure', methods=['POST'])
-def configure_integration(integration_id):
+@integrations_routes.route('/<integration_type>/configure', methods=['POST'])
+def configure_integration(integration_type):
     """Update configuration for an integration"""
     try:
         data = request.json
@@ -109,15 +112,15 @@ def configure_integration(integration_id):
             }), 400
 
         # Update configuration
-        update_integration_config(integration_id, data)
+        update_integration_config(integration_type, data)
 
         # Invalidate cache for this integration and the list
         cache = get_cache()
-        cache.delete(cache_key('integrations', integration_id))
+        cache.delete(cache_key('integrations', integration_type))
         cache.delete(cache_key('integrations', 'list'))
 
         # Get updated integration
-        integration = get_integration(integration_id)
+        integration = get_integration(integration_type)
 
         return jsonify({
             'success': True,
@@ -132,20 +135,20 @@ def configure_integration(integration_id):
         }), 500
 
 
-@integrations_routes.route('/<integration_id>/enable', methods=['POST'])
-def enable_integration(integration_id):
+@integrations_routes.route('/<integration_type>/enable', methods=['POST'])
+def enable_integration(integration_type):
     """Enable an integration"""
     try:
-        set_integration_enabled(integration_id, True)
+        set_integration_enabled(integration_type, True)
 
         # Invalidate cache for this integration and the list
         cache = get_cache()
-        cache.delete(cache_key('integrations', integration_id))
+        cache.delete(cache_key('integrations', integration_type))
         cache.delete(cache_key('integrations', 'list'))
 
         return jsonify({
             'success': True,
-            'message': f'{integration_id} enabled successfully'
+            'message': f'{integration_type} enabled successfully'
         })
 
     except Exception as e:
@@ -155,20 +158,20 @@ def enable_integration(integration_id):
         }), 500
 
 
-@integrations_routes.route('/<integration_id>/disable', methods=['POST'])
-def disable_integration(integration_id):
+@integrations_routes.route('/<integration_type>/disable', methods=['POST'])
+def disable_integration(integration_type):
     """Disable an integration"""
     try:
-        set_integration_enabled(integration_id, False)
+        set_integration_enabled(integration_type, False)
 
         # Invalidate cache for this integration and the list
         cache = get_cache()
-        cache.delete(cache_key('integrations', integration_id))
+        cache.delete(cache_key('integrations', integration_type))
         cache.delete(cache_key('integrations', 'list'))
 
         return jsonify({
             'success': True,
-            'message': f'{integration_id} disabled successfully'
+            'message': f'{integration_type} disabled successfully'
         })
 
     except Exception as e:
@@ -178,37 +181,42 @@ def disable_integration(integration_id):
         }), 500
 
 
-@integrations_routes.route('/<integration_id>/test', methods=['POST'])
-def test_integration(integration_id):
+@integrations_routes.route('/<integration_type>/test', methods=['POST'])
+def test_integration(integration_type):
     """Test an integration connection"""
     try:
         # Get optional test parameters from request
-        test_params = request.json or {}
+        try:
+            test_params = request.json or {}
+        except Exception:
+            test_params = {}
 
-        if integration_id == 'telegram':
+        if integration_type == 'telegram':
             result = test_telegram(test_params)
-        elif integration_id == 'abuseipdb':
+        elif integration_type == 'abuseipdb':
             result = test_abuseipdb(test_params)
-        elif integration_id == 'virustotal':
+        elif integration_type == 'virustotal':
             result = test_virustotal(test_params)
-        elif integration_id == 'shodan':
+        elif integration_type == 'shodan':
             result = test_shodan(test_params)
-        elif integration_id == 'smtp':
+        elif integration_type == 'smtp':
             result = test_smtp(test_params)
-        elif integration_id == 'ipapi':
+        elif integration_type == 'ipapi':
             result = test_ipapi(test_params)
-        elif integration_id == 'freeipapi':
+        elif integration_type == 'freeipapi':
             result = test_freeipapi(test_params)
+        elif integration_type == 'greynoise':
+            result = test_greynoise(test_params)
         else:
             return jsonify({
                 'success': False,
-                'error': f'Unknown integration: {integration_id}'
+                'error': f'Unknown integration: {integration_type}'
             }), 404
 
         # Update test result in database
         response_data = result.get_json()
         update_test_result(
-            integration_id,
+            integration_type,
             response_data.get('success', False),
             response_data.get('message') or response_data.get('error')
         )
@@ -216,7 +224,7 @@ def test_integration(integration_id):
         return result
 
     except Exception as e:
-        update_test_result(integration_id, False, str(e))
+        update_test_result(integration_type, False, str(e))
         return jsonify({
             'success': False,
             'error': str(e)
@@ -248,11 +256,11 @@ def test_telegram(params=None):
         # If chat_id is configured, send a test message
         if chat_id:
             test_message = (
-                f"🔔 *SSH Guardian Test Notification*\n\n"
-                f"✅ Telegram integration is working correctly!\n"
-                f"🤖 Bot: @{bot_username}\n"
-                f"📅 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                f"_This is a test message from SSH Guardian v3.0_"
+                f"*SSH Guardian Test Notification*\n\n"
+                f"Telegram integration is working correctly!\n"
+                f"Bot: @{bot_username}\n"
+                f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"_This is a test message from SSH Guardian v3.1_"
             )
 
             msg_response = requests.post(
@@ -267,6 +275,8 @@ def test_telegram(params=None):
             msg_data = msg_response.json()
 
             if msg_data.get('ok'):
+                # Update last_used_at
+                update_last_used('telegram')
                 return jsonify({
                     'success': True,
                     'message': f'Test message sent to chat {chat_id} via @{bot_username}',
@@ -317,6 +327,7 @@ def test_abuseipdb(params=None):
 
         if response.status_code == 200:
             data = response.json().get('data', {})
+            update_last_used('abuseipdb')
             return jsonify({
                 'success': True,
                 'message': f'AbuseIPDB API verified - tested IP: {test_ip}',
@@ -358,6 +369,7 @@ def test_virustotal(params=None):
         if response.status_code == 200:
             data = response.json().get('data', {}).get('attributes', {})
             stats = data.get('last_analysis_stats', {})
+            update_last_used('virustotal')
             return jsonify({
                 'success': True,
                 'message': f'VirusTotal API verified - tested IP: {test_ip}',
@@ -396,6 +408,7 @@ def test_shodan(params=None):
 
         if response.status_code == 200:
             data = response.json()
+            update_last_used('shodan')
             return jsonify({
                 'success': True,
                 'message': 'Shodan API verified',
@@ -453,7 +466,7 @@ def test_smtp(params=None):
             <html>
             <body style="font-family: Arial, sans-serif; padding: 20px;">
                 <h2 style="color: #0078D4;">SSH Guardian Test Email</h2>
-                <p>This is a test email from SSH Guardian v3.0</p>
+                <p>This is a test email from SSH Guardian v3.1</p>
                 <p>If you're receiving this email, your SMTP integration is working correctly!</p>
                 <hr style="border: 1px solid #EDEBE9; margin: 20px 0;">
                 <p style="color: #605E5C; font-size: 12px;">
@@ -468,6 +481,7 @@ def test_smtp(params=None):
             server.sendmail(from_email, test_email, msg.as_string())
             server.quit()
 
+            update_last_used('smtp')
             return jsonify({
                 'success': True,
                 'message': f'Test email sent to {test_email}',
@@ -480,6 +494,7 @@ def test_smtp(params=None):
             })
         else:
             server.quit()
+            update_last_used('smtp')
             return jsonify({
                 'success': True,
                 'message': f'SMTP connection to {host}:{port} verified (no test email sent)',
@@ -513,6 +528,7 @@ def test_ipapi(params=None):
         if response.status_code == 200:
             data = response.json()
             if data.get('status') == 'success':
+                update_last_used('ipapi')
                 return jsonify({
                     'success': True,
                     'message': f'IP-API verified - tested IP: {test_ip}',
@@ -546,6 +562,7 @@ def test_freeipapi(params=None):
 
         if response.status_code == 200:
             data = response.json()
+            update_last_used('freeipapi')
             return jsonify({
                 'success': True,
                 'message': f'FreeIPAPI verified - tested IP: {test_ip}',
@@ -563,6 +580,84 @@ def test_freeipapi(params=None):
             })
         elif response.status_code == 429:
             return jsonify({'success': False, 'error': 'Rate limit exceeded'})
+        else:
+            return jsonify({'success': False, 'error': f'API returned status {response.status_code}'})
+    except requests.RequestException as e:
+        return jsonify({'success': False, 'error': f'Connection failed: {str(e)}'})
+
+
+def test_greynoise(params=None):
+    """Test GreyNoise API connection"""
+    import requests
+
+    api_key = get_integration_config_value('greynoise', 'api_key')
+    use_community = get_integration_config_value('greynoise', 'use_community_api')
+
+    test_ip = (params or {}).get('test_ip', '8.8.8.8')
+
+    try:
+        # Use community API if no key or use_community is true
+        if api_key and use_community != 'true':
+            url = f'https://api.greynoise.io/v2/noise/context/{test_ip}'
+            headers = {'key': api_key, 'Accept': 'application/json'}
+        else:
+            url = f'https://api.greynoise.io/v3/community/{test_ip}'
+            headers = {'Accept': 'application/json'}
+            if api_key:
+                headers['key'] = api_key
+
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            update_last_used('greynoise')
+
+            # Community API response format
+            if 'noise' in data:
+                return jsonify({
+                    'success': True,
+                    'message': f'GreyNoise API verified - tested IP: {test_ip}',
+                    'data': {
+                        'test_ip': test_ip,
+                        'noise': data.get('noise', False),
+                        'riot': data.get('riot', False),
+                        'classification': data.get('classification', 'unknown'),
+                        'name': data.get('name', ''),
+                        'api_type': 'enterprise' if api_key and use_community != 'true' else 'community'
+                    }
+                })
+            # Enterprise API response format
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': f'GreyNoise Enterprise API verified - tested IP: {test_ip}',
+                    'data': {
+                        'test_ip': test_ip,
+                        'seen': data.get('seen', False),
+                        'classification': data.get('classification', 'unknown'),
+                        'actor': data.get('actor', 'unknown'),
+                        'tags': data.get('tags', [])[:5],
+                        'api_type': 'enterprise'
+                    }
+                })
+        elif response.status_code == 401:
+            return jsonify({'success': False, 'error': 'Invalid API key'})
+        elif response.status_code == 404:
+            # IP not found in GreyNoise database - this is actually okay
+            update_last_used('greynoise')
+            return jsonify({
+                'success': True,
+                'message': f'GreyNoise API verified - IP {test_ip} not found in noise database (likely clean)',
+                'data': {
+                    'test_ip': test_ip,
+                    'noise': False,
+                    'riot': False,
+                    'classification': 'unknown',
+                    'api_type': 'community' if not api_key or use_community == 'true' else 'enterprise'
+                }
+            })
+        elif response.status_code == 429:
+            return jsonify({'success': False, 'error': 'Rate limit exceeded (100/day for community API)'})
         else:
             return jsonify({'success': False, 'error': f'API returned status {response.status_code}'})
     except requests.RequestException as e:

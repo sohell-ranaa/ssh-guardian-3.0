@@ -46,10 +46,11 @@ def get_unread_count():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # Count notifications that are not acknowledged as unread
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM notifications
-            WHERE is_read = FALSE OR is_read IS NULL
+            WHERE is_acknowledged = 0
         """)
 
         result = cursor.fetchone()
@@ -74,6 +75,51 @@ def get_unread_count():
         }), 500
 
 
+def derive_trigger_type(subject, message, is_security_alert):
+    """Derive trigger type from notification content for categorization"""
+    subject_lower = (subject or '').lower()
+    message_lower = (message or '').lower()
+
+    # Security alerts
+    if 'brute force' in subject_lower or 'brute force' in message_lower:
+        return 'brute_force_detected'
+    if 'high risk' in subject_lower or 'suspicious' in subject_lower:
+        return 'high_risk_detected'
+    if 'failed auth' in subject_lower or 'failed login' in subject_lower:
+        return 'failed_auth'
+    if is_security_alert:
+        return 'suspicious_activity'
+
+    # IP blocking
+    if 'blocked' in subject_lower and 'ip' in subject_lower:
+        return 'ip_blocked'
+    if 'unblocked' in subject_lower or 'removed' in subject_lower:
+        return 'ip_unblocked'
+
+    # System
+    if 'agent' in subject_lower:
+        return 'agent_status'
+    if 'config' in subject_lower or 'updated' in subject_lower:
+        return 'config_change'
+
+    return 'system'
+
+
+def derive_priority(subject, is_security_alert):
+    """Derive priority from notification content"""
+    subject_lower = (subject or '').lower()
+
+    if 'critical' in subject_lower or 'urgent' in subject_lower:
+        return 'critical'
+    if 'high risk' in subject_lower or 'attack' in subject_lower:
+        return 'high'
+    if is_security_alert:
+        return 'high'
+    if 'blocked' in subject_lower:
+        return 'normal'
+    return 'low'
+
+
 @notification_pane_routes.route('/recent', methods=['GET'])
 def get_recent_notifications():
     """Get recent notifications for pane display (max 20)"""
@@ -84,27 +130,33 @@ def get_recent_notifications():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Build query based on filter
+        # Build query based on filter - using simplified schema
         if unread_only:
             cursor.execute("""
                 SELECT
                     n.id,
-                    n.notification_uuid,
-                    n.trigger_type,
-                    n.trigger_event_id,
-                    n.trigger_block_id,
-                    n.message_title,
-                    n.message_body,
-                    n.priority,
+                    n.channel,
+                    n.recipient,
+                    n.subject as message_title,
+                    n.message as message_body,
                     n.status,
-                    n.is_read,
-                    n.read_at,
                     n.ip_address,
+                    n.username,
+                    n.is_security_alert,
+                    n.ml_score,
+                    n.ml_factors,
+                    n.geo_data,
+                    n.agent_id,
+                    n.is_acknowledged as is_read,
+                    n.acknowledged_at as read_at,
                     n.created_at,
-                    nr.rule_name
+                    nr.rule_name,
+                    a.display_name as agent_name,
+                    a.hostname as agent_hostname
                 FROM notifications n
                 LEFT JOIN notification_rules nr ON n.notification_rule_id = nr.id
-                WHERE n.is_read = FALSE OR n.is_read IS NULL
+                LEFT JOIN agents a ON n.agent_id = a.id
+                WHERE n.is_acknowledged = 0
                 ORDER BY n.created_at DESC
                 LIMIT %s
             """, (limit,))
@@ -112,35 +164,66 @@ def get_recent_notifications():
             cursor.execute("""
                 SELECT
                     n.id,
-                    n.notification_uuid,
-                    n.trigger_type,
-                    n.trigger_event_id,
-                    n.trigger_block_id,
-                    n.message_title,
-                    n.message_body,
-                    n.priority,
+                    n.channel,
+                    n.recipient,
+                    n.subject as message_title,
+                    n.message as message_body,
                     n.status,
-                    n.is_read,
-                    n.read_at,
                     n.ip_address,
+                    n.username,
+                    n.is_security_alert,
+                    n.ml_score,
+                    n.ml_factors,
+                    n.geo_data,
+                    n.agent_id,
+                    n.is_acknowledged as is_read,
+                    n.acknowledged_at as read_at,
                     n.created_at,
-                    nr.rule_name
+                    nr.rule_name,
+                    a.display_name as agent_name,
+                    a.hostname as agent_hostname
                 FROM notifications n
                 LEFT JOIN notification_rules nr ON n.notification_rule_id = nr.id
+                LEFT JOIN agents a ON n.agent_id = a.id
                 ORDER BY n.created_at DESC
                 LIMIT %s
             """, (limit,))
 
         notifications = cursor.fetchall()
 
-        # Format timestamps
+        # Format timestamps and derive trigger_type/priority
         for notif in notifications:
-            if notif['created_at']:
+            if notif.get('created_at'):
                 notif['created_at'] = notif['created_at'].isoformat()
-            if notif['read_at']:
+            if notif.get('read_at'):
                 notif['read_at'] = notif['read_at'].isoformat()
             # Ensure is_read is boolean
             notif['is_read'] = bool(notif.get('is_read', False))
+            # Derive trigger_type and priority for categorization
+            is_security = bool(notif.get('is_security_alert', False))
+            notif['trigger_type'] = derive_trigger_type(
+                notif.get('message_title'),
+                notif.get('message_body'),
+                is_security
+            )
+            notif['priority'] = derive_priority(notif.get('message_title'), is_security)
+            # Parse JSON fields
+            if notif.get('ml_factors'):
+                try:
+                    import json
+                    if isinstance(notif['ml_factors'], str):
+                        notif['ml_factors'] = json.loads(notif['ml_factors'])
+                except:
+                    notif['ml_factors'] = []
+            if notif.get('geo_data'):
+                try:
+                    import json
+                    if isinstance(notif['geo_data'], str):
+                        notif['geo_data'] = json.loads(notif['geo_data'])
+                except:
+                    notif['geo_data'] = {}
+            # Set agent name
+            notif['agent_name'] = notif.get('agent_name') or notif.get('agent_hostname') or None
 
         cursor.close()
         conn.close()
@@ -162,15 +245,15 @@ def get_recent_notifications():
 
 @notification_pane_routes.route('/<int:notif_id>/read', methods=['POST'])
 def mark_as_read(notif_id):
-    """Mark a single notification as read"""
+    """Mark a single notification as read (set is_acknowledged = 1)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             UPDATE notifications
-            SET is_read = TRUE, read_at = NOW()
-            WHERE id = %s AND (is_read = FALSE OR is_read IS NULL)
+            SET is_acknowledged = 1, acknowledged_at = NOW()
+            WHERE id = %s AND is_acknowledged = 0
         """, (notif_id,))
 
         affected = cursor.rowcount
@@ -199,15 +282,15 @@ def mark_as_read(notif_id):
 
 @notification_pane_routes.route('/mark-all-read', methods=['POST'])
 def mark_all_read():
-    """Mark all notifications as read"""
+    """Mark all notifications as read (set is_acknowledged = 1)"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             UPDATE notifications
-            SET is_read = TRUE, read_at = NOW()
-            WHERE is_read = FALSE OR is_read IS NULL
+            SET is_acknowledged = 1, acknowledged_at = NOW()
+            WHERE is_acknowledged = 0
         """)
 
         affected = cursor.rowcount
@@ -236,14 +319,14 @@ def mark_all_read():
 
 @notification_pane_routes.route('/<int:notif_id>/unread', methods=['POST'])
 def mark_as_unread(notif_id):
-    """Mark a notification as unread"""
+    """Mark a notification as unread (set status to 'pending')"""
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             UPDATE notifications
-            SET is_read = FALSE, read_at = NULL
+            SET status = 'pending', sent_at = NULL
             WHERE id = %s
         """, (notif_id,))
 
@@ -404,7 +487,7 @@ def execute_quick_action(notif_id):
         elif action == 'mark_read':
             cursor.execute("""
                 UPDATE notifications
-                SET is_read = TRUE, read_at = NOW()
+                SET status = 'sent', sent_at = NOW()
                 WHERE id = %s
             """, (notif_id,))
             conn.commit()

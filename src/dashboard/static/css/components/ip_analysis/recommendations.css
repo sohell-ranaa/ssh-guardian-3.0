@@ -1,0 +1,233 @@
+/* Timeline */
+.timeline-row {
+    display: flex;
+    gap: 24px;
+}
+
+.timeline-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.timeline-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.timeline-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* ====== Recommendations Tab ====== */
+.recommendations-intro {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--background);
+    border-radius: 8px;
+}
+
+.recommendations-count {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--azure-blue);
+    margin-right: 6px;
+}
+
+.recommendations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.recommendation-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    border-left: 4px solid;
+    transition: box-shadow 0.2s;
+}
+
+.recommendation-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.recommendation-card.critical { border-left-color: var(--color-danger-dark); }
+.recommendation-card.high { border-left-color: var(--color-orange-dark); }
+.recommendation-card.medium { border-left-color: var(--color-orange); }
+.recommendation-card.low { border-left-color: var(--color-success-dark); }
+
+.rec-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.rec-number {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.rec-title-group { flex: 1; }
+
+.rec-action {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.rec-reason {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.rec-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.rec-priority {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+}
+
+.rec-priority.critical { background: var(--color-danger-dark); }
+.rec-priority.high { background: var(--color-orange-dark); }
+.rec-priority.medium { background: var(--color-orange); }
+.rec-priority.low { background: var(--color-success-dark); }
+
+.rec-confidence {
+    font-size: 11px;
+    color: var(--text-hint);
+}
+
+.rec-evidence {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--background);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.evidence-item {
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.evidence-item:last-child { margin-bottom: 0; }
+
+.rec-risk {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(168, 0, 0, 0.06);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--color-danger-dark);
+    line-height: 1.4;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.quick-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid;
+}
+
+.quick-action-btn.danger {
+    background: rgba(216, 59, 1, 0.1);
+    border-color: rgba(216, 59, 1, 0.2);
+    color: var(--color-orange-dark);
+}
+
+.quick-action-btn.danger:hover {
+    background: var(--color-orange-dark);
+    color: white;
+}
+
+.quick-action-btn.warning {
+    background: rgba(255, 140, 0, 0.1);
+    border-color: rgba(255, 140, 0, 0.2);
+    color: var(--color-orange);
+}
+
+.quick-action-btn.warning:hover {
+    background: var(--color-orange);
+    color: white;
+}
+
+.quick-action-btn.success {
+    background: rgba(16, 124, 16, 0.1);
+    border-color: rgba(16, 124, 16, 0.2);
+    color: var(--color-success-dark);
+}
+
+.quick-action-btn.success:hover {
+    background: var(--color-success-dark);
+    color: white;
+}
+
+/* Empty Recommendations */
+.empty-recommendations {
+    text-align: center;
+    padding: 48px 24px;
+}
+
+.empty-recommendations .empty-icon {
+    font-size: 48px;
+    color: var(--color-success-dark);
+    margin-bottom: 12px;
+}
+
+.empty-recommendations .empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.empty-recommendations .empty-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+

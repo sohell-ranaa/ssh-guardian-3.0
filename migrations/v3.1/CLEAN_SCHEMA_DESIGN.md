@@ -101,7 +101,8 @@
 - Duplicate firewall: agent_firewall_*, firewall_rule_templates
 - Redundant: ip_watchlist, ip_whitelist, ip_reports
 - Merged: ip_threat_intelligence → ip_geolocation
-- Merged: system_config, cache_settings → system_settings
+- Merged: system_config → system_settings
+- Removed: cache_settings (caching now uses hardcoded values in code)
 - Merged: integration_config → integrations
 - Renamed: ip_block_events → blocking_actions (consolidated)
 - Removed: proactive_evaluations, fail2ban_ml_evaluations (merged into main tables)

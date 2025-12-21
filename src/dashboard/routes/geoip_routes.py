@@ -220,41 +220,61 @@ def get_stats():
 
 @geoip_routes.route('/api/geoip/recent', methods=['GET'])
 def get_recent():
-    """Get recently looked up IPs with caching"""
+    """Get IP geolocation records with pagination, search and filters"""
     try:
-        limit = request.args.get('limit', 50, type=int)
+        # Pagination params
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 20, type=int)
+        offset = (page - 1) * limit
 
-        cache = get_cache()
-        cache_k = cache_key('geoip', 'recent', str(limit))
-
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'data': cached['data'],
-                'total': cached['total'],
-                'from_cache': True
-            })
+        # Filter params
+        search = request.args.get('search', '').strip()
+        filter_type = request.args.get('type', '').strip()
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("""
+        # Build WHERE clause
+        where_parts = []
+        params = []
+
+        if search:
+            where_parts.append("ip_address_text LIKE %s")
+            params.append(f"%{search}%")
+
+        if filter_type == 'proxy':
+            where_parts.append("is_proxy = 1")
+        elif filter_type == 'vpn':
+            where_parts.append("is_vpn = 1")
+        elif filter_type == 'tor':
+            where_parts.append("is_tor = 1")
+
+        where_clause = ""
+        if where_parts:
+            where_clause = "WHERE " + " AND ".join(where_parts)
+
+        # Get total count
+        cursor.execute(f"SELECT COUNT(*) as total FROM ip_geolocation {where_clause}", params)
+        total = cursor.fetchone()['total']
+
+        # Get data
+        cursor.execute(f"""
             SELECT
                 ip_address_text,
                 country_code,
                 country_name,
                 city,
+                isp,
                 asn_org,
                 is_proxy,
                 is_vpn,
                 is_tor,
                 last_seen
             FROM ip_geolocation
+            {where_clause}
             ORDER BY last_seen DESC
-            LIMIT %s
-        """, (limit,))
+            LIMIT %s OFFSET %s
+        """, params + [limit, offset])
 
         results = cursor.fetchall()
 
@@ -266,27 +286,62 @@ def get_recent():
         cursor.close()
         conn.close()
 
-        cache_data = {'data': results, 'total': len(results)}
-        cache.set(cache_k, cache_data, GEOIP_RECENT_TTL)
+        total_pages = (total + limit - 1) // limit
 
         return jsonify({
             'success': True,
             'data': results,
-            'total': len(results),
-            'from_cache': False
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total,
+                'total_pages': total_pages,
+                'has_prev': page > 1,
+                'has_next': page < total_pages
+            }
         })
 
     except Exception as e:
         return jsonify({
             'success': False,
-            'error': f'Failed to get recent IPs: {str(e)}'
+            'error': f'Failed to get IPs: {str(e)}'
         }), 500
+
+
+def is_private_ip(ip_address):
+    """Check if an IP address is private/internal"""
+    try:
+        parts = ip_address.split('.')
+        if len(parts) != 4:
+            return False
+        first, second = int(parts[0]), int(parts[1])
+        # 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16
+        if first == 10:
+            return True
+        if first == 172 and 16 <= second <= 31:
+            return True
+        if first == 192 and second == 168:
+            return True
+        if first == 127:
+            return True
+        if first == 169 and second == 254:
+            return True
+        return False
+    except:
+        return False
 
 
 @geoip_routes.route('/api/geoip/enrich/<ip_address>', methods=['POST'])
 def enrich_ip(ip_address):
     """Manually trigger GeoIP enrichment for an IP address"""
     try:
+        # Check for private IP
+        if is_private_ip(ip_address):
+            return jsonify({
+                'success': False,
+                'error': 'Private IP addresses cannot be enriched from external APIs'
+            }), 400
+
         # Perform GeoIP lookup
         geo_lookup = GeoIPLookup()
         geo_data = geo_lookup.lookup_ip(ip_address)
@@ -305,7 +360,7 @@ def enrich_ip(ip_address):
         else:
             return jsonify({
                 'success': False,
-                'error': 'Failed to enrich IP address'
+                'error': 'GeoIP lookup failed. The IP may be invalid or the API may be temporarily unavailable.'
             }), 500
 
     except Exception as e:

@@ -1,0 +1,519 @@
+/**
+ * SSH Guardian v3.0 - ML Training Page Styles
+ * Extracted from ml_training.html for better maintainability
+ */
+
+/* ML Training Page Styles */
+#page-ml-training .training-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+#page-ml-training .stat-card {
+    padding: 16px;
+    text-align: center;
+}
+
+#page-ml-training .stat-label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+#page-ml-training .stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+#page-ml-training .stat-value.stat-blue { color: var(--azure-blue); }
+#page-ml-training .stat-value.stat-red { color: var(--color-danger); }
+#page-ml-training .stat-value.stat-green { color: var(--color-success); }
+#page-ml-training .stat-value.stat-small { font-size: 14px; }
+
+#page-ml-training .training-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+    #page-ml-training .training-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+#page-ml-training .section-title {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#page-ml-training .section-icon {
+    font-size: 20px;
+}
+
+/* Form Styles */
+#page-ml-training .form-group {
+    margin-bottom: 16px;
+}
+
+#page-ml-training .form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+#page-ml-training .form-input,
+#page-ml-training .form-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 13px;
+    transition: border-color 0.2s;
+}
+
+#page-ml-training .form-input:focus,
+#page-ml-training .form-select:focus {
+    outline: none;
+    border-color: var(--azure-blue);
+}
+
+#page-ml-training .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+#page-ml-training .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+#page-ml-training .checkbox-input {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Template Info */
+#page-ml-training .template-info {
+    background: var(--background);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+#page-ml-training .template-info-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+#page-ml-training .template-info-desc {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+/* Buttons */
+#page-ml-training .btn {
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+#page-ml-training .btn-full {
+    width: 100%;
+}
+
+#page-ml-training .btn-success {
+    background: var(--color-success);
+    color: white;
+}
+
+#page-ml-training .btn-success:hover:not(:disabled) {
+    background: var(--color-green-700);
+}
+
+#page-ml-training .btn-warning {
+    background: var(--color-warning);
+    color: white;
+}
+
+#page-ml-training .btn-warning:hover:not(:disabled) {
+    background: var(--color-amber-600);
+}
+
+#page-ml-training .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Progress */
+#page-ml-training .progress-container {
+    margin-top: 16px;
+}
+
+#page-ml-training .progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+#page-ml-training .progress-status {
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+#page-ml-training .progress-percent {
+    font-size: 12px;
+    color: var(--azure-blue);
+    font-weight: 600;
+}
+
+#page-ml-training .progress-track {
+    height: 6px;
+    background: var(--background);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#page-ml-training .progress-bar {
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s;
+    border-radius: 3px;
+}
+
+#page-ml-training .progress-bar-warning {
+    background: var(--color-warning);
+}
+
+#page-ml-training .progress-bar-success {
+    background: var(--color-success);
+}
+
+#page-ml-training .progress-bar-error {
+    background: var(--color-danger);
+}
+
+#page-ml-training .progress-message {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+/* Quick Generate */
+#page-ml-training .quick-generate-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+#page-ml-training .quick-generate-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+#page-ml-training .quick-generate-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+#page-ml-training .quick-gen-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: all 0.2s;
+}
+
+#page-ml-training .quick-gen-btn:hover:not(:disabled) {
+    border-color: var(--azure-blue);
+    background: rgba(0, 120, 212, 0.05);
+}
+
+#page-ml-training .quick-gen-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#page-ml-training .quick-gen-btn.loading {
+    background: var(--azure-blue);
+    color: white;
+    border-color: var(--azure-blue);
+}
+
+/* Info & Warning Boxes */
+#page-ml-training .info-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+}
+
+#page-ml-training .info-box-blue {
+    background: rgba(0, 120, 212, 0.1);
+}
+
+#page-ml-training .info-icon {
+    font-size: 18px;
+}
+
+#page-ml-training .info-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+#page-ml-training .info-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+#page-ml-training .warning-box {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(230, 165, 2, 0.1);
+    border-radius: 4px;
+    border-left: 3px solid var(--color-warning);
+}
+
+#page-ml-training .warning-title {
+    font-size: 12px;
+    color: var(--color-warning);
+    font-weight: 600;
+}
+
+#page-ml-training .warning-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Loading Placeholder */
+#page-ml-training .loading-placeholder {
+    color: var(--text-secondary);
+    padding: 20px;
+    text-align: center;
+}
+
+/* Data Table */
+#page-ml-training .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+#page-ml-training .data-table thead tr {
+    background: var(--background);
+    border-bottom: 2px solid var(--border);
+}
+
+#page-ml-training .data-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+#page-ml-training .data-table th.text-center {
+    text-align: center;
+}
+
+#page-ml-training .data-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+#page-ml-training .data-table td.text-center {
+    text-align: center;
+}
+
+/* Model Cards */
+#page-ml-training .models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+#page-ml-training .model-card {
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--background);
+    transition: all 0.2s;
+}
+
+#page-ml-training .model-card.active {
+    background: rgba(46, 164, 79, 0.05);
+    border-color: var(--color-success);
+}
+
+#page-ml-training .model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 12px;
+}
+
+#page-ml-training .model-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+#page-ml-training .model-version {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+#page-ml-training .model-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+#page-ml-training .model-badge.active {
+    background: rgba(46, 164, 79, 0.2);
+    color: var(--color-success);
+}
+
+#page-ml-training .model-badge.candidate {
+    background: rgba(0, 120, 212, 0.2);
+    color: var(--azure-blue);
+}
+
+#page-ml-training .model-badge.deprecated {
+    background: rgba(128, 128, 128, 0.2);
+    color: var(--text-secondary);
+}
+
+#page-ml-training .model-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#page-ml-training .metric-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+#page-ml-training .metric-value {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#page-ml-training .metric-value.good {
+    color: var(--color-success);
+}
+
+#page-ml-training .model-samples {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+#page-ml-training .model-actions {
+    display: flex;
+    gap: 8px;
+}
+
+#page-ml-training .model-actions .btn {
+    flex: 1;
+    padding: 8px;
+    font-size: 12px;
+}
+
+#page-ml-training .btn-outline-danger {
+    background: var(--surface);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
+}
+
+#page-ml-training .btn-outline-danger:hover {
+    background: rgba(209, 52, 56, 0.1);
+}
+
+#page-ml-training .btn-disabled {
+    background: var(--background);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    cursor: default;
+}
+
+/* Status Badge */
+#page-ml-training .status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+#page-ml-training .status-completed {
+    background: rgba(46, 164, 79, 0.1);
+    color: var(--color-success);
+}
+
+#page-ml-training .status-failed {
+    background: rgba(209, 52, 56, 0.1);
+    color: var(--color-danger);
+}
+
+#page-ml-training .status-training {
+    background: rgba(230, 165, 2, 0.1);
+    color: var(--color-warning);
+}
+
+/* Empty State */
+#page-ml-training .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+#page-ml-training .empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+#page-ml-training .empty-state-title {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+#page-ml-training .empty-state-desc {
+    font-size: 12px;
+}

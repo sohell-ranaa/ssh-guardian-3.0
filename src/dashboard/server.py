@@ -36,6 +36,7 @@ from routes.audit_routes import audit_routes
 from routes.notification_rules_routes import notification_rules_routes
 from routes.notification_history_routes import notification_history_routes
 from routes.notification_channels_routes import notification_channels_routes
+from routes.email_routing_routes import email_routing_routes
 from routes.daily_reports_routes import daily_reports_routes
 from routes.trends_reports_routes import trends_reports_routes
 from routes.simulation_routes import simulation_routes
@@ -45,13 +46,14 @@ from routes.ml_training_routes import ml_training_routes
 from routes.demo_routes import demo_routes
 from routes.pipeline_simulation_routes import pipeline_simulation_routes
 from routes.system_routes import system_routes
-from routes.cache_settings_routes import cache_settings_routes
 from routes.export_routes import export_routes
 from routes.event_actions_routes import event_actions_routes
+from routes.trusted_sources_routes import trusted_bp
 from routes.ip_info_routes import ip_info_routes
 from routes.dashboard_content_routes import dashboard_content_routes
 from routes.notification_pane_routes import notification_pane_routes
 from routes.fail2ban_routes import fail2ban_routes
+from routes.block_events_routes import block_events_routes
 from auth import SessionManager, login_required
 
 # Import API blueprints
@@ -86,6 +88,7 @@ app.register_blueprint(audit_routes, url_prefix='/api/dashboard/audit')  # Audit
 app.register_blueprint(notification_rules_routes, url_prefix='/api/dashboard/notification-rules')  # Notification rules
 app.register_blueprint(notification_history_routes, url_prefix='/api/dashboard/notification-history')  # Notification history
 app.register_blueprint(notification_channels_routes, url_prefix='/api/dashboard/notification-channels')  # Notification channels
+app.register_blueprint(email_routing_routes, url_prefix='/api/dashboard/email-routing')  # Email routing rules
 app.register_blueprint(daily_reports_routes, url_prefix='/api/dashboard/daily-reports')  # Daily reports
 app.register_blueprint(trends_reports_routes, url_prefix='/api/dashboard/trends-reports')  # Trends reports
 app.register_blueprint(simulation_routes, url_prefix='/api/simulation')  # Simulation API
@@ -94,15 +97,16 @@ app.register_blueprint(ml_routes)  # ML Intelligence API
 app.register_blueprint(ml_training_routes)  # ML Training API
 app.register_blueprint(demo_routes, url_prefix='/api/demo')  # Demo scenarios API
 app.register_blueprint(pipeline_simulation_routes, url_prefix='/api/pipeline-sim')  # Full pipeline simulation API
-app.register_blueprint(system_routes, url_prefix='/api/dashboard/system')  # System status & cache API
-app.register_blueprint(cache_settings_routes, url_prefix='/api/dashboard/cache-settings')  # Cache settings API
+app.register_blueprint(system_routes, url_prefix='/api/dashboard/system')  # System status API
 app.register_blueprint(export_routes)  # Data export API
 app.register_blueprint(event_actions_routes)  # Event actions API (whitelist, watchlist, notes, reports)
 app.register_blueprint(ip_info_routes)  # IP geolocation info API (FreeIPAPI)
 app.register_blueprint(dashboard_content_routes, url_prefix='/api/dashboard/content')  # Dashboard content API (thesis/guide)
 app.register_blueprint(notification_pane_routes, url_prefix='/api/notifications')  # Notification pane API
 app.register_blueprint(fail2ban_routes, url_prefix='/api/dashboard/fail2ban')  # Fail2ban events API
+app.register_blueprint(block_events_routes)  # Block events history API
 app.register_blueprint(events_api)  # API for agent event submission
+app.register_blueprint(trusted_bp)  # Trusted sources API
 
 
 @app.route('/')
@@ -330,12 +334,12 @@ def add_cache_control_headers(response):
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
 
-        # For static files (CSS, JS, images) - allow short caching
+        # For static files (CSS, JS, images) - short cache with revalidation
         elif (request.path.startswith('/static/') or
               request.path.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf'))):
 
-            # Cache static files for 1 hour, but revalidate
-            response.headers['Cache-Control'] = 'public, max-age=3600, must-revalidate'
+            # Cache static files for 5 minutes, but always revalidate
+            response.headers['Cache-Control'] = 'public, max-age=300, must-revalidate'
 
         # Default for everything else - no cache
         else:

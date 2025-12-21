@@ -1,0 +1,307 @@
+/**
+ * SSH Guardian v3.0 - Blocked IPs Table Styles
+ * Table layout, columns, badges, empty/error states
+ */
+
+.blocked-ips-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.blocked-ips-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+}
+
+.blocked-ips-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.blocked-ips-count {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.blocked-ips-filter {
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.blocked-ips-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Blocked IP Table Header */
+.blocked-ip-header {
+    display: grid;
+    grid-template-columns: 180px 100px 120px 1fr 90px;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--background);
+    border-bottom: 2px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Blocked IP Row */
+.blocked-ip-row {
+    display: grid;
+    grid-template-columns: 180px 100px 120px 1fr 90px;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    align-items: center;
+}
+
+.blocked-ip-row:last-child {
+    border-bottom: none;
+}
+
+.blocked-ip-row:hover {
+    background: rgba(0, 120, 212, 0.04);
+    border-left: 3px solid var(--azure-blue);
+    padding-left: 13px;
+}
+
+/* Column: IP Address */
+.blocked-col-ip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.blocked-ip-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.blocked-ip-icon.ufw {
+    background: linear-gradient(135deg, rgba(16, 124, 16, 0.15), rgba(16, 124, 16, 0.08));
+}
+
+.blocked-ip-icon.fail2ban {
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.15), rgba(0, 120, 212, 0.08));
+}
+
+.blocked-ip-icon.rule_based {
+    background: linear-gradient(135deg, rgba(209, 52, 56, 0.15), rgba(209, 52, 56, 0.08));
+}
+
+.blocked-ip-icon.ml_behavioral,
+.blocked-ip-icon.ml_model {
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.15), rgba(147, 51, 234, 0.08));
+}
+
+.blocked-ip-icon.manual {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.08));
+}
+
+.blocked-ip-address {
+    font-family: 'SF Mono', Monaco, 'Consolas', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Column: Source Badge */
+.blocked-col-source {
+    display: flex;
+    align-items: center;
+}
+
+.blocked-source-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.blocked-source-badge.ufw {
+    background: linear-gradient(135deg, var(--color-success-dark) 0%, var(--color-success-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(16, 124, 16, 0.25);
+}
+
+.blocked-source-badge.fail2ban {
+    background: linear-gradient(135deg, var(--azure-blue) 0%, var(--azure-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 120, 212, 0.25);
+}
+
+.blocked-source-badge.rule_based {
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(209, 52, 56, 0.25);
+}
+
+.blocked-source-badge.ml_behavioral,
+.blocked-source-badge.ml_model {
+    background: linear-gradient(135deg, var(--color-purple-dark) 0%, var(--color-purple-gradient) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(147, 51, 234, 0.25);
+}
+
+.blocked-source-badge.manual {
+    background: linear-gradient(135deg, var(--color-purple) 0%, var(--color-indigo) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
+}
+
+.blocked-source-badge.unknown {
+    background: linear-gradient(135deg, var(--color-gray-muted) 0%, var(--color-gray-600) 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(107, 114, 128, 0.25);
+}
+
+/* Column: Server */
+.blocked-col-server {
+    display: flex;
+    align-items: center;
+}
+
+.blocked-server-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Column: Reason */
+.blocked-col-reason {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.blocked-reason-text {
+    font-size: 12px;
+    color: var(--text-primary);
+    background: rgba(255, 183, 77, 0.12);
+    padding: 6px 10px;
+    border-radius: 4px;
+    border-left: 3px solid var(--color-warning-light);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* Column: Time */
+.blocked-col-time {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.blocked-time-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* Legacy support for old card layout */
+.blocked-ip-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.blocked-ip-card:hover {
+    background: var(--background);
+}
+
+/* Empty state */
+.blocked-empty-state {
+    padding: 48px 20px;
+    text-align: center;
+}
+
+.blocked-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.blocked-empty-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.blocked-empty-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Error state */
+.blocked-ip-error {
+    padding: 20px;
+    text-align: center;
+    color: var(--color-danger);
+    background: var(--color-danger-bg);
+    border-radius: 6px;
+    margin: 12px;
+}

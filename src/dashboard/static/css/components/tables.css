@@ -1,4 +1,4 @@
-/* SSH Guardian v3.0 - Data Tables */
+/* SSH Guardian v3.0 - Tables */
 
 .data-table {
     width: 100%;
@@ -10,23 +10,27 @@
     text-align: left;
     font-size: 12px;
     font-weight: 600;
-    color: #605E5C;
-    background: #FAF9F8;
-    border-bottom: 1px solid #EDEBE9;
+    color: var(--text-secondary);
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
 }
 
 .data-table td {
     padding: 12px;
-    border-bottom: 1px solid #EDEBE9;
-    color: #323130;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
     font-size: 13px;
 }
 
-.data-table tr:hover {
-    background: #FAF9F8;
+.data-table tbody tr:hover {
+    background: var(--background);
 }
 
-/* Table Wrapper for Horizontal Scroll */
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Table Wrapper */
 .table-wrapper {
     width: 100%;
     overflow-x: auto;
@@ -35,7 +39,6 @@
 
 .table-wrapper table {
     min-width: 100%;
-    white-space: nowrap;
 }
 
 /* Table Actions */
@@ -59,4 +62,30 @@
     padding: 40px 20px;
     color: var(--text-hint);
     font-size: 14px;
+}
+
+/* Sortable Headers */
+.data-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.data-table th.sortable:hover {
+    background: var(--border);
+}
+
+.data-table th.sortable::after {
+    content: '';
+    margin-left: 6px;
+    opacity: 0.4;
+}
+
+.data-table th.sortable.asc::after {
+    content: '▲';
+    opacity: 1;
+}
+
+.data-table th.sortable.desc::after {
+    content: '▼';
+    opacity: 1;
 }

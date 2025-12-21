@@ -1,6 +1,7 @@
 """
-SSH Guardian v3.0 - Authentication Routes
+SSH Guardian v3.1 - Authentication Routes
 Login, OTP, Logout endpoints with persistent sessions
+Updated for v3.1 database schema
 """
 
 from flask import Blueprint, request, jsonify, make_response, render_template
@@ -16,7 +17,8 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 from auth import (
     UserManager, PasswordManager, OTPManager, SessionManager,
     EmailService, AuditLogger, AuthenticationError,
-    login_required, permission_required, role_required
+    login_required, permission_required, role_required,
+    _parse_permissions
 )
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -40,7 +42,6 @@ def login_step1():
         user = UserManager.get_user_by_email(email)
 
         if not user:
-            # Don't reveal if user exists
             return jsonify({'error': 'Invalid credentials'}), 401
 
         # Check if account is active
@@ -59,8 +60,13 @@ def login_step1():
         # Verify password
         if not PasswordManager.verify_password(password, user['password_hash']):
             UserManager.record_failed_login(user['id'])
-            AuditLogger.log_action(user['id'], 'login_failed', details={'reason': 'invalid_password'},
-                                  ip_address=request.remote_addr, user_agent=request.user_agent.string)
+            AuditLogger.log_action(
+                user['id'], 'login_failed',
+                resource_type='user', resource_id=str(user['id']),
+                details={'reason': 'invalid_password'},
+                ip_address=request.remote_addr,
+                user_agent=request.user_agent.string
+            )
             return jsonify({'error': 'Invalid credentials'}), 401
 
         # Password correct - check if user has valid existing session (trusted device)
@@ -70,29 +76,18 @@ def login_step1():
             session_data = SessionManager.validate_session(session_token)
 
             # If valid session exists and belongs to same user, skip OTP
-            if session_data and session_data['id'] == user['id']:
-                # Reset failed attempts
-                UserManager.reset_failed_attempts(user['id'])
-
-                # Update last login
-                from dbs.connection import get_connection
-                conn = None
-                cursor = None
-                try:
-                    conn = get_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user['id'],))
-                    conn.commit()
-                finally:
-                    if cursor:
-                        cursor.close()
-                    if conn:
-                        conn.close()
+            if session_data and session_data['user_id'] == user['id']:
+                # Update last login (v3.1: uses last_login_at, last_login_ip)
+                UserManager.update_last_login(user['id'], request.remote_addr)
 
                 # Log trusted device login
-                AuditLogger.log_action(user['id'], 'login_trusted_device',
-                                      details={'role': user['role_name']},
-                                      ip_address=request.remote_addr, user_agent=request.user_agent.string)
+                AuditLogger.log_action(
+                    user['id'], 'login_trusted_device',
+                    resource_type='user', resource_id=str(user['id']),
+                    details={'role': user['role_name']},
+                    ip_address=request.remote_addr,
+                    user_agent=request.user_agent.string
+                )
 
                 # Return success without OTP
                 return jsonify({
@@ -104,21 +99,23 @@ def login_step1():
                         'email': user['email'],
                         'full_name': user['full_name'],
                         'role': user['role_name'],
-                        'permissions': json.loads(user['permissions']) if isinstance(user['permissions'], str) else user['permissions']
+                        'permissions': _parse_permissions(user['permissions'])
                     }
                 }), 200
 
-        # No valid session - require OTP verification
-        otp_code = OTPManager.create_otp(user['id'], 'login', request.remote_addr)
+        # No valid session - require OTP verification (v3.1: no ip_address param)
+        otp_code = OTPManager.create_otp(user['id'], 'login')
 
         # Send OTP via email
         email_sent = EmailService.send_otp_email(user['email'], otp_code, user['full_name'])
 
-        # Email sending handled by EmailService - no debug output needed
-
         # Log login attempt
-        AuditLogger.log_action(user['id'], 'login_otp_sent',
-                              ip_address=request.remote_addr, user_agent=request.user_agent.string)
+        AuditLogger.log_action(
+            user['id'], 'login_otp_sent',
+            resource_type='user', resource_id=str(user['id']),
+            ip_address=request.remote_addr,
+            user_agent=request.user_agent.string
+        )
 
         return jsonify({
             'success': True,
@@ -130,7 +127,7 @@ def login_step1():
         }), 200
 
     except Exception as e:
-        print(f"❌ Login error: {e}")
+        print(f"[Auth] Login error: {e}")
         return jsonify({'error': 'Login failed'}), 500
 
 
@@ -147,8 +144,12 @@ def verify_otp():
 
         # Verify OTP
         if not OTPManager.verify_otp(user_id, otp_code, 'login'):
-            AuditLogger.log_action(user_id, 'login_otp_failed',
-                                  ip_address=request.remote_addr, user_agent=request.user_agent.string)
+            AuditLogger.log_action(
+                user_id, 'login_otp_failed',
+                resource_type='user', resource_id=str(user_id),
+                ip_address=request.remote_addr,
+                user_agent=request.user_agent.string
+            )
             return jsonify({'error': 'Invalid or expired code'}), 401
 
         # Get user details
@@ -157,23 +158,8 @@ def verify_otp():
         if not user or not user['is_active']:
             return jsonify({'error': 'User account not found or inactive'}), 403
 
-        # Reset failed attempts
-        UserManager.reset_failed_attempts(user_id)
-
-        # Update last login
-        from dbs.connection import get_connection
-        conn = None
-        cursor = None
-        try:
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
-            conn.commit()
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
+        # Update last login (v3.1: uses last_login_at, last_login_ip, resets failed attempts)
+        UserManager.update_last_login(user_id, request.remote_addr)
 
         # Create session - always 30 days for persistent login
         session_token, expires_at = SessionManager.create_session(
@@ -183,9 +169,13 @@ def verify_otp():
         )
 
         # Log successful login
-        AuditLogger.log_action(user_id, 'login_success',
-                              details={'role': user['role_name']},
-                              ip_address=request.remote_addr, user_agent=request.user_agent.string)
+        AuditLogger.log_action(
+            user_id, 'login_success',
+            resource_type='user', resource_id=str(user_id),
+            details={'role': user['role_name']},
+            ip_address=request.remote_addr,
+            user_agent=request.user_agent.string
+        )
 
         # Create response with cookie
         response = make_response(jsonify({
@@ -196,7 +186,7 @@ def verify_otp():
                 'email': user['email'],
                 'full_name': user['full_name'],
                 'role': user['role_name'],
-                'permissions': json.loads(user['permissions']) if isinstance(user['permissions'], str) else user['permissions']
+                'permissions': _parse_permissions(user['permissions'])
             }
         }))
 
@@ -204,9 +194,9 @@ def verify_otp():
         response.set_cookie(
             'session_token',
             session_token,
-            max_age=30*24*60*60,  # 30 days - persists across browser restarts
+            max_age=30*24*60*60,  # 30 days
             secure=False,  # Set to True in production with HTTPS
-            httponly=True,  # Not accessible via JavaScript
+            httponly=True,
             samesite='Lax',
             path='/'
         )
@@ -214,7 +204,7 @@ def verify_otp():
         return response, 200
 
     except Exception as e:
-        print(f"❌ OTP verification error: {e}")
+        print(f"[Auth] OTP verification error: {e}")
         return jsonify({'error': 'OTP verification failed'}), 500
 
 
@@ -229,8 +219,13 @@ def logout():
             SessionManager.delete_session(session_token)
 
         # Log logout
-        AuditLogger.log_action(request.current_user['id'], 'logout',
-                              ip_address=request.remote_addr, user_agent=request.user_agent.string)
+        user_id = request.current_user.get('user_id') or request.current_user.get('id')
+        AuditLogger.log_action(
+            user_id, 'logout',
+            resource_type='user', resource_id=str(user_id),
+            ip_address=request.remote_addr,
+            user_agent=request.user_agent.string
+        )
 
         response = make_response(jsonify({'success': True, 'message': 'Logged out successfully'}))
         response.delete_cookie('session_token', path='/', samesite='Lax')
@@ -238,7 +233,7 @@ def logout():
         return response, 200
 
     except Exception as e:
-        print(f"❌ Logout error: {e}")
+        print(f"[Auth] Logout error: {e}")
         return jsonify({'error': 'Logout failed'}), 500
 
 
@@ -249,19 +244,22 @@ def get_current_user():
     try:
         user = request.current_user
 
+        # v3.1: last_login_at instead of last_login
+        last_login = user.get('last_login_at') or user.get('last_login')
+
         return jsonify({
             'user': {
-                'id': user['id'],
+                'id': user.get('user_id') or user.get('id'),
                 'email': user['email'],
                 'full_name': user['full_name'],
                 'role': user['role_name'],
-                'permissions': json.loads(user['permissions']) if isinstance(user['permissions'], str) else user['permissions'],
-                'last_login': user['last_login'].isoformat() if user['last_login'] else None
+                'permissions': _parse_permissions(user['permissions']),
+                'last_login': last_login.isoformat() if last_login else None
             }
         }), 200
 
     except Exception as e:
-        print(f"❌ Get user error: {e}")
+        print(f"[Auth] Get user error: {e}")
         return jsonify({'error': 'Failed to get user info'}), 500
 
 
@@ -281,7 +279,7 @@ def check_session():
     return jsonify({
         'authenticated': True,
         'user': {
-            'id': session_data['id'],
+            'id': session_data.get('user_id') or session_data.get('id'),
             'email': session_data['email'],
             'full_name': session_data['full_name'],
             'role': session_data['role_name']

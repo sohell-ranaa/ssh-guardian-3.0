@@ -74,22 +74,6 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     'message': f'IP {ip_address} is already blocked'
                 }
 
-            # MUTUAL EXCLUSIVITY: Remove from whitelist if exists
-            cursor.execute("""
-                UPDATE ip_whitelist
-                SET is_active = FALSE, updated_at = NOW()
-                WHERE ip_address_text = %s AND is_active = TRUE
-            """, (ip_address,))
-            removed_from_whitelist = cursor.rowcount > 0
-
-            # MUTUAL EXCLUSIVITY: Remove from watchlist if exists
-            cursor.execute("""
-                UPDATE ip_watchlist
-                SET is_active = FALSE, updated_at = NOW()
-                WHERE ip_address_text = %s AND is_active = TRUE
-            """, (ip_address,))
-            removed_from_watchlist = cursor.rowcount > 0
-
             # Insert block
             cursor.execute("""
                 INSERT INTO ip_blocks (
@@ -139,9 +123,10 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     reason,
                     performed_by_user_id,
                     triggered_by_rule_id,
-                    triggered_by_event_id
+                    triggered_by_event_id,
+                    agent_id
                 ) VALUES (
-                    %s, %s, %s, 'blocked', %s, %s, %s, %s, %s
+                    %s, %s, %s, 'blocked', %s, %s, %s, %s, %s, %s
                 )
             """, (
                 action_uuid,
@@ -151,7 +136,8 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 block_reason,
                 created_by_user_id,
                 blocking_rule_id,
-                trigger_event_id
+                trigger_event_id,
+                agent_id
             ))
 
             # Update rule statistics if rule-based
@@ -174,12 +160,8 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 trigger_event_id=trigger_event_id
             )
 
-            # Build message with mutual exclusivity info
+            # Build message
             msg = f'IP {ip_address} blocked successfully'
-            if removed_from_whitelist:
-                msg += ' (removed from whitelist)'
-            if removed_from_watchlist:
-                msg += ' (removed from watchlist)'
             if ufw_result.get('commands_created', 0) > 0:
                 msg += f' (UFW commands: {ufw_result["commands_created"]})'
 
@@ -190,8 +172,6 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 'block_id': block_id,
                 'message': msg,
                 'unblock_at': unblock_at.isoformat() if unblock_at else None,
-                'removed_from_whitelist': removed_from_whitelist,
-                'removed_from_watchlist': removed_from_watchlist,
                 'ufw_commands_created': ufw_result.get('commands_created', 0)
             }
 
@@ -228,7 +208,7 @@ def unblock_ip(ip_address, unblock_reason='Manual unblock', unblocked_by_user_id
         try:
             # Find active block
             cursor.execute("""
-                SELECT id FROM ip_blocks
+                SELECT id, block_source FROM ip_blocks
                 WHERE ip_address_text = %s AND is_active = TRUE
             """, (ip_address,))
 
@@ -241,16 +221,30 @@ def unblock_ip(ip_address, unblock_reason='Manual unblock', unblocked_by_user_id
                 }
 
             block_id = block['id']
+            block_source = block.get('block_source', '')
 
             # Update block to inactive
-            cursor.execute("""
-                UPDATE ip_blocks
-                SET is_active = FALSE,
-                    manually_unblocked_at = NOW(),
-                    unblocked_by_user_id = %s,
-                    unblock_reason = %s
-                WHERE id = %s
-            """, (unblocked_by_user_id, unblock_reason, block_id))
+            # If this was a fail2ban block, set fail2ban_sync_status = 'pending'
+            # so the agent knows to run `fail2ban-client unbanip`
+            if block_source == 'fail2ban':
+                cursor.execute("""
+                    UPDATE ip_blocks
+                    SET is_active = FALSE,
+                        unblocked_at = NOW(),
+                        unblocked_by_user_id = %s,
+                        unblock_reason = %s,
+                        fail2ban_sync_status = 'pending'
+                    WHERE id = %s
+                """, (unblocked_by_user_id, unblock_reason, block_id))
+            else:
+                cursor.execute("""
+                    UPDATE ip_blocks
+                    SET is_active = FALSE,
+                        unblocked_at = NOW(),
+                        unblocked_by_user_id = %s,
+                        unblock_reason = %s
+                    WHERE id = %s
+                """, (unblocked_by_user_id, unblock_reason, block_id))
 
             # Log unblock action
             action_uuid = str(uuid.uuid4())

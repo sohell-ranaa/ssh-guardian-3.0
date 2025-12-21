@@ -1,0 +1,150 @@
+/* ============================================
+   OVERVIEW - HERO SECTION
+   Light theme hero with Azure accents
+   ============================================ */
+.overview-hero {
+    background: var(--surface);
+    padding: 60px 40px 50px;
+    text-align: center;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+}
+
+.overview-hero-content {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Hero Logo Container - uses global app-logo component */
+.overview-hero-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.overview-hero-title {
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+}
+
+.overview-hero-tagline {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--azure-blue);
+    margin-bottom: 20px;
+}
+
+.overview-hero-description {
+    font-size: 16px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 700px;
+    margin: 0 auto 28px;
+}
+
+/* Feature Pills */
+.hero-features {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 36px;
+}
+
+.hero-feature-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 120, 212, 0.08);
+    border: 1px solid rgba(0, 120, 212, 0.2);
+    padding: 10px 18px;
+    border-radius: 25px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--azure-blue);
+    transition: all 0.2s ease;
+}
+
+.hero-feature-pill:hover {
+    background: rgba(0, 120, 212, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 120, 212, 0.15);
+}
+
+.feature-icon {
+    font-size: 16px;
+}
+
+/* Statistics Grid */
+.overview-hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-top: 32px;
+}
+
+.hero-stat {
+    text-align: center;
+    background: var(--background);
+    padding: 20px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+}
+
+.hero-stat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border-color: var(--azure-blue);
+}
+
+.hero-stat-value {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--azure-blue);
+    display: block;
+    line-height: 1.2;
+}
+
+.hero-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+}
+
+/* Research Info */
+.hero-research-info {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+}
+
+.research-info-item {
+    text-align: center;
+}
+
+.research-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-hint);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.research-value {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+}

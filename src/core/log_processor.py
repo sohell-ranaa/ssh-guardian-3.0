@@ -53,6 +53,12 @@ LOG_PATTERNS = {
     'failed_invalid_user': re.compile(
         r'Failed password for invalid user (?P<username>\S+) from (?P<ip>[\d\.:a-fA-F]+) port (?P<port>\d+)'
     ),
+    'failed_publickey': re.compile(
+        r'Failed publickey for (?P<username>\S+) from (?P<ip>[\d\.:a-fA-F]+) port (?P<port>\d+)'
+    ),
+    'failed_publickey_invalid': re.compile(
+        r'Failed publickey for invalid user (?P<username>\S+) from (?P<ip>[\d\.:a-fA-F]+) port (?P<port>\d+)'
+    ),
     'accepted_password': re.compile(
         r'Accepted password for (?P<username>\S+) from (?P<ip>[\d\.:a-fA-F]+) port (?P<port>\d+)'
     ),
@@ -98,6 +104,33 @@ def parse_log_line(log_line: str) -> Optional[Dict]:
             else:
                 auth_method = 'other'
 
+            # Extract timestamp from log line
+            log_timestamp = None
+
+            # Try ISO format first: "2025-12-20T07:10:05.913746+01:00"
+            iso_match = re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})', log_line)
+            if iso_match:
+                try:
+                    iso_str = iso_match.group(1)
+                    log_timestamp = datetime.fromisoformat(iso_str)
+                except (ValueError, TypeError):
+                    log_timestamp = None
+
+            # Fallback to syslog format: "Dec 20 03:30:00"
+            if not log_timestamp:
+                timestamp_match = re.match(r'^([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})', log_line)
+                if timestamp_match:
+                    month_str, day_str, time_str = timestamp_match.groups()
+                    try:
+                        month_map = {'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+                                     'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12}
+                        month = month_map.get(month_str, datetime.now().month)
+                        day = int(day_str)
+                        hour, minute, second = map(int, time_str.split(':'))
+                        log_timestamp = datetime.now().replace(month=month, day=day, hour=hour, minute=minute, second=second, microsecond=0)
+                    except (ValueError, KeyError):
+                        log_timestamp = None
+
             return {
                 'event_type': event_type,
                 'auth_method': auth_method,
@@ -105,7 +138,8 @@ def parse_log_line(log_line: str) -> Optional[Dict]:
                 'source_port': int(data.get('port', 0)) if data.get('port') else None,
                 'username': data.get('username', 'unknown'),
                 'failure_reason': failure_reason,
-                'raw_log_line': log_line
+                'raw_log_line': log_line,
+                'log_timestamp': log_timestamp
             }
 
     return None
@@ -116,7 +150,8 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                     agent_batch_id: Optional[int] = None,
                     simulation_run_id: Optional[int] = None,
                     target_server_override: Optional[str] = None,
-                    skip_blocking: bool = False) -> Dict:
+                    skip_blocking: bool = False,
+                    skip_learning: bool = False) -> Dict:
     """
     Process a single log line and create auth_event
 
@@ -128,6 +163,7 @@ def process_log_line(log_line: str, source_type: str = 'agent',
         simulation_run_id: Simulation run ID if from simulation
         target_server_override: Override target server name (for simulations)
         skip_blocking: Skip auto-blocking (analysis-only mode for simulations without agent)
+        skip_learning: Skip behavioral profile learning (for simulations)
 
     Returns:
         dict with success status and event_id or error
@@ -150,6 +186,8 @@ def process_log_line(log_line: str, source_type: str = 'agent',
         source_port = parsed['source_port']
         username = parsed['username']
         failure_reason = parsed['failure_reason']
+        # Use parsed timestamp from log or fallback to now
+        event_timestamp = parsed.get('log_timestamp') or datetime.now()
 
         # Generate event UUID
         event_uuid = str(uuid.uuid4())
@@ -188,14 +226,14 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                     target_server, target_username, failure_reason,
                     raw_log_line, processing_status
                 ) VALUES (
-                    %s, NOW(), %s, %s, %s,
+                    %s, %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
                     %s, 'pending'
                 )
             """, (
-                event_uuid, source_type, agent_id, agent_batch_id,
+                event_uuid, event_timestamp, source_type, agent_id, agent_batch_id,
                 simulation_run_id, event_type, auth_method,
                 ip_binary, source_ip, source_port,
                 target_server, username, failure_reason,
@@ -212,16 +250,37 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                 if enrich_event:
                     enrichment_result = enrich_event(
                         event_id, source_ip, verbose=False,
-                        skip_blocking=skip_blocking
+                        skip_blocking=skip_blocking,
+                        skip_learning=skip_learning
                     )
             except Exception as e:
                 # Don't fail the event if enrichment fails
                 enrichment_result = {'error': str(e)}
 
+            # Run unified threat evaluation and store ML results
+            threat_evaluation = None
+            try:
+                from threat_evaluator import evaluate_and_store_for_event
+                event_context = {
+                    'username': username,
+                    'status': event_type,
+                    'auth_method': auth_method,
+                    'failure_reason': failure_reason,
+                    'timestamp': event_timestamp.isoformat()
+                }
+                threat_evaluation = evaluate_and_store_for_event(
+                    event_id, source_ip, event_context
+                )
+            except Exception as e:
+                # Don't fail if threat evaluation fails
+                threat_evaluation = {'error': str(e)}
+
             # Run proactive threat evaluation for failed logins
             # This can block threats BEFORE fail2ban threshold is reached
             proactive_result = None
-            if event_type == 'failed' and not skip_blocking:
+            # Run proactive blocker for failed logins (may block)
+            # AND for successful logins (may create behavioral alert, no block)
+            if not skip_blocking:
                 try:
                     evaluate_event = _get_proactive_blocker()
                     if evaluate_event:
@@ -230,7 +289,7 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                             'username': username,
                             'event_type': event_type,
                             'failure_reason': failure_reason,
-                            'timestamp': datetime.now().isoformat()
+                            'timestamp': event_timestamp.isoformat()
                         })
                 except Exception as e:
                     # Don't fail if proactive blocking fails

@@ -6,12 +6,9 @@
             <p class="page-subtitle">View system activity and security events</p>
         </div>
         <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="audit">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadAuditPage()" title="Refresh data">↻</button>
-            </div>
+            <button class="refresh-btn" onclick="loadAuditPage()">
+                <span class="refresh-icon">↻</span> Refresh
+            </button>
             <button id="audit-export-btn" class="btn btn-secondary">Export</button>
         </div>
     </div>

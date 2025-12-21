@@ -1,291 +1,1037 @@
 /**
- * Blocked IPs Page Module
- * Handles IP blocks management, manual block/unblock operations
+ * Blocked IPs - Core Module
+ * Data loading and table rendering
  */
 
-// Load Blocked IPs page data
-async function loadBlockedIPsPage() {
-    // Load agents list for dropdown first
-    await loadAgentsForBlockFilter();
-    await loadIPBlocks();
-    setupBlockFilters();
-    setupManualBlockForm();
-    setupManualUnblockForm();
-    setupFormToggles();
-    setupRefreshButton();
-}
+(function() {
+    'use strict';
 
-// Load agents for the agent filter dropdown (agent-based blocking)
-async function loadAgentsForBlockFilter() {
-    try {
-        const response = await fetch('/api/agents/list');
-        const data = await response.json();
+    const BlockedIPs = window.BlockedIPs = window.BlockedIPs || {};
 
-        if (!data.agents) return;
+    // Defensive fallbacks for utility functions
+    const escapeHtml = window.escapeHtml || function(text) {
+        if (text === null || text === undefined) return '';
+        const str = String(text);
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return str.replace(/[&<>"']/g, m => map[m]);
+    };
+    const formatLocalDateTime = window.formatLocalDateTime || function(dateStr) {
+        if (!dateStr) return 'N/A';
+        return new Date(dateStr).toLocaleString();
+    };
+    const TC = window.TC || {
+        primary: '#0078D4',
+        primaryDark: '#004C87',
+        danger: '#D13438',
+        success: '#107C10',
+        successDark: '#0B6A0B',
+        warning: '#FFB900',
+        purple: '#8764B8',
+        textSecondary: '#605E5C',
+        textPrimary: '#323130',
+        orangeDark: '#CA5010',
+        primaryHover: '#106EBE'
+    };
 
-        const agentFilter = document.getElementById('blockAgentFilter');
-        if (!agentFilter) return;
+    BlockedIPs.Core = {
+        /**
+         * Load all IP blocks from API
+         */
+        async loadIPBlocks() {
+            const loadingEl = document.getElementById('blocksLoading');
+            const tableEl = document.getElementById('blocksTable');
+            const errorEl = document.getElementById('blocksError');
 
-        // Clear existing options except "All Agents"
-        agentFilter.innerHTML = '<option value="">All Agents (Global)</option>';
+            try {
+                if (loadingEl) loadingEl.style.display = 'block';
+                if (tableEl) tableEl.style.display = 'none';
+                if (errorEl) errorEl.style.display = 'none';
 
-        // Add agents
-        (data.agents || []).forEach(agent => {
-            const option = document.createElement('option');
-            option.value = agent.id;
-            option.textContent = agent.display_name || agent.hostname || `Agent ${agent.id}`;
-            agentFilter.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Error loading agents for filter:', error);
-    }
-}
+                let apiUrl = '/api/dashboard/blocking/blocks/list';
+                if (BlockedIPs.state.currentAgentFilter) {
+                    apiUrl += `?agent_id=${encodeURIComponent(BlockedIPs.state.currentAgentFilter)}`;
+                }
 
-// Current agent filter for agent-based blocking
-let currentAgentFilter = '';
+                let data;
+                if (typeof fetchWithCache === 'function') {
+                    data = await fetchWithCache(apiUrl, 'blocking');
+                } else {
+                    const response = await fetch(apiUrl);
+                    data = await response.json();
+                }
 
-// Load all IP blocks
-async function loadIPBlocks() {
-    const loadingEl = document.getElementById('blocksLoading');
-    const tableEl = document.getElementById('blocksTable');
-    const errorEl = document.getElementById('blocksError');
+                if (!data.success || !data.blocks || data.blocks.length === 0) {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (tableEl) {
+                        tableEl.innerHTML = '<div class="empty-state-small">No IP blocks found</div>';
+                        tableEl.style.display = 'block';
+                    }
+                    return;
+                }
 
-    try {
-        // Show loading
-        loadingEl.style.display = 'block';
-        tableEl.style.display = 'none';
-        errorEl.style.display = 'none';
+                BlockedIPs.state.blocks = data.blocks;
+                this.renderTable(data.blocks);
 
-        // Build API URL with agent filter if set
-        let apiUrl = '/api/dashboard/blocking/blocks/list';
-        if (currentAgentFilter) {
-            apiUrl += `?agent_id=${encodeURIComponent(currentAgentFilter)}`;
-        }
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (tableEl) tableEl.style.display = 'block';
 
-        // Use fetchWithCache if available to track cache status
-        let data;
-        if (typeof fetchWithCache === 'function') {
-            data = await fetchWithCache(apiUrl, 'blocking');
-        } else {
-            const response = await fetch(apiUrl);
-            data = await response.json();
-        }
+                // Enrich location data asynchronously
+                BlockedIPs.UI.enrichLocations(data.blocks);
 
-        if (!data.success || !data.blocks || data.blocks.length === 0) {
-            loadingEl.style.display = 'none';
-            tableEl.innerHTML = '<div class="empty-state-small">No IP blocks found</div>';
-            tableEl.style.display = 'block';
-            return;
-        }
+            } catch (error) {
+                console.error('Error loading IP blocks:', error);
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (errorEl) {
+                    errorEl.innerHTML = `<p>Error loading IP blocks: ${escapeHtml(error.message)}</p>`;
+                    errorEl.style.display = 'block';
+                }
+            }
+        },
 
-        // Build table
-        const tableBody = document.getElementById('blocksTableBody');
+        /**
+         * Render blocks table
+         */
+        renderTable(blocks) {
+            const tableBody = document.getElementById('blocksTableBody');
+            if (!tableBody) return;
 
-        // Collect unique agents for filter dropdown
-        const uniqueAgents = new Set();
-        data.blocks.forEach(block => {
-            const agentName = block.agent_name || 'Manual Block';
-            uniqueAgents.add(agentName);
-        });
+            // Collect unique agents for filter
+            const uniqueAgents = new Set();
+            blocks.forEach(block => {
+                const agentName = block.agent_name || 'Manual Block';
+                uniqueAgents.add(agentName);
+            });
 
-        tableBody.innerHTML = data.blocks.map(block => {
+            tableBody.innerHTML = blocks.map(block => this.renderRow(block)).join('');
+
+            // Update stats
+            BlockedIPs.UI.updateStats(blocks);
+
+            // Populate agent filter
+            BlockedIPs.Filters.populateAgentDropdown(Array.from(uniqueAgents));
+        },
+
+        /**
+         * Render single table row
+         */
+        renderRow(block) {
             const statusBadge = block.is_active
-                ? '<span style="padding: 4px 12px; background: #D13438; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Active</span>'
-                : '<span style="padding: 4px 12px; background: #10b981; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Expired</span>';
+                ? `<span style="padding: 4px 12px; background: ${TC.danger}; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Active</span>`
+                : `<span style="padding: 4px 12px; background: ${TC.success}; color: white; border-radius: 3px; font-size: 12px; font-weight: 600;">Expired</span>`;
 
-            const sourceBadge = getSourceBadge(block.source);
+            const sourceBadge = BlockedIPs.UI.getSourceBadge(block.source);
+            const expiresAt = block.unblock_at ? formatLocalDateTime(block.unblock_at) : 'Permanent';
+            const agentName = block.agent_name || 'Manual';
+            const scopeBadge = block.agent_id
+                ? `<span style="padding: 2px 8px; background: ${TC.purple}; color: white; border-radius: 3px; font-size: 10px;">Agent: ${escapeHtml(agentName)}</span>`
+                : `<span style="padding: 2px 8px; background: ${TC.primary}; color: white; border-radius: 3px; font-size: 10px;">Global</span>`;
 
-            const expiresAt = block.unblock_at
-                ? formatLocalDateTime(block.unblock_at)
-                : 'Permanent';
+            const actions = block.is_active
+                ? `<button class="btn btn-sm btn-secondary" onclick="disableBlockFromTable('${escapeHtml(block.ip_address)}', ${block.id})" title="Unblock IP">Unblock</button>`
+                : `<button class="btn btn-sm btn-warning" onclick="reblockIPFromTable('${escapeHtml(block.ip_address)}')" title="Re-block IP">Re-block</button>`;
 
-            // Use ip_address field from API
-            const ipAddress = block.ip_address;
+            return `
+                <tr data-block-id="${block.id}" data-ip="${escapeHtml(block.ip_address)}" data-agent="${escapeHtml(agentName)}" data-source="${escapeHtml(block.source || '')}">
+                    <td>
+                        <a href="#" onclick="showBlockIpDetails('${escapeHtml(block.ip_address)}'); return false;" style="font-weight: 600; color: ${TC.primary};">
+                            ${escapeHtml(block.ip_address)}
+                        </a>
+                    </td>
+                    <td class="ip-location-cell" data-ip="${escapeHtml(block.ip_address)}">
+                        <span style="color: var(--text-secondary);">Loading...</span>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td>${sourceBadge}</td>
+                    <td>${escapeHtml(block.reason || 'No reason provided')}</td>
+                    <td>${formatLocalDateTime(block.blocked_at)}</td>
+                    <td>${expiresAt}</td>
+                    <td>${scopeBadge}</td>
+                    <td>${actions}</td>
+                </tr>
+            `;
+        }
+    };
+})();
+/**
+ * Blocked IPs - UI Module
+ * UI helpers, badges, notifications, location enrichment
+ */
 
-            // Agent name from API (already includes fallback to 'Manual Block')
-            const agentName = escapeHtml(block.agent_name || 'Manual Block');
+(function() {
+    'use strict';
 
-            // Location from API response
-            const locationText = block.location && block.location.country
-                ? `${block.location.city || 'Unknown'}, ${block.location.country}`
-                : '';
+    const BlockedIPs = window.BlockedIPs = window.BlockedIPs || {};
+    const escapeHtml = window.escapeHtml || ((t) => t == null ? '' : String(t).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[m]));
+    const TC = window.TC || { primary:'#0078D4', danger:'#D13438', success:'#107C10', warning:'#FFB900', purple:'#8764B8', textSecondary:'#605E5C', orangeDark:'#CA5010' };
 
-            // Action buttons based on status
-            let actionButtons = '';
-            if (block.is_active) {
-                actionButtons = `
-                    <button
-                        onclick="unblockIPFromTable('${escapeHtml(ipAddress)}', ${block.id})"
-                        style="padding: 6px 12px; background: #107C10; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;"
-                        title="Unblock IP"
-                    >
-                        Unblock
-                    </button>`;
+    BlockedIPs.UI = {
+        /**
+         * Get source badge HTML
+         */
+        getSourceBadge(source) {
+            const sourceStyles = {
+                'auto': { bg: TC.danger, icon: '🤖', label: 'Auto' },
+                'manual': { bg: TC.primary, icon: '👤', label: 'Manual' },
+                'fail2ban': { bg: TC.warning, icon: '🛡️', label: 'Fail2ban' },
+                'firewall': { bg: TC.purple, icon: '🔥', label: 'Firewall' },
+                'ml': { bg: TC.orangeDark, icon: '🧠', label: 'ML' }
+            };
+
+            const style = sourceStyles[source?.toLowerCase()] || { bg: TC.textSecondary, icon: '❓', label: source || 'Unknown' };
+
+            return `<span style="padding: 4px 10px; background: ${style.bg}; color: white; border-radius: 3px; font-size: 11px; font-weight: 500;">
+                ${style.icon} ${style.label}
+            </span>`;
+        },
+
+        /**
+         * Update block statistics
+         */
+        updateStats(blocks) {
+            const total = blocks.length;
+            const active = blocks.filter(b => b.is_active).length;
+            const expired = blocks.filter(b => !b.is_active).length;
+            const permanent = blocks.filter(b => !b.unblock_at).length;
+
+            const totalEl = document.getElementById('stat-blocks-total');
+            const activeEl = document.getElementById('stat-blocks-active');
+            const expiredEl = document.getElementById('stat-blocks-expired');
+            const permanentEl = document.getElementById('stat-blocks-permanent');
+
+            if (totalEl) totalEl.textContent = total;
+            if (activeEl) activeEl.textContent = active;
+            if (expiredEl) expiredEl.textContent = expired;
+            if (permanentEl) permanentEl.textContent = permanent;
+        },
+
+        /**
+         * Show notification
+         */
+        notify(message, type = 'info') {
+            if (typeof window.showToast === 'function') {
+                window.showToast(message, type);
             } else {
-                actionButtons = `
-                    <button
-                        onclick="reblockIPFromTable('${escapeHtml(ipAddress)}')"
-                        style="padding: 6px 12px; border: 1px solid #D13438; background: var(--surface); color: #D13438; border-radius: 3px; cursor: pointer; font-size: 12px;"
-                        title="Block IP again"
-                    >
-                        Block Again
-                    </button>`;
+                console.log(`[${type.toUpperCase()}] ${message}`);
+            }
+        },
+
+        /**
+         * Enrich blocks with location data
+         */
+        async enrichLocations(blocks) {
+            const uniqueIPs = [...new Set(blocks.map(b => b.ip_address))];
+
+            for (const ip of uniqueIPs) {
+                try {
+                    const response = await fetch(`/api/dashboard/ip-info/lookup/${encodeURIComponent(ip)}`);
+                    const data = await response.json();
+
+                    const cells = document.querySelectorAll(`.ip-location-cell[data-ip="${ip}"]`);
+                    cells.forEach(cell => {
+                        if (data.success) {
+                            const flagImg = data.country_code && data.country_code !== 'N/A'
+                                ? `<img src="https://flagcdn.com/16x12/${data.country_code.toLowerCase()}.png" alt="${data.country_code}" style="vertical-align: middle; margin-right: 6px;">`
+                                : '';
+                            const locationText = data.country_code === 'N/A'
+                                ? 'Unknown Location'
+                                : `${data.city || 'Unknown'}, ${data.country || 'Unknown'}`;
+                            cell.innerHTML = `${flagImg}<span>${escapeHtml(locationText)}</span>`;
+                        } else {
+                            cell.innerHTML = '<span style="color: var(--text-secondary);">Unknown</span>';
+                        }
+                    });
+                } catch (error) {
+                    console.error(`Error fetching location for ${ip}:`, error);
+                    const cells = document.querySelectorAll(`.ip-location-cell[data-ip="${ip}"]`);
+                    cells.forEach(cell => {
+                        cell.innerHTML = '<span style="color: var(--text-secondary);">Error</span>';
+                    });
+                }
+            }
+        }
+    };
+})();
+/**
+ * Blocked IPs - Filters Module
+ * Search, filter, and agent dropdown functionality
+ */
+
+(function() {
+    'use strict';
+
+    const BlockedIPs = window.BlockedIPs = window.BlockedIPs || {};
+    const escapeHtml = window.escapeHtml;
+
+    BlockedIPs.Filters = {
+        /**
+         * Load agents for filter dropdown
+         */
+        async loadAgentsForDropdown() {
+            try {
+                const response = await fetch('/api/agents/list');
+                const data = await response.json();
+
+                if (!data.agents) return;
+
+                const agentFilter = document.getElementById('blockAgentFilter');
+                if (!agentFilter) return;
+
+                agentFilter.innerHTML = '<option value="">All Agents (Global)</option>';
+
+                (data.agents || []).forEach(agent => {
+                    const option = document.createElement('option');
+                    option.value = agent.id;
+                    option.textContent = agent.display_name || agent.hostname || `Agent ${agent.id}`;
+                    agentFilter.appendChild(option);
+                });
+
+                BlockedIPs.state.agents = data.agents;
+            } catch (error) {
+                console.error('Error loading agents for filter:', error);
+            }
+        },
+
+        /**
+         * Populate agent filter from blocks data
+         */
+        populateAgentDropdown(uniqueAgents) {
+            const filterSelect = document.getElementById('blockSourceAgentFilter');
+            if (!filterSelect) return;
+
+            const currentValue = filterSelect.value;
+            filterSelect.innerHTML = '<option value="">All Sources</option>';
+
+            uniqueAgents.sort().forEach(agent => {
+                const option = document.createElement('option');
+                option.value = agent;
+                option.textContent = agent;
+                filterSelect.appendChild(option);
+            });
+
+            filterSelect.value = currentValue;
+        },
+
+        /**
+         * Setup all filters
+         */
+        setupAll() {
+            this.setupSearchFilter();
+            this.setupAgentFilter();
+            this.setupSourceFilter();
+            this.setupStatusFilter();
+        },
+
+        /**
+         * Setup search filter
+         */
+        setupSearchFilter() {
+            const searchInput = document.getElementById('blockSearchFilter');
+            if (!searchInput) return;
+
+            let debounceTimer;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => this.applyFilters(), 300);
+            });
+        },
+
+        /**
+         * Setup agent filter
+         */
+        setupAgentFilter() {
+            const agentFilter = document.getElementById('blockAgentFilter');
+            if (!agentFilter) return;
+
+            agentFilter.addEventListener('change', () => {
+                BlockedIPs.state.currentAgentFilter = agentFilter.value;
+                BlockedIPs.Core.loadIPBlocks();
+            });
+        },
+
+        /**
+         * Setup source filter
+         */
+        setupSourceFilter() {
+            const sourceFilter = document.getElementById('blockSourceAgentFilter');
+            if (!sourceFilter) return;
+
+            sourceFilter.addEventListener('change', () => this.applyFilters());
+        },
+
+        /**
+         * Setup status filter
+         */
+        setupStatusFilter() {
+            const statusFilter = document.getElementById('blockStatusFilter');
+            if (!statusFilter) return;
+
+            statusFilter.addEventListener('change', () => this.applyFilters());
+        },
+
+        /**
+         * Apply all filters to table
+         */
+        applyFilters() {
+            const searchValue = (document.getElementById('blockSearchFilter')?.value || '').toLowerCase();
+            const sourceValue = document.getElementById('blockSourceAgentFilter')?.value || '';
+            const statusValue = document.getElementById('blockStatusFilter')?.value || '';
+
+            const rows = document.querySelectorAll('#blocksTableBody tr');
+
+            rows.forEach(row => {
+                const ip = row.dataset.ip?.toLowerCase() || '';
+                const agent = row.dataset.agent || '';
+                const source = row.dataset.source?.toLowerCase() || '';
+                const isActive = row.querySelector('[style*="background: var(--color-danger)"]') ||
+                                 row.querySelector('[style*="background: rgb(209, 52, 56)"]');
+
+                let show = true;
+
+                // Search filter
+                if (searchValue && !ip.includes(searchValue)) {
+                    show = false;
+                }
+
+                // Source/Agent filter
+                if (sourceValue && agent !== sourceValue) {
+                    show = false;
+                }
+
+                // Status filter
+                if (statusValue === 'active' && !isActive) {
+                    show = false;
+                } else if (statusValue === 'expired' && isActive) {
+                    show = false;
+                }
+
+                row.style.display = show ? '' : 'none';
+            });
+        }
+    };
+})();
+/**
+ * Blocked IPs - Forms Module
+ * Manual block/unblock forms and form toggles
+ */
+
+(function() {
+    'use strict';
+
+    const BlockedIPs = window.BlockedIPs = window.BlockedIPs || {};
+
+    BlockedIPs.Forms = {
+        /**
+         * Setup all forms
+         */
+        setupAll() {
+            this.setupFormToggles();
+            this.setupManualBlockForm();
+            this.setupManualUnblockForm();
+            this.setupRefreshButton();
+        },
+
+        /**
+         * Setup form section toggles
+         */
+        setupFormToggles() {
+            const toggles = document.querySelectorAll('[data-toggle-form]');
+            toggles.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    const formId = toggle.dataset.toggleForm;
+                    const formSection = document.getElementById(formId);
+                    if (formSection) {
+                        const isVisible = formSection.style.display !== 'none';
+                        formSection.style.display = isVisible ? 'none' : 'block';
+                        toggle.classList.toggle('active', !isVisible);
+                    }
+                });
+            });
+        },
+
+        /**
+         * Setup manual block form
+         */
+        setupManualBlockForm() {
+            const form = document.getElementById('manualBlockForm');
+            if (!form) return;
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const ipInput = document.getElementById('blockIpAddress');
+                const reasonInput = document.getElementById('blockReason');
+                const durationSelect = document.getElementById('blockDuration');
+                const agentSelect = document.getElementById('blockAgentFilter');
+                const submitBtn = form.querySelector('button[type="submit"]');
+
+                const ip = ipInput?.value?.trim();
+                const reason = reasonInput?.value?.trim() || 'Manual block from dashboard';
+                const duration = parseInt(durationSelect?.value) || 0;
+                const agentId = agentSelect?.value || null;
+
+                if (!ip) {
+                    BlockedIPs.UI.notify('Please enter an IP address', 'error');
+                    return;
+                }
+
+                // Validate IP format
+                if (!window.isValidIPv4 || !window.isValidIPv4(ip)) {
+                    BlockedIPs.UI.notify('Invalid IP address format', 'error');
+                    return;
+                }
+
+                try {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Blocking...';
+
+                    const payload = {
+                        ip_address: ip,
+                        reason: reason,
+                        duration_hours: duration || null
+                    };
+
+                    if (agentId) {
+                        payload.agent_id = agentId;
+                    }
+
+                    const response = await fetch('/api/dashboard/blocking/blocks/manual', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        BlockedIPs.UI.notify(`IP ${ip} has been blocked`, 'success');
+                        form.reset();
+                        BlockedIPs.Core.loadIPBlocks();
+                    } else {
+                        BlockedIPs.UI.notify(`Failed to block IP: ${data.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error blocking IP:', error);
+                    BlockedIPs.UI.notify(`Error blocking IP: ${error.message}`, 'error');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Block IP';
+                }
+            });
+        },
+
+        /**
+         * Setup manual unblock form
+         */
+        setupManualUnblockForm() {
+            const form = document.getElementById('manualUnblockForm');
+            if (!form) return;
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const ipInput = document.getElementById('unblockIpAddress');
+                const reasonInput = document.getElementById('unblockReason');
+                const submitBtn = form.querySelector('button[type="submit"]');
+
+                const ip = ipInput?.value?.trim();
+                const reason = reasonInput?.value?.trim() || 'Manual unblock from dashboard';
+
+                if (!ip) {
+                    BlockedIPs.UI.notify('Please enter an IP address', 'error');
+                    return;
+                }
+
+                try {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Unblocking...';
+
+                    const response = await fetch('/api/dashboard/blocking/blocks/unblock', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ip_address: ip,
+                            reason: reason
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        BlockedIPs.UI.notify(`IP ${ip} has been unblocked`, 'success');
+                        form.reset();
+                        BlockedIPs.Core.loadIPBlocks();
+                    } else {
+                        BlockedIPs.UI.notify(`Failed to unblock IP: ${data.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error unblocking IP:', error);
+                    BlockedIPs.UI.notify(`Error unblocking IP: ${error.message}`, 'error');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Unblock IP';
+                }
+            });
+        },
+
+        /**
+         * Setup refresh button
+         */
+        setupRefreshButton() {
+            const refreshBtn = document.getElementById('refreshBlocksBtn');
+            if (!refreshBtn) return;
+
+            refreshBtn.addEventListener('click', () => {
+                BlockedIPs.Core.loadIPBlocks();
+            });
+        }
+    };
+})();
+/**
+ * Blocked IPs - Modal Module
+ * IP details modal and styling
+ */
+
+(function() {
+    'use strict';
+
+    const BlockedIPs = window.BlockedIPs = window.BlockedIPs || {};
+    const escapeHtml = window.escapeHtml || ((t) => t == null ? '' : String(t).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[m]));
+    const formatLocalDateTime = window.formatLocalDateTime || ((d) => d ? new Date(d).toLocaleString() : 'N/A');
+    const TC = window.TC || { primary:'#0078D4', primaryDark:'#004C87', primaryHover:'#106EBE', danger:'#D13438', success:'#107C10', successDark:'#0B6A0B', warning:'#FFB900', purple:'#8764B8', textSecondary:'#605E5C', textPrimary:'#323130' };
+
+    BlockedIPs.Modal = {
+        stylesInjected: false,
+
+        /**
+         * Fetch with timeout helper
+         */
+        async fetchWithTimeout(url, timeoutMs = 5000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (e) {
+                clearTimeout(timeoutId);
+                throw e;
+            }
+        },
+
+        /**
+         * Show IP details modal
+         */
+        async showDetails(ipAddress) {
+            if (!ipAddress) {
+                BlockedIPs.UI.notify('No IP address provided', 'error');
+                return;
+            }
+
+            // Show loading modal
+            this.show('Loading...', `
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 24px; margin-bottom: 16px;">⏳</div>
+                    <p>Loading details for ${escapeHtml(ipAddress)}...</p>
+                </div>
+            `);
+
+            // Fetch data with timeouts - don't fail if one API is slow
+            let status = { success: false };
+            let geoInfo = { success: false };
+
+            try {
+                const results = await Promise.allSettled([
+                    this.fetchWithTimeout(`/api/dashboard/event-actions/ip-status/${encodeURIComponent(ipAddress)}`, 5000)
+                        .then(r => r.json()),
+                    // Use threat-intel endpoint which checks database first (much faster than external APIs)
+                    this.fetchWithTimeout(`/api/threat-intel/lookup/${encodeURIComponent(ipAddress)}`, 5000)
+                        .then(r => r.json())
+                        .then(r => {
+                            // Map threat-intel response to geoInfo format
+                            if (r.success && r.data) {
+                                return {
+                                    success: true,
+                                    country: r.data.country_name,
+                                    country_code: r.data.country_code,
+                                    city: r.data.city,
+                                    region: r.data.region,
+                                    isp: r.data.isp || r.data.asn_org,
+                                    asn: r.data.asn,
+                                    is_proxy: r.data.is_proxy || r.data.is_vpn || r.data.is_tor,
+                                    is_private: false,
+                                    from_cache: r.from_cache,
+                                    // Threat intel data
+                                    threat_level: r.data.threat_level,
+                                    abuseipdb_score: r.data.abuseipdb_score,
+                                    abuseipdb_reports: r.data.abuseipdb_reports,
+                                    is_tor: r.data.is_tor,
+                                    is_vpn: r.data.is_vpn,
+                                    is_datacenter: r.data.is_datacenter
+                                };
+                            }
+                            return r;
+                        })
+                ]);
+
+                if (results[0].status === 'fulfilled') status = results[0].value;
+                if (results[1].status === 'fulfilled') geoInfo = results[1].value;
+
+                const content = this.buildDetailsContent(ipAddress, status, geoInfo);
+                this.show(`IP Details: ${ipAddress}`, content, { icon: '🔍 ' });
+
+            } catch (error) {
+                console.error('Error loading IP details:', error);
+                // Still show what we have
+                const content = this.buildDetailsContent(ipAddress, status, geoInfo);
+                this.show(`IP Details: ${ipAddress}`, content, { icon: '🔍 ' });
+            }
+        },
+
+        /**
+         * Build details modal content
+         */
+        buildDetailsContent(ipAddress, status, geoInfo) {
+            // Status badges
+            const statusBadges = [];
+            if (status?.is_blocked) {
+                statusBadges.push(`<span style="display: inline-block; padding: 4px 8px; background: ${TC.danger}; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Blocked</span>`);
+            }
+            if (status?.is_whitelisted) {
+                statusBadges.push(`<span style="display: inline-block; padding: 4px 8px; background: ${TC.successDark}; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Whitelisted</span>`);
+            }
+            if (status?.is_watched) {
+                statusBadges.push(`<span style="display: inline-block; padding: 4px 8px; background: ${TC.warning}; color: ${TC.textPrimary}; border-radius: 3px; font-size: 11px; margin-right: 5px;">Watched</span>`);
+            }
+            if (geoInfo?.is_proxy) {
+                statusBadges.push(`<span style="display: inline-block; padding: 4px 8px; background: ${TC.purple}; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Proxy/VPN</span>`);
+            }
+            if (statusBadges.length === 0) {
+                statusBadges.push(`<span style="display: inline-block; padding: 4px 8px; background: ${TC.textSecondary}; color: white; border-radius: 3px; font-size: 11px;">No Special Status</span>`);
+            }
+
+            // Geolocation section
+            let geoSection = '';
+            if (geoInfo?.success) {
+                const flagImg = geoInfo.country_code && geoInfo.country_code !== 'N/A'
+                    ? `<img src="https://flagcdn.com/24x18/${geoInfo.country_code.toLowerCase()}.png" alt="${geoInfo.country_code}" style="vertical-align: middle; margin-right: 6px;">`
+                    : '';
+
+                geoSection = `
+                    <div class="ip-detail-section">
+                        <div class="ip-detail-section-title">Geolocation</div>
+                        <div class="ip-detail-grid">
+                            <div>
+                                <div class="ip-detail-item-label">Country</div>
+                                <div class="ip-detail-item-value">${flagImg}${escapeHtml(geoInfo.country || 'Unknown')} (${escapeHtml(geoInfo.country_code || 'N/A')})</div>
+                            </div>
+                            <div>
+                                <div class="ip-detail-item-label">City</div>
+                                <div class="ip-detail-item-value">${escapeHtml(geoInfo.city || 'Unknown')}</div>
+                            </div>
+                            <div>
+                                <div class="ip-detail-item-label">Region</div>
+                                <div class="ip-detail-item-value">${escapeHtml(geoInfo.region || 'Unknown')}</div>
+                            </div>
+                            <div>
+                                <div class="ip-detail-item-label">Timezone</div>
+                                <div class="ip-detail-item-value">${escapeHtml(geoInfo.timezone || 'N/A')}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ip-detail-section">
+                        <div class="ip-detail-section-title">Network</div>
+                        <div class="ip-detail-grid">
+                            <div>
+                                <div class="ip-detail-item-label">ISP / Organization</div>
+                                <div class="ip-detail-item-value">${escapeHtml(geoInfo.isp || 'Unknown')}</div>
+                            </div>
+                            <div>
+                                <div class="ip-detail-item-label">ASN</div>
+                                <div class="ip-detail-item-value">AS${escapeHtml(geoInfo.asn || 'N/A')}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Add threat intel section if we have data
+                if (geoInfo.threat_level || geoInfo.abuseipdb_score !== undefined) {
+                    const threatColor = geoInfo.threat_level === 'critical' || geoInfo.threat_level === 'high' ? TC.danger :
+                                        geoInfo.threat_level === 'medium' ? '#f59e0b' : TC.success;
+                    const abuseScore = geoInfo.abuseipdb_score || 0;
+                    const abuseColor = abuseScore >= 70 ? TC.danger : abuseScore >= 40 ? '#f59e0b' : TC.success;
+
+                    const networkFlags = [];
+                    if (geoInfo.is_tor) networkFlags.push('<span style="background:#7c3aed;color:white;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:4px;">TOR</span>');
+                    if (geoInfo.is_vpn) networkFlags.push('<span style="background:#2563eb;color:white;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:4px;">VPN</span>');
+                    if (geoInfo.is_datacenter) networkFlags.push('<span style="background:#64748b;color:white;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:4px;">Datacenter</span>');
+                    if (geoInfo.is_proxy) networkFlags.push('<span style="background:#8b5cf6;color:white;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:4px;">Proxy</span>');
+
+                    geoSection += `
+                    <div class="ip-detail-section">
+                        <div class="ip-detail-section-title">Threat Intelligence</div>
+                        <div class="ip-detail-grid">
+                            <div>
+                                <div class="ip-detail-item-label">Threat Level</div>
+                                <div class="ip-detail-item-value"><span style="color:${threatColor};font-weight:600;">${escapeHtml((geoInfo.threat_level || 'unknown').toUpperCase())}</span></div>
+                            </div>
+                            <div>
+                                <div class="ip-detail-item-label">AbuseIPDB Score</div>
+                                <div class="ip-detail-item-value"><span style="color:${abuseColor};font-weight:600;">${abuseScore}%</span> (${geoInfo.abuseipdb_reports || 0} reports)</div>
+                            </div>
+                            ${networkFlags.length > 0 ? `
+                            <div style="grid-column: span 2;">
+                                <div class="ip-detail-item-label">Network Flags</div>
+                                <div class="ip-detail-item-value">${networkFlags.join('')}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    `;
+                }
             }
 
             return `
-                <tr style="border-bottom: 1px solid var(--border-light);" data-ip="${escapeHtml(ipAddress)}" data-agent="${agentName}" data-source="${escapeHtml(block.source)}" data-is-active="${block.is_active}">
-                    <td style="padding: 10px; font-family: monospace; font-weight: 600; font-size: 13px;">
-                        ${escapeHtml(ipAddress)}
-                    </td>
-                    <td style="padding: 10px; font-size: 13px;">
-                        ${agentName}
-                    </td>
-                    <td style="padding: 10px; text-align: center; font-size: 13px;" class="ip-attempts-cell" data-ip="${escapeHtml(ipAddress)}">
-                        ${block.failed_attempts && block.failed_attempts > 0 ? `<span style="font-weight: 600; color: #D13438;">${block.failed_attempts}</span>` : '<span style="color: var(--text-secondary);">-</span>'}
-                    </td>
-                    <td style="padding: 10px; font-size: 13px;" class="ip-location-cell" data-ip="${escapeHtml(ipAddress)}">
-                        ${locationText ? escapeHtml(locationText) : '<span style="color: var(--text-secondary);">...</span>'}
-                    </td>
-                    <td style="padding: 10px; font-size: 13px; max-width: 250px; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(block.reason || 'No reason specified')}">
-                        ${escapeHtml(block.reason || 'No reason specified')}
-                    </td>
-                    <td style="padding: 10px;">${sourceBadge}</td>
-                    <td style="padding: 10px; font-size: 13px; white-space: nowrap;">
-                        ${formatLocalDateTime(block.blocked_at)}
-                    </td>
-                    <td style="padding: 10px; font-size: 13px; white-space: nowrap;">
-                        ${expiresAt}
-                    </td>
-                    <td style="padding: 10px; text-align: center;">${statusBadge}</td>
-                    <td style="padding: 10px; text-align: center; white-space: nowrap;">
-                        ${actionButtons}
-                    </td>
-                </tr>
+                <div class="ip-detail-content">
+                    <div class="ip-detail-header">
+                        <div class="ip-detail-ip">${escapeHtml(ipAddress)}</div>
+                        <div class="ip-detail-status">${statusBadges.join('')}</div>
+                    </div>
+                    ${geoSection}
+                </div>
             `;
-        }).join('');
+        },
 
-        // Populate agent filter dropdown
-        populateAgentFilter(uniqueAgents);
+        /**
+         * Show modal
+         */
+        show(title, content, options = {}) {
+            this.injectStyles();
 
-        // Enrich location data asynchronously
-        enrichBlocksLocationData();
+            document.querySelectorAll('.block-modal-overlay').forEach(el => el.remove());
 
-        // Show table
-        loadingEl.style.display = 'none';
-        tableEl.style.display = 'block';
+            const overlay = document.createElement('div');
+            overlay.className = 'block-modal-overlay';
 
-        // Update stats
-        updateBlockStats(data.blocks);
+            const modal = document.createElement('div');
+            modal.className = 'block-modal';
 
-    } catch (error) {
-        console.error('Error loading IP blocks:', error);
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
-    }
-}
+            const titleIcon = options.icon || '';
 
-// Get badge for block source
-function getSourceBadge(source) {
-    const badges = {
-        'manual': '<span style="padding: 4px 8px; background: #0078D4; color: white; border-radius: 3px; font-size: 11px; font-weight: 600;">MANUAL</span>',
-        'rule_based': '<span style="padding: 4px 8px; background: #8764B8; color: white; border-radius: 3px; font-size: 11px; font-weight: 600;">RULE</span>',
-        'ml_threshold': '<span style="padding: 4px 8px; background: #CA5010; color: white; border-radius: 3px; font-size: 11px; font-weight: 600;">ML</span>',
-        'api_reputation': '<span style="padding: 4px 8px; background: #D13438; color: white; border-radius: 3px; font-size: 11px; font-weight: 600;">API</span>',
-        'anomaly_detection': '<span style="padding: 4px 8px; background: #FFB900; color: #323130; border-radius: 3px; font-size: 11px; font-weight: 600;">ANOMALY</span>'
+            modal.innerHTML = `
+                <div class="block-modal-header">
+                    <h3 class="block-modal-title">${titleIcon}${escapeHtml(title)}</h3>
+                    <button class="block-modal-close" title="Close">&times;</button>
+                </div>
+                <div class="block-modal-body">${content}</div>
+                <div class="block-modal-footer">
+                    <button class="block-modal-btn block-modal-btn-primary modal-close-action">Close</button>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            document.body.style.overflow = 'hidden';
+
+            const closeModal = () => {
+                overlay.style.animation = 'blockModalFadeIn 0.15s ease-out reverse';
+                modal.style.animation = 'blockModalSlideIn 0.15s ease-out reverse';
+                setTimeout(() => {
+                    overlay.remove();
+                    document.body.style.overflow = '';
+                }, 140);
+            };
+
+            modal.querySelector('.block-modal-close').onclick = closeModal;
+            modal.querySelector('.modal-close-action').onclick = closeModal;
+            overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+
+            const keyHandler = (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', keyHandler);
+                }
+            };
+            document.addEventListener('keydown', keyHandler);
+
+            return { overlay, modal, closeModal };
+        },
+
+        /**
+         * Inject modal styles
+         */
+        injectStyles() {
+            if (this.stylesInjected) return;
+            if (document.getElementById('block-modal-styles')) return;
+
+            const style = document.createElement('style');
+            style.id = 'block-modal-styles';
+            style.textContent = `
+                .block-modal-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10000;
+                    animation: blockModalFadeIn 0.2s ease-out;
+                }
+                .block-modal {
+                    background: var(--surface);
+                    border-radius: 8px;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                    max-width: 600px;
+                    width: 90%;
+                    max-height: 85vh;
+                    overflow: hidden;
+                    animation: blockModalSlideIn 0.2s ease-out;
+                }
+                .block-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 16px 20px;
+                    background: linear-gradient(135deg, ${TC.primary} 0%, ${TC.primaryDark} 100%);
+                    color: white;
+                }
+                .block-modal-title {
+                    margin: 0;
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+                .block-modal-close {
+                    background: none;
+                    border: none;
+                    color: rgba(255, 255, 255, 0.8);
+                    font-size: 24px;
+                    cursor: pointer;
+                    padding: 0;
+                    line-height: 1;
+                }
+                .block-modal-close:hover { color: white; }
+                .block-modal-body {
+                    padding: 20px;
+                    max-height: 60vh;
+                    overflow-y: auto;
+                }
+                .block-modal-footer {
+                    padding: 16px 20px;
+                    border-top: 1px solid var(--border);
+                    display: flex;
+                    justify-content: flex-end;
+                }
+                .block-modal-btn {
+                    padding: 8px 16px;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                }
+                .block-modal-btn-primary {
+                    background: ${TC.primary};
+                    color: white;
+                }
+                .block-modal-btn-primary:hover { background: ${TC.primaryHover}; }
+                .block-modal-btn-secondary {
+                    background: var(--background);
+                    color: var(--text-primary);
+                    border: 1px solid var(--border);
+                }
+                .block-modal-btn-secondary:hover { background: var(--border); }
+
+                .ip-detail-content { }
+                .ip-detail-header {
+                    text-align: center;
+                    padding-bottom: 16px;
+                    border-bottom: 1px solid var(--border);
+                    margin-bottom: 16px;
+                }
+                .ip-detail-ip {
+                    font-size: 24px;
+                    font-weight: 700;
+                    font-family: var(--font-mono);
+                    margin-bottom: 8px;
+                }
+                .ip-detail-status { }
+                .ip-detail-section {
+                    margin-bottom: 16px;
+                    padding: 16px;
+                    background: var(--background);
+                    border-radius: 6px;
+                }
+                .ip-detail-section-title {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: var(--text-secondary);
+                    margin-bottom: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .ip-detail-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 12px;
+                }
+                .ip-detail-item-label {
+                    font-size: 11px;
+                    color: var(--text-hint);
+                    margin-bottom: 2px;
+                }
+                .ip-detail-item-value {
+                    font-size: 13px;
+                    color: var(--text-primary);
+                }
+
+                @keyframes blockModalFadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes blockModalSlideIn {
+                    from { transform: translateY(-20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+
+                @media (max-width: 600px) {
+                    .block-modal { width: 95%; }
+                    .ip-detail-grid { grid-template-columns: 1fr; }
+                }
+            `;
+            document.head.appendChild(style);
+            this.stylesInjected = true;
+        }
     };
-    return badges[source] || '<span style="padding: 4px 8px; background: #8A8886; color: white; border-radius: 3px; font-size: 11px; font-weight: 600;">UNKNOWN</span>';
-}
+})();
+/**
+ * Blocked IPs - Actions Module
+ * Block/Unblock/Delete operations
+ */
 
-// Update block statistics
-function updateBlockStats(blocks) {
-    const activeBlocks = blocks.filter(b => b.is_active).length;
-    const totalBlocks = blocks.length;
-    const ruleBlocks = blocks.filter(b => b.source === 'rule_based').length;
-    const manualBlocks = blocks.filter(b => b.source === 'manual').length;
-    const expiredBlocks = blocks.filter(b => !b.is_active).length;
+(function() {
+    'use strict';
 
-    // Update stat cards
-    const statActiveEl = document.getElementById('stat-active-blocks');
-    const statTotalEl = document.getElementById('stat-total-blocks');
-    const statRuleEl = document.getElementById('stat-rule-blocks');
-    const statManualEl = document.getElementById('stat-manual-blocks');
-    const statExpiredEl = document.getElementById('stat-expired-blocks');
+    const BlockedIPs = window.BlockedIPs = window.BlockedIPs || {};
+    const escapeHtml = window.escapeHtml || ((t) => t == null ? '' : String(t).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[m]));
+    const TC = window.TC || { primary:'#0078D4', danger:'#D13438', success:'#107C10', warning:'#FFB900', purple:'#8764B8', textSecondary:'#605E5C' };
 
-    if (statActiveEl) statActiveEl.textContent = activeBlocks.toLocaleString();
-    if (statTotalEl) statTotalEl.textContent = totalBlocks.toLocaleString();
-    if (statRuleEl) statRuleEl.textContent = ruleBlocks.toLocaleString();
-    if (statManualEl) statManualEl.textContent = manualBlocks.toLocaleString();
-    if (statExpiredEl) statExpiredEl.textContent = expiredBlocks.toLocaleString();
-}
+    BlockedIPs.Actions = {
+        /**
+         * Unblock IP from table
+         */
+        async unblock(ipAddress, blockId) {
+            if (!confirm(`Unblock IP: ${ipAddress}?`)) return;
+            await this.unblockIP(ipAddress, 'Unblocked from IP Blocks page');
+        },
 
-// Setup form toggle buttons
-function setupFormToggles() {
-    const showBlockFormBtn = document.getElementById('showManualBlockForm');
-    const showUnblockFormBtn = document.getElementById('showManualUnblockForm');
-    const cancelBlockFormBtn = document.getElementById('cancelBlockForm');
-    const cancelUnblockFormBtn = document.getElementById('cancelUnblockForm');
-
-    const blockForm = document.getElementById('manualBlockForm');
-    const unblockForm = document.getElementById('manualUnblockForm');
-
-    if (showBlockFormBtn && blockForm) {
-        showBlockFormBtn.onclick = () => {
-            blockForm.style.display = 'block';
-            if (unblockForm) unblockForm.style.display = 'none';
-        };
-    }
-
-    if (showUnblockFormBtn && unblockForm) {
-        showUnblockFormBtn.onclick = () => {
-            unblockForm.style.display = 'block';
-            if (blockForm) blockForm.style.display = 'none';
-        };
-    }
-
-    if (cancelBlockFormBtn && blockForm) {
-        cancelBlockFormBtn.onclick = () => {
-            blockForm.style.display = 'none';
-        };
-    }
-
-    if (cancelUnblockFormBtn && unblockForm) {
-        cancelUnblockFormBtn.onclick = () => {
-            unblockForm.style.display = 'none';
-        };
-    }
-}
-
-// Setup refresh button
-function setupRefreshButton() {
-    const refreshBtn = document.getElementById('refreshBlocks');
-    if (refreshBtn) {
-        refreshBtn.onclick = () => loadIPBlocks();
-    }
-}
-
-// Setup manual block form
-function setupManualBlockForm() {
-    const form = document.getElementById('manualBlockForm');
-    if (!form) return;
-
-    const submitBtn = document.getElementById('submitBlockIp');
-    if (submitBtn) {
-        submitBtn.onclick = async (e) => {
-            e.preventDefault();
-
-            const ipAddress = document.getElementById('blockIpAddress').value.trim();
-            const reason = document.getElementById('blockReason').value.trim();
-            const duration = parseInt(document.getElementById('blockDuration').value);
-
-            if (!ipAddress) {
-                showBlockNotification('Please enter an IP address', 'error');
-                return;
-            }
-
-            if (!reason) {
-                showBlockNotification('Please enter a reason', 'error');
-                return;
-            }
+        /**
+         * Re-block a previously unblocked IP
+         */
+        async reblock(ipAddress) {
+            if (!confirm(`Re-block IP: ${ipAddress}?`)) return;
 
             try {
                 const response = await fetch('/api/dashboard/blocking/blocks/manual', {
@@ -293,907 +1039,204 @@ function setupManualBlockForm() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ip_address: ipAddress,
-                        reason: reason,
-                        duration_minutes: duration
+                        reason: 'Re-blocked from IP Blocks page',
+                        duration_hours: 24
                     })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showBlockNotification(`IP ${ipAddress} blocked successfully`, 'success');
-                    // Clear form
-                    document.getElementById('blockIpAddress').value = '';
-                    document.getElementById('blockReason').value = '';
-                    document.getElementById('blockDuration').value = '1440';
-                    // Hide form
-                    form.style.display = 'none';
-                    // Reload blocks
-                    setTimeout(() => loadIPBlocks(), 1000);
+                    BlockedIPs.UI.notify(`IP ${ipAddress} has been re-blocked`, 'success');
+                    BlockedIPs.Core.loadIPBlocks();
                 } else {
-                    showBlockNotification(`Failed to block IP: ${data.error || 'Unknown error'}`, 'error');
+                    BlockedIPs.UI.notify(`Failed to re-block IP: ${data.error || 'Unknown error'}`, 'error');
                 }
             } catch (error) {
-                console.error('Error blocking IP:', error);
-                showBlockNotification('Error blocking IP', 'error');
+                console.error('Error re-blocking IP:', error);
+                BlockedIPs.UI.notify(`Error re-blocking IP: ${error.message}`, 'error');
             }
-        };
-    }
-}
+        },
 
-// Setup manual unblock form
-function setupManualUnblockForm() {
-    const form = document.getElementById('manualUnblockForm');
-    if (!form) return;
-
-    const submitBtn = document.getElementById('submitUnblockIp');
-    if (submitBtn) {
-        submitBtn.onclick = async (e) => {
-            e.preventDefault();
-
-            const ipAddress = document.getElementById('unblockIpAddress').value.trim();
-            const reason = document.getElementById('unblockReason').value.trim();
-
-            if (!ipAddress) {
-                showBlockNotification('Please enter an IP address', 'error');
+        /**
+         * Disable block (unblock but keep record)
+         */
+        async disable(ipAddress, blockId) {
+            if (!confirm(`Disable block for IP: ${ipAddress}?\n\nThis will unblock the IP but keep the record for reference.`)) {
                 return;
             }
+            await this.unblockIP(ipAddress, 'Disabled from IP Blocks page');
+        },
 
-            const success = await unblockIPAddress(ipAddress, reason);
-            if (success && form) {
-                form.style.display = 'none';
-            }
-        };
-    }
-}
+        /**
+         * Unblock IP address
+         */
+        async unblockIP(ipAddress, reason) {
+            try {
+                const response = await fetch('/api/dashboard/blocking/blocks/unblock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ip_address: ipAddress,
+                        reason: reason || 'Unblocked from dashboard'
+                    })
+                });
 
-// Unblock IP from table row
-async function unblockIPFromTable(ipAddress, blockId) {
-    if (!confirm(`Are you sure you want to unblock IP: ${ipAddress}?`)) {
-        return;
-    }
+                const data = await response.json();
 
-    await unblockIPAddress(ipAddress, 'Unblocked from dashboard');
-}
-
-// Re-block IP from table row (for previously unblocked IPs)
-async function reblockIPFromTable(ipAddress) {
-    if (!confirm(`Are you sure you want to block IP: ${ipAddress} again?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/dashboard/blocking/blocks/manual', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ip_address: ipAddress,
-                reason: 'Re-blocked from IP Blocks page',
-                duration_minutes: 1440
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showBlockNotification(`IP ${ipAddress} blocked successfully`, 'success');
-            // Reload blocks
-            setTimeout(() => loadIPBlocks(), 1000);
-        } else {
-            showBlockNotification(`Failed to block IP: ${data.message || data.error || 'Unknown error'}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error blocking IP:', error);
-        showBlockNotification('Error blocking IP', 'error');
-    }
-}
-
-// Unblock IP address
-async function unblockIPAddress(ipAddress, reason) {
-    try {
-        const response = await fetch('/api/dashboard/blocking/blocks/unblock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ip_address: ipAddress,
-                reason: reason || 'Manually unblocked from dashboard'
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showBlockNotification(`IP ${ipAddress} unblocked successfully`, 'success');
-            // Clear unblock form if it exists
-            const unblockForm = document.getElementById('unblockIpAddress');
-            if (unblockForm) {
-                unblockForm.value = '';
-                const reasonField = document.getElementById('unblockReason');
-                if (reasonField) reasonField.value = '';
-            }
-            // Reload blocks
-            setTimeout(() => loadIPBlocks(), 1000);
-            return true;
-        } else {
-            showBlockNotification(`Failed to unblock IP: ${data.error || 'Unknown error'}`, 'error');
-            return false;
-        }
-    } catch (error) {
-        console.error('Error unblocking IP:', error);
-        showBlockNotification('Error unblocking IP', 'error');
-        return false;
-    }
-}
-
-// Populate agent filter dropdown
-function populateAgentFilter(uniqueAgents) {
-    const agentFilter = document.getElementById('blockAgentFilter');
-    if (!agentFilter) return;
-
-    // Keep current selection
-    const currentValue = agentFilter.value;
-
-    // Clear and rebuild options
-    agentFilter.innerHTML = '<option value="">All Agents</option>';
-
-    // Sort agents alphabetically
-    const sortedAgents = Array.from(uniqueAgents).sort();
-
-    sortedAgents.forEach(agent => {
-        const option = document.createElement('option');
-        option.value = agent;
-        option.textContent = agent;
-        agentFilter.appendChild(option);
-    });
-
-    // Restore selection if it still exists
-    if (currentValue && sortedAgents.includes(currentValue)) {
-        agentFilter.value = currentValue;
-    }
-}
-
-// Setup filter functionality
-function setupBlockFilters() {
-    const agentFilter = document.getElementById('blockAgentFilter');
-    const sourceFilter = document.getElementById('blockSourceFilter');
-    const statusFilter = document.getElementById('blockStatusFilter');
-
-    // Agent filter triggers server-side reload (agent-based blocking)
-    if (agentFilter) {
-        agentFilter.onchange = async () => {
-            currentAgentFilter = agentFilter.value;
-            // Reload data from server with new agent filter
-            await loadIPBlocks();
-        };
-    }
-
-    // Source and status filters are client-side only
-    if (sourceFilter) {
-        sourceFilter.onchange = applyBlockFilters;
-    }
-
-    if (statusFilter) {
-        statusFilter.onchange = applyBlockFilters;
-    }
-}
-
-// Apply filters to block table (client-side filtering for source and status)
-function applyBlockFilters() {
-    const sourceFilter = document.getElementById('blockSourceFilter')?.value || '';
-    const statusFilter = document.getElementById('blockStatusFilter')?.value || '';
-
-    const rows = document.querySelectorAll('#blocksTableBody tr');
-
-    rows.forEach(row => {
-        let showRow = true;
-
-        // Get source from data attribute
-        const rowSource = row.getAttribute('data-source') || '';
-
-        // Get status from data attribute
-        const isActive = row.getAttribute('data-is-active') === 'true';
-
-        // Apply source filter
-        if (sourceFilter && rowSource !== sourceFilter) {
-            showRow = false;
-        }
-
-        // Apply status filter (values are "true" or "false" as strings)
-        if (statusFilter) {
-            if (statusFilter === 'true' && !isActive) {
-                showRow = false;
-            } else if (statusFilter === 'false' && isActive) {
-                showRow = false;
-            }
-        }
-
-        row.style.display = showRow ? '' : 'none';
-    });
-}
-
-// Show notification
-function showBlockNotification(message, type = 'info') {
-    const colors = {
-        success: '#107C10',
-        error: '#D13438',
-        info: '#0078D4',
-        warning: '#FFB900'
-    };
-
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        padding: 16px 24px;
-        background: ${colors[type]};
-        color: white;
-        border-radius: 4px;
-        font-size: 14px;
-        font-weight: 600;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        animation: slideIn 0.3s ease;
-    `;
-    notification.textContent = message;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
-
-// Add animation styles if not already present
-if (!document.getElementById('block-notification-styles')) {
-    const style = document.createElement('style');
-    style.id = 'block-notification-styles';
-    style.textContent = `
-        @keyframes slideIn {
-            from { transform: translateX(400px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(400px); opacity: 0; }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Enrich location data for blocked IPs using FreeIPAPI
-async function enrichBlocksLocationData() {
-    const locationCells = document.querySelectorAll('.ip-location-cell');
-    if (locationCells.length === 0) return;
-
-    // Get unique IPs
-    const uniqueIps = new Set();
-    locationCells.forEach(cell => {
-        const ip = cell.getAttribute('data-ip');
-        if (ip) uniqueIps.add(ip);
-    });
-
-    // Fetch info for each IP (limit concurrent requests)
-    for (const ip of uniqueIps) {
-        try {
-            const response = await fetch(`/api/dashboard/ip-info/lookup/${encodeURIComponent(ip)}`);
-            const data = await response.json();
-
-            // Update all cells for this IP
-            const cells = document.querySelectorAll(`.ip-location-cell[data-ip="${ip}"]`);
-            cells.forEach(cell => {
                 if (data.success) {
-                    const flagImg = data.country_code && data.country_code !== 'N/A'
-                        ? `<img src="https://flagcdn.com/20x15/${data.country_code.toLowerCase()}.png" alt="${data.country_code}" style="vertical-align: middle; margin-right: 6px;">`
-                        : '';
-                    const locationText = data.is_private
-                        ? 'Private Network'
-                        : `${data.city || 'Unknown'}, ${data.country || 'Unknown'}`;
-                    cell.innerHTML = `${flagImg}<span>${escapeHtml(locationText)}</span>`;
+                    BlockedIPs.UI.notify(`IP ${ipAddress} has been unblocked`, 'success');
+                    BlockedIPs.Core.loadIPBlocks();
                 } else {
-                    cell.innerHTML = '<span style="color: var(--text-secondary);">Unknown</span>';
+                    BlockedIPs.UI.notify(`Failed to unblock IP: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error unblocking IP:', error);
+                BlockedIPs.UI.notify(`Error unblocking IP: ${error.message}`, 'error');
+            }
+        },
+
+        /**
+         * Show delete confirmation modal
+         */
+        confirmDelete(ipAddress, blockId) {
+            BlockedIPs.Modal.injectStyles();
+
+            document.querySelectorAll('.block-modal-overlay').forEach(el => el.remove());
+
+            const overlay = document.createElement('div');
+            overlay.className = 'block-modal-overlay';
+
+            const modal = document.createElement('div');
+            modal.className = 'block-modal';
+
+            modal.innerHTML = `
+                <div class="block-modal-header" style="background: linear-gradient(135deg, ${TC.danger} 0%, ${TC.danger} 100%);">
+                    <h3 class="block-modal-title" style="color: white;">
+                        <span style="font-size: 20px;">⚠️</span>
+                        Delete Block Record
+                    </h3>
+                    <button class="block-modal-close" style="color: rgba(255,255,255,0.8);" title="Close">&times;</button>
+                </div>
+                <div class="block-modal-body" style="padding: 24px;">
+                    <p style="margin-bottom: 16px;">This will <strong>permanently delete</strong> the block record for:</p>
+                    <div style="background: var(--background); padding: 12px 16px; border-radius: 6px; font-family: monospace; font-size: 16px; margin-bottom: 16px;">
+                        ${escapeHtml(ipAddress)}
+                    </div>
+                    <p style="color: ${TC.danger}; margin-bottom: 16px;">⚠️ This action cannot be undone.</p>
+                    <p style="margin-bottom: 8px;">Type the IP address to confirm:</p>
+                    <input type="text" id="deleteConfirmInput" class="form-control" placeholder="Enter IP address" style="margin-bottom: 16px;">
+                </div>
+                <div class="block-modal-footer" style="justify-content: flex-end; gap: 10px;">
+                    <button class="block-modal-btn block-modal-btn-secondary modal-cancel">Cancel</button>
+                    <button class="block-modal-btn" id="confirmDeleteBtn" style="background: ${TC.danger}; color: white; opacity: 0.5; pointer-events: none;">Delete Record</button>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            document.body.style.overflow = 'hidden';
+
+            const input = modal.querySelector('#deleteConfirmInput');
+            const deleteBtn = modal.querySelector('#confirmDeleteBtn');
+
+            input.addEventListener('input', () => {
+                if (input.value === ipAddress) {
+                    deleteBtn.style.opacity = '1';
+                    deleteBtn.style.pointerEvents = 'auto';
+                } else {
+                    deleteBtn.style.opacity = '0.5';
+                    deleteBtn.style.pointerEvents = 'none';
                 }
             });
-        } catch (error) {
-            console.error(`Error fetching location for ${ip}:`, error);
-            const cells = document.querySelectorAll(`.ip-location-cell[data-ip="${ip}"]`);
-            cells.forEach(cell => {
-                cell.innerHTML = '<span style="color: var(--text-secondary);">Error</span>';
-            });
-        }
-    }
-}
 
-// Show IP Details Modal (self-contained version)
-async function showBlockIpDetails(ipAddress) {
-    if (!ipAddress) {
-        showBlockNotification('No IP address provided', 'error');
-        return;
-    }
+            const closeModal = () => {
+                overlay.remove();
+                document.body.style.overflow = '';
+            };
 
-    // Show loading modal
-    showBlockModal('Loading...', `
-        <div style="text-align: center; padding: 40px;">
-            <div style="font-size: 24px; margin-bottom: 16px;">⏳</div>
-            <p>Loading details for ${escapeHtml(ipAddress)}...</p>
-        </div>
-    `);
+            modal.querySelector('.block-modal-close').onclick = closeModal;
+            modal.querySelector('.modal-cancel').onclick = closeModal;
+            overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
 
-    try {
-        // Fetch IP status and geolocation info in parallel
-        const [statusResponse, geoResponse] = await Promise.all([
-            fetch(`/api/dashboard/event-actions/ip-status/${encodeURIComponent(ipAddress)}`),
-            fetch(`/api/dashboard/ip-info/lookup/${encodeURIComponent(ipAddress)}`)
-        ]);
+            deleteBtn.onclick = async () => {
+                if (input.value === ipAddress) {
+                    closeModal();
+                    await this.deleteFromDB(ipAddress, blockId);
+                }
+            };
 
-        const status = await statusResponse.json();
-        const geoInfo = await geoResponse.json();
+            input.focus();
+        },
 
-        // Build status badges
-        const statusBadges = [];
-        if (status && status.is_blocked) {
-            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #D83B01; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Blocked</span>');
-        }
-        if (status && status.is_whitelisted) {
-            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #107C10; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Whitelisted</span>');
-        }
-        if (status && status.is_watched) {
-            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #FFB900; color: #323130; border-radius: 3px; font-size: 11px; margin-right: 5px;">Watched</span>');
-        }
-        if (geoInfo && geoInfo.is_proxy) {
-            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #8764B8; color: white; border-radius: 3px; font-size: 11px; margin-right: 5px;">Proxy/VPN</span>');
-        }
-        if (statusBadges.length === 0) {
-            statusBadges.push('<span style="display: inline-block; padding: 4px 8px; background: #605E5C; color: white; border-radius: 3px; font-size: 11px;">No Special Status</span>');
-        }
+        /**
+         * Delete block record from database
+         */
+        async deleteFromDB(ipAddress, blockId) {
+            try {
+                const response = await fetch(`/api/dashboard/blocking/blocks/${blockId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
 
-        // Build geolocation section
-        let geoSection = '';
-        if (geoInfo && geoInfo.success) {
-            const flagImg = geoInfo.country_code && geoInfo.country_code !== 'N/A'
-                ? `<img src="https://flagcdn.com/24x18/${geoInfo.country_code.toLowerCase()}.png" alt="${geoInfo.country_code}" style="vertical-align: middle; margin-right: 6px;">`
-                : '';
+                const data = await response.json();
 
-            geoSection = `
-                <div class="ip-detail-section">
-                    <div class="ip-detail-section-title">Geolocation</div>
-                    <div class="ip-detail-grid">
-                        <div>
-                            <div class="ip-detail-item-label">Country</div>
-                            <div class="ip-detail-item-value">${flagImg}${escapeHtml(geoInfo.country || 'Unknown')} (${escapeHtml(geoInfo.country_code || 'N/A')})</div>
-                        </div>
-                        <div>
-                            <div class="ip-detail-item-label">City</div>
-                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.city || 'Unknown')}</div>
-                        </div>
-                        <div>
-                            <div class="ip-detail-item-label">Region</div>
-                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.region || 'Unknown')}</div>
-                        </div>
-                        <div>
-                            <div class="ip-detail-item-label">Timezone</div>
-                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.timezone || 'N/A')}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="ip-detail-section">
-                    <div class="ip-detail-section-title">Network</div>
-                    <div class="ip-detail-grid">
-                        <div>
-                            <div class="ip-detail-item-label">ISP / Organization</div>
-                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.isp || 'Unknown')}</div>
-                        </div>
-                        <div>
-                            <div class="ip-detail-item-label">ASN</div>
-                            <div class="ip-detail-item-value">AS${escapeHtml(geoInfo.asn || 'N/A')}</div>
-                        </div>
-                        <div>
-                            <div class="ip-detail-item-label">Coordinates</div>
-                            <div class="ip-detail-item-value">${geoInfo.latitude || 0}, ${geoInfo.longitude || 0}</div>
-                        </div>
-                        <div>
-                            <div class="ip-detail-item-label">Continent</div>
-                            <div class="ip-detail-item-value">${escapeHtml(geoInfo.continent || 'Unknown')}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else {
-            geoSection = `
-                <div class="ip-detail-section">
-                    <div style="text-align: center; color: var(--text-secondary); padding: 12px;">
-                        Geolocation info unavailable
-                    </div>
-                </div>
-            `;
-        }
-
-        const content = `
-            <div style="display: grid; gap: 20px;">
-                <div>
-                    <div class="ip-detail-item-label">IP Address</div>
-                    <div style="font-family: 'SF Mono', 'Consolas', monospace; font-size: 22px; font-weight: 600; color: var(--text-primary);">${escapeHtml(ipAddress)}</div>
-                </div>
-                <div>
-                    <div class="ip-detail-item-label" style="margin-bottom: 8px;">Status</div>
-                    <div>${statusBadges.join('')}</div>
-                </div>
-                <div class="ip-detail-grid">
-                    <div class="ip-stat-box">
-                        <div class="ip-stat-value" style="color: #0078D4;">${status?.notes_count || 0}</div>
-                        <div class="ip-stat-label">Notes</div>
-                    </div>
-                    <div class="ip-stat-box">
-                        <div class="ip-stat-value" style="color: #F7630C;">${status?.reports_count || 0}</div>
-                        <div class="ip-stat-label">Reports</div>
-                    </div>
-                </div>
-                ${geoSection}
-            </div>
-        `;
-
-        showBlockModal(`IP Details: ${ipAddress}`, content, { icon: '<span style="font-size: 20px; margin-right: 6px;">🌐</span>' });
-
-    } catch (error) {
-        console.error('Error loading IP details:', error);
-        showBlockModal('Error', `
-            <div style="text-align: center; padding: 20px; color: #D13438;">
-                <div style="font-size: 24px; margin-bottom: 12px;">❌</div>
-                <p>Error loading IP details</p>
-            </div>
-        `);
-    }
-}
-
-// Inject modal styles if not present
-function injectBlockModalStyles() {
-    if (document.getElementById('block-modal-styles')) return;
-
-    const style = document.createElement('style');
-    style.id = 'block-modal-styles';
-    style.textContent = `
-        .block-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            z-index: 10000;
-            padding: 60px 20px 20px 20px;
-            overflow-y: auto;
-            animation: blockModalFadeIn 0.2s ease-out;
-            box-sizing: border-box;
-        }
-
-        @keyframes blockModalFadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes blockModalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px) scale(0.98);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
+                if (data.success) {
+                    BlockedIPs.UI.notify(`Block record for ${ipAddress} has been deleted`, 'success');
+                    BlockedIPs.Core.loadIPBlocks();
+                } else {
+                    BlockedIPs.UI.notify(`Failed to delete record: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting block record:', error);
+                BlockedIPs.UI.notify(`Error deleting record: ${error.message}`, 'error');
             }
         }
+    };
+})();
+/**
+ * Blocked IPs Module - Entry Point
+ * Modular structure for IP blocking management
+ *
+ * Sub-modules:
+ * - core.js: Data loading and table rendering
+ * - actions.js: Block/unblock operations
+ * - filters.js: Search and filter functionality
+ * - forms.js: Manual block/unblock forms
+ * - modal.js: IP details modal
+ * - ui.js: UI helpers and notifications
+ */
 
-        .block-modal {
-            background: var(--card-bg, #ffffff);
-            border-radius: 8px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05);
-            max-width: 520px;
-            width: 100%;
-            animation: blockModalSlideIn 0.25s ease-out;
-            margin: 0 auto 40px auto;
-            flex-shrink: 0;
-        }
+(function() {
+    'use strict';
 
-        .block-modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--border, #e0e0e0);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--surface, #fafafa);
-            border-radius: 8px 8px 0 0;
-        }
+    // Create namespace
+    window.BlockedIPs = window.BlockedIPs || {};
 
-        .block-modal-title {
-            font-size: 17px;
-            font-weight: 600;
-            margin: 0;
-            color: var(--text-primary, #323130);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .block-modal-close {
-            background: none;
-            border: none;
-            font-size: 22px;
-            cursor: pointer;
-            color: var(--text-secondary, #605E5C);
-            padding: 0;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            transition: all 0.15s ease;
-        }
-
-        .block-modal-close:hover {
-            background: var(--hover-bg, #f0f0f0);
-            color: var(--text-primary, #323130);
-        }
-
-        .block-modal-body {
-            padding: 24px;
-        }
-
-        .block-modal-footer {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border, #e0e0e0);
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            background: var(--surface, #fafafa);
-            border-radius: 0 0 8px 8px;
-        }
-
-        .block-modal-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.15s ease;
-        }
-
-        .block-modal-btn-primary {
-            background: var(--azure-blue, #0078D4);
-            color: white;
-        }
-
-        .block-modal-btn-primary:hover {
-            background: #106EBE;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);
-        }
-
-        .block-modal-btn-secondary {
-            background: var(--surface, #f0f0f0);
-            color: var(--text-primary, #323130);
-            border: 1px solid var(--border, #e0e0e0);
-        }
-
-        .block-modal-btn-secondary:hover {
-            background: var(--hover-bg, #e8e8e8);
-        }
-
-        .block-modal-btn-danger {
-            background: #D13438;
-            color: white;
-        }
-
-        .block-modal-btn-danger:hover:not(:disabled) {
-            background: #C42B30;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(209, 52, 56, 0.3);
-        }
-
-        .block-modal-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* IP Details specific styles */
-        .ip-detail-section {
-            border-top: 1px solid var(--border, #e0e0e0);
-            padding-top: 16px;
-            margin-top: 16px;
-        }
-
-        .ip-detail-section-title {
-            font-size: 11px;
-            color: var(--text-secondary, #605E5C);
-            margin-bottom: 12px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-
-        .ip-detail-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-        }
-
-        .ip-detail-item-label {
-            font-size: 11px;
-            color: var(--text-secondary, #605E5C);
-            margin-bottom: 2px;
-        }
-
-        .ip-detail-item-value {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-primary, #323130);
-        }
-
-        .ip-stat-box {
-            background: var(--hover-bg, #f5f5f5);
-            padding: 14px;
-            border-radius: 8px;
-            text-align: center;
-            transition: transform 0.15s ease;
-        }
-
-        .ip-stat-box:hover {
-            transform: translateY(-2px);
-        }
-
-        .ip-stat-value {
-            font-size: 28px;
-            font-weight: 700;
-        }
-
-        .ip-stat-label {
-            font-size: 12px;
-            color: var(--text-secondary, #605E5C);
-            margin-top: 2px;
-        }
-
-        /* Delete confirmation specific */
-        .delete-confirm-input {
-            width: 100%;
-            padding: 12px 14px;
-            border: 2px solid var(--border, #e0e0e0);
-            border-radius: 6px;
-            font-size: 15px;
-            font-family: 'SF Mono', 'Consolas', monospace;
-            transition: all 0.2s ease;
-        }
-
-        .delete-confirm-input:focus {
-            outline: none;
-            border-color: var(--azure-blue, #0078D4);
-            box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
-        }
-
-        .delete-confirm-input.error {
-            border-color: #D13438;
-            box-shadow: 0 0 0 3px rgba(209, 52, 56, 0.1);
-        }
-
-        .delete-confirm-input.success {
-            border-color: #107C10;
-            box-shadow: 0 0 0 3px rgba(16, 124, 16, 0.1);
-        }
-
-        @media (max-width: 600px) {
-            .block-modal-overlay {
-                padding: 20px 10px;
-            }
-            .ip-detail-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Show Block Modal (improved design)
-function showBlockModal(title, content, options = {}) {
-    injectBlockModalStyles();
-
-    // Remove existing modals
-    document.querySelectorAll('.block-modal-overlay').forEach(el => el.remove());
-
-    const overlay = document.createElement('div');
-    overlay.className = 'block-modal-overlay';
-
-    const modal = document.createElement('div');
-    modal.className = 'block-modal';
-
-    const titleIcon = options.icon || '';
-
-    modal.innerHTML = `
-        <div class="block-modal-header">
-            <h3 class="block-modal-title">${titleIcon}${escapeHtml(title)}</h3>
-            <button class="block-modal-close" title="Close">&times;</button>
-        </div>
-        <div class="block-modal-body">${content}</div>
-        <div class="block-modal-footer">
-            <button class="block-modal-btn block-modal-btn-primary modal-close-action">Close</button>
-        </div>
-    `;
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden';
-
-    const closeModal = () => {
-        overlay.style.animation = 'blockModalFadeIn 0.15s ease-out reverse';
-        modal.style.animation = 'blockModalSlideIn 0.15s ease-out reverse';
-        setTimeout(() => {
-            overlay.remove();
-            document.body.style.overflow = '';
-        }, 140);
+    // Module state
+    BlockedIPs.state = {
+        currentAgentFilter: '',
+        blocks: [],
+        agents: []
     };
 
-    // Close handlers
-    modal.querySelector('.block-modal-close').onclick = closeModal;
-    modal.querySelector('.modal-close-action').onclick = closeModal;
-    overlay.onclick = (e) => {
-        if (e.target === overlay) closeModal();
-    };
-
-    // ESC to close
-    const keyHandler = (e) => {
-        if (e.key === 'Escape') {
-            closeModal();
-            document.removeEventListener('keydown', keyHandler);
-        }
-    };
-    document.addEventListener('keydown', keyHandler);
-
-    return { overlay, modal, closeModal };
-}
-
-// Disable block (unblock but keep record)
-async function disableBlockFromTable(ipAddress, blockId) {
-    if (!confirm(`Disable block for IP: ${ipAddress}?\n\nThis will unblock the IP but keep the record for reference.`)) {
-        return;
-    }
-
-    await unblockIPAddress(ipAddress, 'Disabled from IP Blocks page');
-}
-
-// Confirm delete with type-to-confirm (improved design)
-function confirmDeleteBlock(ipAddress, blockId) {
-    injectBlockModalStyles();
-
-    // Remove existing modals
-    document.querySelectorAll('.block-modal-overlay').forEach(el => el.remove());
-
-    const overlay = document.createElement('div');
-    overlay.className = 'block-modal-overlay';
-
-    const modal = document.createElement('div');
-    modal.className = 'block-modal';
-
-    modal.innerHTML = `
-        <div class="block-modal-header" style="background: linear-gradient(135deg, #D13438 0%, #A4262C 100%);">
-            <h3 class="block-modal-title" style="color: white;">
-                <span style="font-size: 20px;">⚠️</span>
-                Delete Block Record
-            </h3>
-            <button class="block-modal-close" style="color: rgba(255,255,255,0.8);" title="Close">&times;</button>
-        </div>
-        <div class="block-modal-body">
-            <p style="margin: 0 0 16px 0; color: var(--text-primary); font-size: 14px; line-height: 1.5;">
-                You are about to <strong>permanently delete</strong> the block record for:
-            </p>
-            <div style="background: linear-gradient(135deg, var(--hover-bg, #f5f5f5) 0%, var(--surface, #fafafa) 100%); padding: 16px; border-radius: 8px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 18px; font-weight: 600; text-align: center; margin-bottom: 20px; border: 1px solid var(--border);">
-                ${escapeHtml(ipAddress)}
-            </div>
-            <div style="background: rgba(209, 52, 56, 0.08); border: 1px solid rgba(209, 52, 56, 0.2); border-radius: 6px; padding: 12px 14px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: flex-start; gap: 10px;">
-                    <span style="font-size: 16px;">🚫</span>
-                    <p style="margin: 0; color: #A4262C; font-size: 13px; line-height: 1.5;">
-                        This action <strong>cannot be undone</strong>. The IP will be unblocked and all associated block history will be permanently removed.
-                    </p>
-                </div>
-            </div>
-            <div>
-                <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; color: var(--text-primary);">
-                    Type the IP address to confirm deletion:
-                </label>
-                <input type="text" id="confirmDeleteInput" class="delete-confirm-input" placeholder="Enter ${ipAddress}" autocomplete="off">
-            </div>
-        </div>
-        <div class="block-modal-footer">
-            <button class="block-modal-btn block-modal-btn-secondary modal-cancel-btn">Cancel</button>
-            <button id="confirmDeleteBtn" class="block-modal-btn block-modal-btn-danger" disabled>
-                <span style="display: flex; align-items: center; gap: 6px;">
-                    🗑️ Delete Permanently
-                </span>
-            </button>
-        </div>
-    `;
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden';
-
-    const confirmInput = modal.querySelector('#confirmDeleteInput');
-    const confirmBtn = modal.querySelector('#confirmDeleteBtn');
-
-    const closeModal = () => {
-        overlay.style.animation = 'blockModalFadeIn 0.15s ease-out reverse';
-        modal.style.animation = 'blockModalSlideIn 0.15s ease-out reverse';
-        setTimeout(() => {
-            overlay.remove();
-            document.body.style.overflow = '';
-        }, 140);
-    };
-
-    // Enable button only when IP matches
-    confirmInput.oninput = () => {
-        const matches = confirmInput.value.trim() === ipAddress;
-        confirmBtn.disabled = !matches;
-        confirmInput.classList.remove('error', 'success');
-        if (confirmInput.value.trim()) {
-            confirmInput.classList.add(matches ? 'success' : 'error');
-        }
-    };
-
-    // Delete action
-    confirmBtn.onclick = async () => {
-        if (confirmInput.value.trim() !== ipAddress) return;
-
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 6px;"><span class="loading-spinner-small"></span> Deleting...</span>';
-
+    // Main page loader - called from HTML
+    window.loadBlockedIPsPage = async function() {
         try {
-            const response = await fetch(`/api/dashboard/blocking/blocks/${blockId}`, {
-                method: 'DELETE'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                closeModal();
-                showBlockNotification(`Block record for ${ipAddress} deleted successfully`, 'success');
-                setTimeout(() => loadIPBlocks(), 500);
-            } else {
-                showBlockNotification(`Failed to delete: ${data.error || 'Unknown error'}`, 'error');
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 6px;">🗑️ Delete Permanently</span>';
-            }
+            await BlockedIPs.Filters.loadAgentsForDropdown();
+            await BlockedIPs.Core.loadIPBlocks();
+            BlockedIPs.Filters.setupAll();
+            BlockedIPs.Forms.setupAll();
         } catch (error) {
-            console.error('Error deleting block:', error);
-            showBlockNotification('Error deleting block record', 'error');
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = '<span style="display: flex; align-items: center; gap: 6px;">🗑️ Delete Permanently</span>';
+            console.error('Error loading Blocked IPs page:', error);
         }
     };
 
-    // Close handlers
-    modal.querySelector('.block-modal-close').onclick = closeModal;
-    modal.querySelector('.modal-cancel-btn').onclick = closeModal;
-    overlay.onclick = (e) => {
-        if (e.target === overlay) closeModal();
-    };
+    // Re-export commonly used functions to window for backward compatibility
+    window.showBlockIpDetails = (ip) => BlockedIPs.Modal.showDetails(ip);
+    window.unblockIPFromTable = (ip, id) => BlockedIPs.Actions.unblock(ip, id);
+    window.reblockIPFromTable = (ip) => BlockedIPs.Actions.reblock(ip);
+    window.disableBlockFromTable = (ip, id) => BlockedIPs.Actions.disable(ip, id);
+    window.confirmDeleteBlock = (ip, id) => BlockedIPs.Actions.confirmDelete(ip, id);
 
-    // ESC to close
-    const keyHandler = (e) => {
-        if (e.key === 'Escape') {
-            closeModal();
-            document.removeEventListener('keydown', keyHandler);
-        }
-    };
-    document.addEventListener('keydown', keyHandler);
-
-    // Focus input
-    setTimeout(() => confirmInput.focus(), 100);
-}
+})();

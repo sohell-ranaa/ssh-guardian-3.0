@@ -1,0 +1,291 @@
+/**
+ * SSH Guardian v3.0 - Cell Badges Component CSS
+ * Shared styles for table cell components (.c-*) used across multiple pages
+ */
+
+/* ========== IP Cell ========== */
+.c-ip {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--azure-blue);
+    word-break: break-all;
+    font-weight: 600;
+}
+
+/* ========== Tags ========== */
+.c-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.c-tag {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.c-tag.tor {
+    background: var(--color-purple-bg-light);
+    color: var(--color-violet);
+}
+
+.c-tag.vpn {
+    background: var(--color-amber-100);
+    color: var(--color-warning-dark);
+}
+
+.c-tag.proxy {
+    background: var(--color-blue-100);
+    color: var(--color-blue-bright);
+}
+
+/* ========== Location Cell ========== */
+.c-loc {
+    font-size: 12px;
+}
+
+.c-loc .isp {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+/* ========== Attempts/Actions ========== */
+.c-att {
+    display: flex;
+    gap: 6px;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+
+.c-att .f {
+    color: var(--color-danger-light);
+    font-weight: 600;
+}
+
+.c-att .s {
+    color: var(--color-success);
+}
+
+.c-att .b {
+    color: var(--color-danger-light);
+    font-weight: 600;
+}
+
+.c-att .u {
+    color: var(--color-muted-light);
+}
+
+/* ========== Users Badge ========== */
+.c-users {
+    padding: 2px 8px;
+    background: var(--background);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ========== Risk Display ========== */
+.c-risk {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.c-risk-bar {
+    width: 40px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.c-risk-fill {
+    height: 100%;
+    border-radius: 3px;
+}
+
+.c-risk-fill.low {
+    background: var(--color-green-500);
+}
+
+.c-risk-fill.med {
+    background: var(--color-warning-light);
+}
+
+.c-risk-fill.high {
+    background: var(--color-danger);
+}
+
+.c-risk-fill.crit {
+    background: var(--color-red-800);
+}
+
+/* ========== Status Badges ========== */
+.c-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.c-badge.failed,
+.c-badge.ban {
+    background: var(--color-danger-bg-light);
+    color: var(--color-danger-light);
+}
+
+.c-badge.success,
+.c-badge.successful,
+.c-badge.unban {
+    background: var(--color-success-bg-light);
+    color: var(--color-success);
+}
+
+/* ========== Status Indicator ========== */
+.c-status {
+    font-size: 10px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--color-danger-bg-light);
+    color: var(--color-danger-light);
+    margin-left: 6px;
+}
+
+/* ========== Detail Button ========== */
+.c-detail {
+    padding: 5px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.c-detail:hover {
+    background: var(--background);
+    border-color: var(--azure-blue);
+    color: var(--azure-blue);
+}
+
+/* ========== Source Badges (Block Sources) ========== */
+.c-source {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.c-source.rule,
+.c-source.rule_based {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-danger-dark));
+    color: white;
+    box-shadow: 0 2px 4px rgba(209, 52, 56, 0.25);
+}
+
+.c-source.manual {
+    background: linear-gradient(135deg, var(--color-purple), var(--color-indigo));
+    color: white;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
+}
+
+.c-source.ml,
+.c-source.ml_threshold,
+.c-source.ml_behavioral {
+    background: linear-gradient(135deg, var(--color-purple-dark), var(--color-purple-gradient));
+    color: white;
+    box-shadow: 0 2px 4px rgba(147, 51, 234, 0.25);
+}
+
+.c-source.fail2ban {
+    background: linear-gradient(135deg, var(--azure-blue), var(--azure-dark));
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 120, 212, 0.25);
+}
+
+.c-source.ufw {
+    background: linear-gradient(135deg, var(--color-success-dark), var(--color-success-dark));
+    color: white;
+    box-shadow: 0 2px 4px rgba(16, 124, 16, 0.25);
+}
+
+.c-source.api_reputation {
+    background: linear-gradient(135deg, var(--color-warning), var(--color-burnt-orange));
+    color: white;
+    box-shadow: 0 2px 4px rgba(202, 80, 16, 0.25);
+}
+
+/* ========== Block Status Badges ========== */
+.c-stat {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.c-stat.active {
+    background: linear-gradient(135deg, var(--color-danger), var(--color-danger-dark));
+    color: white;
+    box-shadow: 0 2px 4px rgba(209, 52, 56, 0.25);
+}
+
+.c-stat.active::before {
+    content: '\25CF';
+    font-size: 8px;
+}
+
+.c-stat.inactive {
+    background: linear-gradient(135deg, var(--color-success-dark), var(--color-success-dark));
+    color: white;
+    box-shadow: 0 2px 4px rgba(16, 124, 16, 0.25);
+}
+
+.c-stat.inactive::before {
+    content: '\25CB';
+    font-size: 8px;
+}
+
+.c-stat.escalated {
+    background: linear-gradient(135deg, var(--color-warning), var(--color-burnt-orange));
+    color: white;
+    box-shadow: 0 2px 4px rgba(202, 80, 16, 0.25);
+}
+
+.c-stat.escalated::before {
+    content: '\25B2';
+    font-size: 8px;
+}
+
+/* ========== Reason Cell ========== */
+.c-reason {
+    font-size: 12px;
+    color: var(--text-primary);
+    background: rgba(255, 183, 77, 0.15);
+    padding: 8px 12px;
+    border-radius: 4px;
+    border-left: 3px solid var(--color-warning-light);
+    line-height: 1.4;
+}
+
+/* ========== Agent Badge ========== */
+.c-agent {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--background);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+}

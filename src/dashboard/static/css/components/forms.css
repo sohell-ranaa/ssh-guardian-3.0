@@ -13,7 +13,12 @@
 }
 
 .form-control:focus {
-    border-color: #0078D4;
+    border-color: var(--azure-blue);
+}
+
+.form-control:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 select.form-control {
@@ -40,7 +45,7 @@ select.form-control {
 
 .form-error {
     font-size: 11px;
-    color: #D13438;
+    color: var(--color-danger);
     margin-top: 4px;
 }
 

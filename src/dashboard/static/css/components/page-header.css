@@ -1,16 +1,22 @@
-        /* Page Header */
-        .page-header {
-            margin-bottom: 24px;
-        }
+/* SSH Guardian v3.0 - Page Header */
 
-        .page-title {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    gap: 16px;
+}
 
-        .page-subtitle {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
+.page-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    color: var(--text-primary);
+}
 
+.page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}

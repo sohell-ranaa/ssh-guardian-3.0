@@ -1,0 +1,174 @@
+/**
+ * SSH Guardian v3.0 - Firewall Simple Base Styles
+ * Tabs, quick actions, log entries, clickable IP, spinner
+ */
+
+/* Tab styles */
+.fw-tabs {
+    background: var(--surface);
+    border-radius: 4px 4px 0 0;
+}
+
+.fw-tab {
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.fw-tab:hover {
+    color: var(--text-primary);
+    background: var(--background);
+}
+
+.fw-tab.active {
+    color: var(--azure-blue);
+    border-bottom-color: var(--azure-blue);
+    background: var(--surface);
+}
+
+.fw-tab-content {
+    border-top: none;
+}
+
+/* Quick action small buttons */
+.quick-action-sm {
+    padding: 8px 14px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.quick-action-sm:hover {
+    border-color: var(--azure-blue);
+    background: rgba(0, 120, 212, 0.05);
+}
+
+.quick-action-sm.success {
+    border-color: rgba(46, 164, 79, 0.3);
+    background: var(--color-success-bg);
+}
+
+.quick-action-sm.success:hover {
+    border-color: var(--color-success);
+}
+
+.quick-action-sm.danger {
+    border-color: rgba(209, 52, 56, 0.3);
+    background: var(--color-danger-bg);
+}
+
+.quick-action-sm.danger:hover {
+    border-color: var(--color-danger);
+}
+
+/* Log entry styles */
+.log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-icon {
+    font-size: 14px;
+    width: 20px;
+    text-align: center;
+}
+
+.log-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.log-ip {
+    font-family: monospace;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.log-action {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+.log-action.failed {
+    background: rgba(209, 52, 56, 0.1);
+    color: var(--color-danger);
+}
+
+.log-action.success {
+    background: rgba(16, 124, 16, 0.1);
+    color: var(--color-success);
+}
+
+.log-meta {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.log-time {
+    color: var(--text-secondary);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+/* Clickable IP */
+.clickable-ip {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 3px;
+    transition: background 0.15s;
+}
+
+.clickable-ip:hover {
+    background: rgba(0, 120, 212, 0.1);
+}
+
+.ip-details-hint {
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.clickable-ip:hover .ip-details-hint {
+    opacity: 0.7;
+}
+
+/* Loading spinner */
+.ip-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--azure-blue);
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

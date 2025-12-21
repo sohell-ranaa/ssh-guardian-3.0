@@ -52,8 +52,13 @@ class FeatureExtractor:
             'unique_servers': set(),
             'first_seen': None,
             'last_seen': None,
-            'last_location': None
+            'last_location': None,
+            'last_location_time': None,
+            'consecutive_failures': 0
         })
+
+        # User login history for time deviation detection
+        self.user_profiles = {}
 
     def extract(self, event: Dict) -> np.ndarray:
         """
@@ -63,7 +68,7 @@ class FeatureExtractor:
             event: Event dict with keys like timestamp, source_ip_text, event_type, etc.
 
         Returns:
-            numpy array of shape (42,) with extracted features
+            numpy array of shape (50,) with extracted features
         """
         features = []
 
@@ -93,6 +98,9 @@ class FeatureExtractor:
 
         # === PATTERN FEATURES (2) ===
         features.extend(self._extract_pattern_features(event, timestamp))
+
+        # === ADVANCED DETECTION FEATURES (8) - NEW ===
+        features.extend(self._extract_advanced_features(event, timestamp))
 
         # Update history for future predictions
         self._update_history(event, timestamp)
@@ -323,6 +331,110 @@ class FeatureExtractor:
 
         return [is_sequential, is_distributed]
 
+    def _extract_advanced_features(self, event: Dict, timestamp: datetime) -> List[float]:
+        """
+        Extract advanced detection features (8 features) - NEW
+        Covers: Impossible Travel, Brute Force Success, Lateral Movement,
+                Rapid Attack, GreyNoise scanner, User Time Anomaly
+
+        - travel_velocity_kmh, is_impossible_travel, success_after_failures,
+          is_brute_success, servers_accessed_10min, attempts_per_second,
+          is_greynoise_scanner, user_time_deviation_hours
+        """
+        source_ip = event.get('source_ip_text', '')
+        history = self.ip_history[source_ip]
+        geo = event.get('geo', {}) or {}
+        threat = event.get('threat', {}) or {}
+        event_type = str(event.get('event_type', '')).lower()
+        username = str(event.get('target_username', '') or '').lower()
+
+        # === Feature 43-44: Travel Velocity & Impossible Travel ===
+        travel_velocity = 0.0
+        is_impossible_travel = 0.0
+
+        if history['last_location'] and history['last_location_time']:
+            curr_lat = float(geo.get('latitude', 0) or 0)
+            curr_lon = float(geo.get('longitude', 0) or 0)
+
+            if curr_lat != 0 and curr_lon != 0:
+                prev_lat, prev_lon = history['last_location']
+                distance_km = self._haversine_distance(prev_lat, prev_lon, curr_lat, curr_lon)
+                time_diff_hours = (timestamp - history['last_location_time']).total_seconds() / 3600.0
+
+                if time_diff_hours > 0.001:  # At least 3.6 seconds
+                    velocity_kmh = distance_km / time_diff_hours
+                    # Normalize: 1000 km/h is impossible (faster than commercial flight)
+                    travel_velocity = min(velocity_kmh / 5000.0, 1.0)
+                    is_impossible_travel = 1.0 if velocity_kmh > 1000 else 0.0
+
+        # === Feature 45-46: Success After Failures & Brute Force Success ===
+        success_after_failures = 0.0
+        is_brute_success = 0.0
+
+        is_success = 'success' in event_type or 'accepted' in event_type
+        consecutive_failures = history.get('consecutive_failures', 0)
+
+        if is_success and consecutive_failures >= 5:
+            is_brute_success = 1.0
+            success_after_failures = min(consecutive_failures / 20.0, 1.0)
+
+        # === Feature 47: Servers Accessed in 10 minutes (Lateral Movement) ===
+        servers_10min = 0.0
+        recent_servers = set()
+
+        # Check unique servers from recent attempts
+        if len(history['unique_servers']) > 0:
+            servers_10min = min(len(history['unique_servers']) / 10.0, 1.0)
+
+        # === Feature 48: Attempts Per Second (Rapid Attack / DDoS) ===
+        attempts_per_second = 0.0
+
+        recent_attempts = [t for t in history['failed_attempts']
+                         if (timestamp - t).total_seconds() < 60]
+        if len(recent_attempts) > 1:
+            # Calculate rate over the last minute
+            attempts_per_second = min(len(recent_attempts) / 60.0, 1.0)
+
+        # === Feature 49: GreyNoise Scanner (Internet Noise Detection) ===
+        is_greynoise_scanner = 0.0
+
+        greynoise_noise = threat.get('greynoise_noise')
+        greynoise_riot = threat.get('greynoise_riot')
+
+        if greynoise_noise is True:
+            is_greynoise_scanner = 1.0
+        elif greynoise_riot is True:
+            # Known benign service (CDN, search engine)
+            is_greynoise_scanner = -0.5  # Negative = good sign
+
+        # === Feature 50: User Time Deviation (Time Anomaly) ===
+        user_time_deviation = 0.0
+
+        if username and username in self.user_profiles:
+            profile = self.user_profiles[username]
+            typical_hours = profile.get('typical_hours', [])
+
+            if typical_hours:
+                current_hour = timestamp.hour
+                # Find minimum deviation from any typical hour
+                min_deviation = min(
+                    min(abs(current_hour - h), 24 - abs(current_hour - h))
+                    for h in typical_hours
+                )
+                # Normalize: 12 hours is maximum deviation
+                user_time_deviation = min(min_deviation / 12.0, 1.0)
+
+        return [
+            travel_velocity,           # 43: travel_velocity_kmh
+            is_impossible_travel,      # 44: is_impossible_travel
+            success_after_failures,    # 45: success_after_failures
+            is_brute_success,          # 46: is_brute_success
+            servers_10min,             # 47: servers_accessed_10min
+            attempts_per_second,       # 48: attempts_per_second
+            is_greynoise_scanner,      # 49: is_greynoise_scanner
+            user_time_deviation        # 50: user_time_deviation_hours
+        ]
+
     def _update_history(self, event: Dict, timestamp: datetime):
         """Update IP history for future predictions"""
         source_ip = event.get('source_ip_text', '')
@@ -343,24 +455,90 @@ class FeatureExtractor:
             # Keep only last 24 hours
             cutoff = timestamp - timedelta(hours=24)
             history['failed_attempts'] = [t for t in history['failed_attempts'] if t > cutoff]
+            # Track consecutive failures for brute force detection
+            history['consecutive_failures'] = history.get('consecutive_failures', 0) + 1
         elif 'success' in event_type or 'accepted' in event_type:
             history['successful_logins'].append(timestamp)
             history['successful_logins'] = [t for t in history['successful_logins']
                                            if t > timestamp - timedelta(hours=24)]
+            # Reset consecutive failures on success
+            history['consecutive_failures'] = 0
 
         # Track unique targets
         username = event.get('target_username')
         if username:
             history['unique_usernames'].add(username)
+            # Update user profile for time deviation detection
+            self._update_user_profile(username, timestamp)
 
         server = event.get('target_server')
         if server:
             history['unique_servers'].add(server)
 
-        # Track location
+        # Track location with timestamp for velocity calculation
         geo = event.get('geo', {}) or {}
         if geo.get('latitude') and geo.get('longitude'):
             history['last_location'] = (float(geo['latitude']), float(geo['longitude']))
+            history['last_location_time'] = timestamp
+
+    def _update_user_profile(self, username: str, timestamp: datetime):
+        """Update user profile for time deviation detection"""
+        if not username:
+            return
+
+        username = username.lower()
+        if username not in self.user_profiles:
+            self.user_profiles[username] = {
+                'typical_hours': [],
+                'login_count': 0
+            }
+
+        profile = self.user_profiles[username]
+        hour = timestamp.hour
+
+        # Add hour to typical hours list (keep last 20 logins)
+        profile['typical_hours'].append(hour)
+        if len(profile['typical_hours']) > 20:
+            profile['typical_hours'] = profile['typical_hours'][-20:]
+
+        profile['login_count'] += 1
+
+    def load_user_profiles_from_db(self):
+        """Load user behavioral profiles from database for time anomaly detection"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT username, typical_hours, typical_days, login_count
+                FROM user_behavioral_profiles
+                WHERE is_active = TRUE AND login_count >= 5
+            """)
+
+            for row in cursor.fetchall():
+                username = row.get('username', '').lower()
+                if username:
+                    typical_hours_json = row.get('typical_hours')
+                    if typical_hours_json:
+                        import json
+                        try:
+                            typical_hours = json.loads(typical_hours_json) if isinstance(typical_hours_json, str) else typical_hours_json
+                        except:
+                            typical_hours = []
+                    else:
+                        typical_hours = []
+
+                    self.user_profiles[username] = {
+                        'typical_hours': typical_hours,
+                        'login_count': row.get('login_count', 0)
+                    }
+
+            cursor.close()
+            conn.close()
+            print(f"Loaded {len(self.user_profiles)} user profiles from database")
+
+        except Exception as e:
+            print(f"Warning: Could not load user profiles: {e}")
 
     def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calculate distance between two points in km"""
@@ -386,7 +564,7 @@ class FeatureExtractor:
         return entropy
 
     def get_feature_names(self) -> List[str]:
-        """Return list of all feature names (42 features)"""
+        """Return list of all feature names (50 features)"""
         return [
             # Temporal (6)
             'hour_normalized', 'minute_normalized', 'day_of_week_normalized',
@@ -416,7 +594,12 @@ class FeatureExtractor:
             'abuseipdb_score', 'virustotal_ratio', 'threat_level_encoded',
 
             # Patterns (2)
-            'is_sequential_username', 'is_distributed_attack'
+            'is_sequential_username', 'is_distributed_attack',
+
+            # Advanced Detection (8) - NEW
+            'travel_velocity_kmh', 'is_impossible_travel', 'success_after_failures',
+            'is_brute_success', 'servers_accessed_10min', 'attempts_per_second',
+            'is_greynoise_scanner', 'user_time_deviation_hours'
         ]
 
     def reset_history(self):

@@ -77,16 +77,14 @@ def register_agent():
                 cursor.execute("""
                     UPDATE agents
                     SET hostname = %s,
-                        system_info = %s,
                         version = %s,
                         heartbeat_interval_sec = %s,
-                        ip_address_primary = %s,
+                        ip_address = %s,
                         last_heartbeat = NOW(),
                         status = 'online',
                         updated_at = NOW()
                     WHERE agent_id = %s
-                """, (hostname, json.dumps(system_info), version,
-                     heartbeat_interval, ip_address, agent_id))
+                """, (hostname, version, heartbeat_interval, ip_address, agent_id))
 
                 conn.commit()
 
@@ -106,14 +104,13 @@ def register_agent():
                 cursor.execute("""
                     INSERT INTO agents (
                         agent_uuid, agent_id, api_key, hostname,
-                        ip_address_primary, system_info, version,
-                        heartbeat_interval_sec, status, last_heartbeat,
-                        is_active, is_approved
+                        ip_address, version, heartbeat_interval_sec,
+                        status, last_heartbeat, is_active, is_approved
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, 'online', NOW(), TRUE, FALSE
+                        %s, %s, %s, %s, %s, %s, %s, 'online', NOW(), TRUE, FALSE
                     )
                 """, (agent_uuid, agent_id, api_key, hostname,
-                     ip_address, json.dumps(system_info), version, heartbeat_interval))
+                     ip_address, version, heartbeat_interval))
 
                 conn.commit()
                 new_agent_id = cursor.lastrowid

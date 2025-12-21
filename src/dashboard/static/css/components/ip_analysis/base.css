@@ -1,0 +1,154 @@
+/* SSH Guardian v3.0 - IP Analysis Modal */
+/* Professional tabbed design with ML reasoning integration */
+
+/* ====== Overlay & Modal Container ====== */
+.ip-analysis-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.ip-analysis-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 95%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== Header ====== */
+.ip-analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.ip-analysis-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ip-analysis-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.ip-analysis-icon.critical { background: linear-gradient(135deg, var(--color-danger-dark) 0%, var(--color-orange-dark) 100%); }
+.ip-analysis-icon.high { background: linear-gradient(135deg, var(--color-orange-dark) 0%, var(--color-orange) 100%); }
+.ip-analysis-icon.moderate { background: linear-gradient(135deg, var(--color-orange) 0%, var(--color-gold) 100%); }
+.ip-analysis-icon.low { background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-success-dark) 100%); }
+.ip-analysis-icon.clean { background: linear-gradient(135deg, var(--color-success-dark) 0%, var(--color-success-light) 100%); }
+.ip-analysis-icon.unknown { background: linear-gradient(135deg, var(--text-secondary) 0%, var(--text-tertiary) 100%); }
+
+.ip-analysis-title-group h2 {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 3px 0;
+    font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+.ip-analysis-location {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.ip-analysis-location img { border-radius: 2px; }
+.isp-name { color: var(--text-hint); }
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.quick-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 8px;
+    min-width: 60px;
+}
+
+.quick-score.critical { background: rgba(168, 0, 0, 0.1); }
+.quick-score.high { background: rgba(216, 59, 1, 0.1); }
+.quick-score.moderate { background: rgba(255, 140, 0, 0.1); }
+.quick-score.low { background: rgba(255, 185, 0, 0.1); }
+.quick-score.clean { background: rgba(16, 124, 16, 0.1); }
+.quick-score.unknown { background: var(--background); }
+
+.quick-score .score-value {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.quick-score.critical .score-value { color: var(--color-danger-dark); }
+.quick-score.high .score-value { color: var(--color-orange-dark); }
+.quick-score.moderate .score-value { color: var(--color-orange); }
+.quick-score.low .score-value { color: var(--color-warning-dark); }
+.quick-score.clean .score-value { color: var(--color-success-dark); }
+.quick-score.unknown .score-value { color: var(--text-secondary); }
+
+.quick-score .score-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.ip-analysis-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 22px;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+}
+
+.ip-analysis-close:hover {
+    background: var(--background);
+    color: var(--text-primary);
+}
+

@@ -115,43 +115,50 @@ def get_daily_summary():
                 'avg_risk_score': daily_summary['avg_risk_score']
             }
         else:
-            # Fallback to querying auth_events directly
-            # Use indexed columns and optimize with STRAIGHT_JOIN hint
+            # Fallback to querying auth_events with LEFT JOIN to auth_events_ml
             cursor.execute("""
                 SELECT
                     COUNT(*) as total_events,
-                    SUM(CASE WHEN event_type = 'failed' THEN 1 ELSE 0 END) as failed_events,
-                    SUM(CASE WHEN event_type = 'successful' THEN 1 ELSE 0 END) as successful_events,
-                    SUM(CASE WHEN event_type = 'invalid' THEN 1 ELSE 0 END) as invalid_events,
-                    COUNT(DISTINCT source_ip_text) as unique_ips,
-                    COUNT(DISTINCT target_username) as unique_usernames,
-                    COUNT(DISTINCT target_server) as unique_servers,
-                    SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies,
-                    SUM(CASE WHEN ml_risk_score >= 80 THEN 1 ELSE 0 END) as critical_events,
-                    SUM(CASE WHEN ml_risk_score >= 60 AND ml_risk_score < 80 THEN 1 ELSE 0 END) as high_events,
-                    SUM(CASE WHEN ml_risk_score >= 40 AND ml_risk_score < 60 THEN 1 ELSE 0 END) as medium_events,
-                    SUM(CASE WHEN ml_risk_score < 40 THEN 1 ELSE 0 END) as low_events,
-                    AVG(ml_risk_score) as avg_risk_score
-                FROM auth_events USE INDEX (idx_timestamp_event_type)
-                WHERE timestamp >= %s AND timestamp <= %s
-                AND source_type != 'simulation'
+                    SUM(CASE WHEN ae.event_type = 'failed' THEN 1 ELSE 0 END) as failed_events,
+                    SUM(CASE WHEN ae.event_type = 'successful' THEN 1 ELSE 0 END) as successful_events,
+                    SUM(CASE WHEN ae.event_type = 'invalid' THEN 1 ELSE 0 END) as invalid_events,
+                    COUNT(DISTINCT ae.source_ip_text) as unique_ips,
+                    COUNT(DISTINCT ae.target_username) as unique_usernames,
+                    COUNT(DISTINCT ae.target_server) as unique_servers,
+                    SUM(CASE WHEN ml.is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies,
+                    SUM(CASE WHEN ml.risk_score >= 0.80 THEN 1 ELSE 0 END) as critical_events,
+                    SUM(CASE WHEN ml.risk_score >= 0.60 AND ml.risk_score < 0.80 THEN 1 ELSE 0 END) as high_events,
+                    SUM(CASE WHEN ml.risk_score >= 0.40 AND ml.risk_score < 0.60 THEN 1 ELSE 0 END) as medium_events,
+                    SUM(CASE WHEN ml.risk_score < 0.40 OR ml.risk_score IS NULL THEN 1 ELSE 0 END) as low_events,
+                    AVG(ml.risk_score) * 100 as avg_risk_score
+                FROM auth_events ae
+                LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+                WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+                AND ae.source_type != 'simulation'
             """, (start_time, end_time))
             event_stats = cursor.fetchone()
 
-        # Check if we have daily_statistics for additional info
-        cursor.execute("""
-            SELECT * FROM daily_statistics WHERE stat_date = %s
-        """, (report_date,))
-        daily_stats = cursor.fetchone()
+        # Check if we have daily_statistics for additional info (optional table)
+        daily_stats = None
+        try:
+            cursor.execute("""
+                SELECT * FROM daily_statistics WHERE stat_date = %s
+            """, (report_date,))
+            daily_stats = cursor.fetchone()
+        except Exception:
+            pass  # Table may not exist
 
-        # Get blocked IPs count using indexed columns
-        cursor.execute("""
-            SELECT COUNT(*) as blocked_count
-            FROM ip_blocks USE INDEX (idx_is_simulation)
-            WHERE is_simulation = FALSE
-            AND blocked_at >= %s AND blocked_at <= %s
-        """, (start_time, end_time))
-        blocked_stats = cursor.fetchone()
+        # Get blocked IPs count
+        blocked_stats = {'blocked_count': 0}
+        try:
+            cursor.execute("""
+                SELECT COUNT(*) as blocked_count
+                FROM ip_blocks
+                WHERE blocked_at >= %s AND blocked_at <= %s
+            """, (start_time, end_time))
+            blocked_stats = cursor.fetchone() or {'blocked_count': 0}
+        except Exception:
+            pass  # Table or column may not exist
 
         summary = {
             'date': report_date.isoformat(),
@@ -240,16 +247,17 @@ def get_hourly_breakdown():
         # Use composite index for efficient hourly aggregation
         cursor.execute("""
             SELECT
-                HOUR(timestamp) as hour,
+                HOUR(ae.timestamp) as hour,
                 COUNT(*) as total_count,
-                SUM(CASE WHEN event_type = 'failed' THEN 1 ELSE 0 END) as failed_count,
-                SUM(CASE WHEN event_type = 'successful' THEN 1 ELSE 0 END) as success_count,
-                AVG(ml_risk_score) as avg_risk,
-                SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies
-            FROM auth_events USE INDEX (idx_timestamp_event_type)
-            WHERE timestamp >= %s AND timestamp <= %s
-            AND source_type != 'simulation'
-            GROUP BY HOUR(timestamp)
+                SUM(CASE WHEN ae.event_type = 'failed' THEN 1 ELSE 0 END) as failed_count,
+                SUM(CASE WHEN ae.event_type = 'successful' THEN 1 ELSE 0 END) as success_count,
+                AVG(ml.risk_score) * 100 as avg_risk,
+                SUM(CASE WHEN ml.is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies
+            FROM auth_events ae
+            LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+            WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+            AND ae.source_type != 'simulation'
+            GROUP BY HOUR(ae.timestamp)
             ORDER BY hour
         """, (start_time, end_time))
         hourly_raw = {row['hour']: row for row in cursor.fetchall()}
@@ -346,19 +354,20 @@ def get_top_threats():
                 ip_data.threat_type
             FROM (
                 SELECT
-                    source_ip_text as ip,
+                    ae.source_ip_text as ip,
                     COUNT(*) as attempt_count,
-                    COUNT(DISTINCT target_username) as unique_usernames,
-                    AVG(ml_risk_score) as avg_risk,
-                    MAX(ml_risk_score) as max_risk,
-                    MIN(timestamp) as first_seen,
-                    MAX(timestamp) as last_seen,
-                    MAX(ml_threat_type) as threat_type
-                FROM auth_events USE INDEX (idx_timestamp_event_type)
-                WHERE timestamp >= %s AND timestamp <= %s
-                AND source_type != 'simulation'
-                AND event_type = 'failed'
-                GROUP BY source_ip_text
+                    COUNT(DISTINCT ae.target_username) as unique_usernames,
+                    AVG(ml.risk_score) * 100 as avg_risk,
+                    MAX(ml.risk_score) * 100 as max_risk,
+                    MIN(ae.timestamp) as first_seen,
+                    MAX(ae.timestamp) as last_seen,
+                    MAX(ml.threat_type) as threat_type
+                FROM auth_events ae
+                LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+                WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+                AND ae.source_type != 'simulation'
+                AND ae.event_type = 'failed'
+                GROUP BY ae.source_ip_text
                 ORDER BY attempt_count DESC
                 LIMIT %s
             ) ip_data
@@ -444,9 +453,10 @@ def get_geographic_breakdown():
                 geo.country_code,
                 COUNT(*) as attempt_count,
                 COUNT(DISTINCT ae.source_ip_text) as unique_ips,
-                AVG(ae.ml_risk_score) as avg_risk,
-                SUM(CASE WHEN ae.is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies
-            FROM auth_events ae USE INDEX (idx_timestamp_event_type)
+                AVG(ml.risk_score) * 100 as avg_risk,
+                SUM(CASE WHEN ml.is_anomaly = 1 THEN 1 ELSE 0 END) as anomalies
+            FROM auth_events ae
+            LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
             LEFT JOIN ip_geolocation geo ON ae.source_ip_text = geo.ip_address_text
             WHERE ae.timestamp >= %s AND ae.timestamp <= %s
             AND ae.source_type != 'simulation'
@@ -525,16 +535,17 @@ def get_targeted_usernames():
         # Use composite index for username analysis
         cursor.execute("""
             SELECT
-                target_username as username,
+                ae.target_username as username,
                 COUNT(*) as attempt_count,
-                COUNT(DISTINCT source_ip_text) as unique_ips,
-                AVG(ml_risk_score) as avg_risk
-            FROM auth_events USE INDEX (idx_username_event_type)
-            WHERE timestamp >= %s AND timestamp <= %s
-            AND target_username IS NOT NULL
-            AND source_type != 'simulation'
-            AND event_type = 'failed'
-            GROUP BY target_username
+                COUNT(DISTINCT ae.source_ip_text) as unique_ips,
+                AVG(ml.risk_score) * 100 as avg_risk
+            FROM auth_events ae
+            LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+            WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+            AND ae.target_username IS NOT NULL
+            AND ae.source_type != 'simulation'
+            AND ae.event_type = 'failed'
+            GROUP BY ae.target_username
             ORDER BY attempt_count DESC
             LIMIT %s
         """, (start_time, end_time, limit))
@@ -606,15 +617,16 @@ def get_threat_types_breakdown():
         # Use index hint for performance
         cursor.execute("""
             SELECT
-                COALESCE(ml_threat_type, 'Unknown') as threat_type,
+                COALESCE(ml.threat_type, 'Unknown') as threat_type,
                 COUNT(*) as count,
-                AVG(ml_risk_score) as avg_risk,
-                COUNT(DISTINCT source_ip_text) as unique_ips
-            FROM auth_events USE INDEX (idx_timestamp_event_type)
-            WHERE timestamp >= %s AND timestamp <= %s
-            AND source_type != 'simulation'
-            AND event_type = 'failed'
-            GROUP BY ml_threat_type
+                AVG(ml.risk_score) * 100 as avg_risk,
+                COUNT(DISTINCT ae.source_ip_text) as unique_ips
+            FROM auth_events ae
+            LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+            WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+            AND ae.source_type != 'simulation'
+            AND ae.event_type = 'failed'
+            GROUP BY ml.threat_type
             ORDER BY count DESC
         """, (start_time, end_time))
 
@@ -680,35 +692,37 @@ def get_daily_comparison():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Current day stats - use index hint
+        # Current day stats
         current_start = datetime.combine(report_date, datetime.min.time())
         current_end = datetime.combine(report_date, datetime.max.time())
 
         cursor.execute("""
             SELECT
                 COUNT(*) as total_events,
-                SUM(CASE WHEN ml_risk_score >= 60 THEN 1 ELSE 0 END) as high_risk,
-                COUNT(DISTINCT source_ip_text) as unique_ips
-            FROM auth_events USE INDEX (idx_timestamp_event_type)
-            WHERE timestamp >= %s AND timestamp <= %s
-            AND source_type != 'simulation'
-            AND event_type = 'failed'
+                SUM(CASE WHEN ml.risk_score >= 0.60 THEN 1 ELSE 0 END) as high_risk,
+                COUNT(DISTINCT ae.source_ip_text) as unique_ips
+            FROM auth_events ae
+            LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+            WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+            AND ae.source_type != 'simulation'
+            AND ae.event_type = 'failed'
         """, (current_start, current_end))
         current_stats = cursor.fetchone()
 
-        # Previous day stats - use index hint
+        # Previous day stats
         prev_start = datetime.combine(prev_date, datetime.min.time())
         prev_end = datetime.combine(prev_date, datetime.max.time())
 
         cursor.execute("""
             SELECT
                 COUNT(*) as total_events,
-                SUM(CASE WHEN ml_risk_score >= 60 THEN 1 ELSE 0 END) as high_risk,
-                COUNT(DISTINCT source_ip_text) as unique_ips
-            FROM auth_events USE INDEX (idx_timestamp_event_type)
-            WHERE timestamp >= %s AND timestamp <= %s
-            AND source_type != 'simulation'
-            AND event_type = 'failed'
+                SUM(CASE WHEN ml.risk_score >= 0.60 THEN 1 ELSE 0 END) as high_risk,
+                COUNT(DISTINCT ae.source_ip_text) as unique_ips
+            FROM auth_events ae
+            LEFT JOIN auth_events_ml ml ON ae.id = ml.event_id
+            WHERE ae.timestamp >= %s AND ae.timestamp <= %s
+            AND ae.source_type != 'simulation'
+            AND ae.event_type = 'failed'
         """, (prev_start, prev_end))
         prev_stats = cursor.fetchone()
 

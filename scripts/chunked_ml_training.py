@@ -7,10 +7,23 @@ Usage:
     python3 scripts/chunked_ml_training.py
 
 This script:
-1. Fetches training data in chunks (50K events per chunk)
-2. Extracts features incrementally
+1. Fetches training data in chunks (30K events per chunk)
+2. Extracts 50 features incrementally (including advanced detection features)
 3. Trains a Random Forest model on all data
 4. Saves and promotes the model to production
+
+Features (50 total):
+- Temporal (6): hour, minute, day_of_week, is_weekend, is_business_hours, is_night
+- Event type (5): is_failed, is_success, is_invalid_user, is_invalid_password, failure_reason
+- Geographic (6): lat, lon, is_high_risk_country, is_unknown_country, distance, is_new_location
+- Username (6): is_root, is_admin, is_system, entropy, length, has_numbers
+- IP behavior (9): fails_hour, fails_10min, unique_users, unique_servers, etc.
+- Network flags (5): is_proxy, is_vpn, is_tor, is_datacenter, is_hosting
+- Reputation (3): abuseipdb_score, virustotal_ratio, threat_level
+- Patterns (2): is_sequential_username, is_distributed_attack
+- Advanced Detection (8): travel_velocity, is_impossible_travel, success_after_failures,
+                         is_brute_success, servers_accessed, attempts_per_second,
+                         is_greynoise_scanner, user_time_deviation
 """
 
 import os
@@ -98,6 +111,7 @@ def fetch_events_chunk(offset: int, limit: int, data_start: datetime, data_end: 
                 e.target_username, e.failure_reason, e.timestamp,
                 g.country_code, g.latitude, g.longitude,
                 g.is_tor, g.is_proxy, g.is_vpn, g.is_datacenter, g.is_hosting,
+                g.greynoise_noise, g.greynoise_riot,
                 t.abuseipdb_score, t.virustotal_positives, t.virustotal_total, t.overall_threat_level
             FROM auth_events e
             LEFT JOIN ip_geolocation g ON e.source_ip_text = g.ip_address_text
@@ -135,6 +149,8 @@ def fetch_events_chunk(offset: int, limit: int, data_start: datetime, data_end: 
                     'virustotal_positives': row.get('virustotal_positives'),
                     'virustotal_total': row.get('virustotal_total'),
                     'overall_threat_level': row.get('overall_threat_level'),
+                    'greynoise_noise': row.get('greynoise_noise'),
+                    'greynoise_riot': row.get('greynoise_riot'),
                 }
             }
             structured_events.append(event)
@@ -508,7 +524,7 @@ def promote_model(model_name: str):
         # Activate new model
         cursor.execute("""
             UPDATE ml_models
-            SET is_active = 1, status = 'production', promoted_to_production_at = NOW()
+            SET is_active = 1, status = 'production', promoted_at = NOW()
             WHERE model_name = %s
         """, (model_name,))
 

@@ -1,0 +1,438 @@
+/**
+ * SSH Guardian v3.0 - Events Table Component CSS
+ * Shared styles for events table (.ev-*) used across multiple pages
+ * Usage: Import this file and use with page-specific prefix like #page-xxx .ev-*
+ */
+
+/* ========== Header ========== */
+.ev-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.ev-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+}
+
+.ev-header p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* ========== Filters ========== */
+.ev-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.ev-filters select,
+.ev-filters input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    min-width: 100px;
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.ev-apply {
+    padding: 8px 16px;
+    background: var(--azure-blue);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.ev-apply:hover {
+    opacity: 0.9;
+}
+
+/* ========== Card Container ========== */
+.ev-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* ========== Table ========== */
+.ev-tbl-wrap {
+    overflow-x: auto;
+}
+
+.ev-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 600px;
+}
+
+.ev-tbl th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.ev-tbl td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.ev-tbl tbody tr {
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.ev-tbl tbody tr:hover {
+    background: rgba(0, 120, 212, 0.04);
+    border-left: 3px solid var(--azure-blue);
+}
+
+.ev-tbl tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ========== Messages ========== */
+.ev-msg {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.ev-msg.err {
+    color: var(--color-danger-light);
+}
+
+/* ========== Pagination ========== */
+.ev-pg {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ev-pg button {
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 6px;
+    transition: all 0.2s;
+}
+
+.ev-pg button:hover:not(:disabled) {
+    background: var(--background);
+    border-color: var(--azure-blue);
+    color: var(--azure-blue);
+}
+
+.ev-pg button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: var(--background);
+}
+
+/* ========== Modal ========== */
+.ev-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.ev-modal-box {
+    background: var(--surface);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 850px;
+    height: auto;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.ev-modal-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+}
+
+.ev-modal-hdr > div {
+    overflow: hidden;
+}
+
+.ev-modal-hdr h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ev-modal-hdr span {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: block;
+}
+
+.ev-modal-hdr > button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border: 1px solid var(--border);
+    background: var(--background);
+    border-radius: 6px;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 12px;
+}
+
+.ev-modal-hdr > button:hover {
+    background: var(--border);
+}
+
+.ev-modal-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+    flex-shrink: 0;
+}
+
+.ev-modal-tabs button {
+    flex: 1;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.2s;
+}
+
+.ev-modal-tabs button:hover {
+    color: var(--text-primary);
+}
+
+.ev-modal-tabs button.active {
+    color: var(--azure-blue);
+    border-bottom-color: var(--azure-blue);
+}
+
+.ev-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 200px;
+}
+
+.ev-modal-pane {
+    display: none;
+}
+
+.ev-modal-pane.active {
+    display: block;
+}
+
+.ev-modal-ftr {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+.ev-modal-ftr button {
+    padding: 10px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ev-modal-ftr button:hover {
+    background: var(--background);
+    border-color: var(--text-secondary);
+}
+
+/* ========== Responsive ========== */
+@media screen and (max-width: 900px) {
+    .ev-modal {
+        padding: 16px;
+    }
+    .ev-modal-box {
+        max-width: 100%;
+        max-height: 90vh;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .ev-header h1 {
+        font-size: 18px;
+    }
+    .ev-tabs {
+        overflow-x: auto;
+    }
+    .ev-tab {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+    .ev-filters select,
+    .ev-filters input {
+        min-width: 80px;
+        font-size: 12px;
+    }
+    .ev-filters {
+        flex-direction: column;
+    }
+    .ev-modal {
+        padding: 12px;
+    }
+    .ev-modal-box {
+        max-height: 92vh;
+        border-radius: 10px;
+    }
+    .ev-modal-hdr {
+        padding: 14px 16px;
+    }
+    .ev-modal-hdr h2 {
+        font-size: 15px;
+    }
+    .ev-modal-body {
+        padding: 16px;
+    }
+    .ev-modal-ftr {
+        padding: 14px 16px;
+    }
+}
+
+@media screen and (max-width: 576px) {
+    .ev-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .ev-refresh {
+        align-self: flex-end;
+    }
+    .ev-filters {
+        flex-direction: column;
+    }
+    .ev-filters select,
+    .ev-filters input {
+        width: 100%;
+    }
+    .ev-modal {
+        padding: 0;
+        align-items: flex-end;
+    }
+    .ev-modal-box {
+        max-width: 100%;
+        max-height: 90vh;
+        height: auto;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+        animation: slideUp 0.25s ease;
+    }
+    .ev-modal-hdr {
+        padding: 16px;
+        border-radius: 16px 16px 0 0;
+    }
+    .ev-modal-hdr::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+    }
+    .ev-modal-hdr h2 {
+        font-size: 15px;
+        margin-top: 8px;
+    }
+    .ev-modal-hdr > button {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+    }
+    .ev-modal-tabs button {
+        padding: 12px 8px;
+        font-size: 13px;
+    }
+    .ev-modal-body {
+        padding: 16px;
+        flex: 1;
+        max-height: calc(90vh - 180px);
+        -webkit-overflow-scrolling: touch;
+    }
+    .ev-modal-ftr {
+        padding: 16px;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    .ev-modal-ftr button {
+        width: 100%;
+        padding: 14px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}

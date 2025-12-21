@@ -1,84 +1,79 @@
-<!-- SSH Guardian v3.0 - Notification History Page -->
+<!-- SSH Guardian v3.1 - Notification History Page -->
 <div id="page-notif-history" class="page-content" style="display: none;">
-    <div class="page-header-with-cache">
-        <div>
-            <h1 class="page-title">Notification History</h1>
-            <p class="page-subtitle">View sent notifications and delivery status</p>
+    <!-- Compact Header -->
+    <div class="page-header-compact">
+        <div class="page-header-left">
+            <h2 class="page-title-sm">Notification History</h2>
+            <div class="header-stats-inline" id="notif-header-stats">
+                <span class="header-stat"><strong id="stat-notif-total">-</strong> Total</span>
+                <span class="header-stat"><strong id="stat-notif-delivered">-</strong> Sent</span>
+                <span class="header-stat"><strong id="stat-notif-failed">-</strong> Failed</span>
+                <span class="header-stat"><strong id="stat-notif-unread">-</strong> Unread</span>
+            </div>
         </div>
         <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="notifications">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadNotificationHistoryPage()" title="Refresh data">↻</button>
-            </div>
-            <button id="notif-history-export-btn" class="btn btn-secondary">Export</button>
+            <button id="notif-history-export-btn" class="btn btn-sm btn-secondary">Export</button>
+            <button class="refresh-btn" onclick="loadNotificationHistoryPage()"><span class="refresh-icon">↻</span> Refresh</button>
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div id="notif-history-stats" class="stats-grid" style="margin-top: 24px;">
-        <!-- Stats will be loaded here -->
+    <!-- Category Tabs -->
+    <div class="history-tabs" id="notif-history-tabs">
+        <button class="history-tab active" data-category="all">All <span class="tab-count">0</span></button>
+        <button class="history-tab" data-category="security">🛡️ Security <span class="tab-count">0</span></button>
+        <button class="history-tab" data-category="blocking">🚫 Blocking <span class="tab-count">0</span></button>
+        <button class="history-tab" data-category="system">⚙️ System <span class="tab-count">0</span></button>
     </div>
 
-    <!-- Filters -->
-    <div class="card" style="margin-top: 24px; padding: 16px;">
-        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-            <select id="notif-filter-status" class="form-control" style="width: 140px;">
-                <option value="">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="sent">Sent</option>
-                <option value="failed">Failed</option>
-                <option value="cancelled">Cancelled</option>
-            </select>
-            <select id="notif-filter-priority" class="form-control" style="width: 140px;">
-                <option value="">All Priority</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="normal">Normal</option>
-                <option value="low">Low</option>
-            </select>
-            <select id="notif-filter-channel" class="form-control" style="width: 140px;">
-                <option value="">All Channels</option>
-                <option value="telegram">Telegram</option>
-                <option value="email">Email</option>
-                <option value="webhook">Webhook</option>
-            </select>
-            <select id="notif-filter-trigger" class="form-control" style="width: 160px;">
-                <option value="">All Triggers</option>
-            </select>
-            <input type="date" id="notif-filter-start" class="form-control" style="width: 150px;" placeholder="Start Date">
-            <input type="date" id="notif-filter-end" class="form-control" style="width: 150px;" placeholder="End Date">
-            <input type="text" id="notif-filter-search" class="form-control" style="width: 200px;" placeholder="Search...">
-            <button id="notif-filter-apply-btn" class="btn btn-primary">Apply</button>
-            <button id="notif-filter-clear-btn" class="btn btn-secondary">Clear</button>
-        </div>
+    <!-- Compact Filters -->
+    <div class="history-filters" id="notif-history-filters">
+        <select id="notif-filter-status" class="form-control form-control-sm">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+        </select>
+        <select id="notif-filter-channel" class="form-control form-control-sm">
+            <option value="">All Channels</option>
+            <option value="telegram">Telegram</option>
+            <option value="email">Email</option>
+            <option value="webhook">Webhook</option>
+            <option value="dashboard">Dashboard</option>
+        </select>
+        <input type="date" id="notif-filter-start" class="form-control form-control-sm">
+        <input type="date" id="notif-filter-end" class="form-control form-control-sm">
+        <input type="text" id="notif-filter-search" class="form-control form-control-sm" placeholder="Search..." style="flex: 1; min-width: 120px;">
+        <button id="notif-filter-apply-btn" class="btn btn-sm btn-primary">Filter</button>
+        <button id="notif-filter-clear-btn" class="btn btn-sm btn-secondary">Clear</button>
     </div>
 
-    <!-- Notifications Table -->
-    <div class="card" style="margin-top: 24px; overflow-x: auto;">
-        <table class="data-table" id="notif-history-table">
+    <!-- Compact Table -->
+    <div class="history-table-container">
+        <table class="history-table" id="notif-history-table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Time</th>
-                    <th>Rule</th>
-                    <th>Trigger</th>
-                    <th>Title</th>
-                    <th>Channels</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style="width: 140px;">Time</th>
+                    <th style="width: 80px;">Channel</th>
+                    <th>Subject</th>
+                    <th style="width: 100px;">IP</th>
+                    <th style="width: 70px;">Status</th>
+                    <th style="width: 70px;">Action</th>
                 </tr>
             </thead>
             <tbody id="notif-history-tbody">
-                <!-- Notifications will be loaded here -->
+                <tr>
+                    <td colspan="6">
+                        <div class="loading-placeholder">
+                            <div class="loading-spinner"></div>
+                            <span>Loading...</span>
+                        </div>
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
 
     <!-- Pagination -->
-    <div id="notif-history-pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;">
-        <!-- Pagination will be loaded here -->
+    <div id="notif-history-pagination" class="pagination-compact">
     </div>
 </div>

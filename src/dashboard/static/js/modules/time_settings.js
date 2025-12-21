@@ -7,10 +7,11 @@
     'use strict';
 
     // Default settings (used until loaded from server)
+    // Default display timezone is Asia/Kuala_Lumpur (Malaysia, UTC+8)
     let timeSettings = {
         time_format: '24h',
         date_format: 'YYYY-MM-DD',
-        timezone: 'UTC',
+        timezone: 'Asia/Kuala_Lumpur',
         datetime_format: 'YYYY-MM-DD HH:mm:ss'
     };
 
@@ -118,53 +119,27 @@
         return Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
 
-    // Server timezone - timestamps from database are in this timezone
-    const SERVER_TIMEZONE = 'Europe/Berlin';
-
     /**
-     * Convert a timestamp from server timezone to UTC
-     * @param {string} dateStr - Date string without timezone info (assumed server timezone)
-     * @returns {Date} Date object in UTC
+     * Parse a timestamp string and return a Date object
+     * Timestamps from the server are in server timezone (Asia/Kuala_Lumpur)
+     * @param {string} dateStr - Date string (in server timezone if no timezone info)
+     * @returns {Date} Date object
      */
-    function serverTimeToUTC(dateStr) {
-        // Parse the naive datetime as if it's in server timezone
-        // Then convert to UTC by finding the offset
-        const normalized = dateStr.replace(' ', 'T');
+    function parseTimestamp(dateStr) {
+        // Normalize the date string
+        let normalized = String(dateStr).replace(' ', 'T');
 
-        // Create a temporary date to get the server timezone offset for this specific datetime
-        // We'll use a reference point approach
-        const tempDate = new Date(normalized + 'Z'); // Treat as UTC temporarily
+        // If no timezone info, assume server timezone (KL = +08:00)
+        if (!normalized.endsWith('Z') && !normalized.includes('+') && !normalized.match(/-\d{2}:\d{2}$/)) {
+            normalized += '+08:00';
+        }
 
-        // Format this UTC time in server timezone to see what time it shows
-        const serverFormatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: SERVER_TIMEZONE,
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-            hour12: false
-        });
-
-        const parts = serverFormatter.formatToParts(tempDate);
-        const serverHour = parseInt(parts.find(p => p.type === 'hour').value);
-
-        // Extract hour from input
-        const inputParts = normalized.split('T')[1].split(':');
-        const inputHour = parseInt(inputParts[0]);
-
-        // The difference tells us the offset
-        // If input is 10:00 (server time) and serverHour shows 11:00, offset is +1
-        let hourDiff = serverHour - inputHour;
-
-        // Handle day boundary wrap-around
-        if (hourDiff > 12) hourDiff -= 24;
-        if (hourDiff < -12) hourDiff += 24;
-
-        // Subtract the offset to get true UTC
-        return new Date(tempDate.getTime() - (hourDiff * 60 * 60 * 1000));
+        return new Date(normalized);
     }
 
     /**
      * Format a date/time according to user's settings
-     * @param {string|Date} dateInput - Date string or Date object (assumed server timezone if no timezone info)
+     * @param {string|Date} dateInput - Date string or Date object (assumed UTC if no timezone info)
      * @param {string} format - 'time', 'date', 'datetime', or custom format
      * @returns {string} Formatted date/time string
      */
@@ -175,14 +150,7 @@
         if (dateInput instanceof Date) {
             date = dateInput;
         } else {
-            let dateStr = String(dateInput);
-
-            // If no timezone info, timestamp is in server timezone (Europe/Berlin)
-            if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                date = serverTimeToUTC(dateStr);
-            } else {
-                date = new Date(dateStr);
-            }
+            date = parseTimestamp(dateInput);
         }
 
         if (isNaN(date.getTime())) return 'Invalid Date';
@@ -310,14 +278,9 @@
         if (dateInput instanceof Date) {
             date = dateInput;
         } else {
-            let dateStr = String(dateInput);
-            // If no timezone info, timestamp is in server timezone (Europe/Berlin)
-            if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                date = serverTimeToUTC(dateStr);
-            } else {
-                date = new Date(dateStr);
-            }
+            date = parseTimestamp(dateInput);
         }
+
         if (isNaN(date.getTime())) return 'Invalid Date';
 
         const now = new Date();

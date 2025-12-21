@@ -20,9 +20,9 @@ from cache import get_cache, cache_key, cache_key_hash
 # Create Blueprint
 event_actions_routes = Blueprint('event_actions_routes', __name__, url_prefix='/api/dashboard/event-actions')
 
-# Cache TTLs - OPTIMIZED FOR PERFORMANCE (minimum 15 minutes)
-EVENT_ACTIONS_TTL = 900     # 15 minutes for event actions data
-IP_STATUS_TTL = 900         # 15 minutes for IP status checks
+# Cache TTLs - OPTIMIZED FOR FRESHNESS (data changes frequently)
+EVENT_ACTIONS_TTL = 30      # 30 seconds for event actions data
+IP_STATUS_TTL = 30          # 30 seconds for IP status checks
 
 
 def invalidate_event_actions_cache():
@@ -1054,41 +1054,57 @@ def get_ip_status(ip_address):
             """, (ip_address,))
             is_blocked = cursor.fetchone()['count'] > 0
 
-            # Check if whitelisted
-            cursor.execute("""
-                SELECT COUNT(*) as count
-                FROM ip_whitelist
-                WHERE ip_address_text = %s
-                AND is_active = TRUE
-                AND (expires_at IS NULL OR expires_at > NOW())
-            """, (ip_address,))
-            is_whitelisted = cursor.fetchone()['count'] > 0
+            # Check if whitelisted (table may not exist)
+            is_whitelisted = False
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) as count
+                    FROM ip_whitelist
+                    WHERE ip_address_text = %s
+                    AND is_active = TRUE
+                    AND (expires_at IS NULL OR expires_at > NOW())
+                """, (ip_address,))
+                is_whitelisted = cursor.fetchone()['count'] > 0
+            except Exception:
+                pass  # Table doesn't exist
 
-            # Check if watched
-            cursor.execute("""
-                SELECT COUNT(*) as count
-                FROM ip_watchlist
-                WHERE ip_address_text = %s
-                AND is_active = TRUE
-                AND (expires_at IS NULL OR expires_at > NOW())
-            """, (ip_address,))
-            is_watched = cursor.fetchone()['count'] > 0
+            # Check if watched (table may not exist)
+            is_watched = False
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) as count
+                    FROM ip_watchlist
+                    WHERE ip_address_text = %s
+                    AND is_active = TRUE
+                    AND (expires_at IS NULL OR expires_at > NOW())
+                """, (ip_address,))
+                is_watched = cursor.fetchone()['count'] > 0
+            except Exception:
+                pass  # Table doesn't exist
 
-            # Count notes
-            cursor.execute("""
-                SELECT COUNT(*) as count
-                FROM event_notes
-                WHERE note_type = 'ip' AND ip_address_text = %s
-            """, (ip_address,))
-            notes_count = cursor.fetchone()['count']
+            # Count notes (table may not exist)
+            notes_count = 0
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) as count
+                    FROM event_notes
+                    WHERE note_type = 'ip' AND ip_address_text = %s
+                """, (ip_address,))
+                notes_count = cursor.fetchone()['count']
+            except Exception:
+                pass  # Table doesn't exist
 
-            # Count reports
-            cursor.execute("""
-                SELECT COUNT(*) as count
-                FROM ip_reports
-                WHERE ip_address_text = %s
-            """, (ip_address,))
-            reports_count = cursor.fetchone()['count']
+            # Count reports (table may not exist)
+            reports_count = 0
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) as count
+                    FROM ip_reports
+                    WHERE ip_address_text = %s
+                """, (ip_address,))
+                reports_count = cursor.fetchone()['count']
+            except Exception:
+                pass  # Table doesn't exist
 
             result = {
                 'success': True,

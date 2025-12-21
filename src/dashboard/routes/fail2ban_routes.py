@@ -30,32 +30,27 @@ def get_fail2ban_stats():
         cursor = conn.cursor(dictionary=True)
 
         # Total bans
-        cursor.execute("SELECT COUNT(*) as count FROM fail2ban_events WHERE action = 'ban'")
+        cursor.execute("SELECT COUNT(*) as count FROM fail2ban_events WHERE event_type = 'ban'")
         total_bans = cursor.fetchone()['count']
 
         # Total unbans
-        cursor.execute("SELECT COUNT(*) as count FROM fail2ban_events WHERE action = 'unban'")
+        cursor.execute("SELECT COUNT(*) as count FROM fail2ban_events WHERE event_type = 'unban'")
         total_unbans = cursor.fetchone()['count']
 
-        # Active bans (IPs that have been banned but not unbanned)
+        # Active bans - check ip_blocks table for currently active fail2ban blocks
+        # This reflects the actual state synced from agents
         cursor.execute("""
-            SELECT COUNT(DISTINCT b.ip_address) as count
-            FROM fail2ban_events b
-            WHERE b.action = 'ban'
-            AND NOT EXISTS (
-                SELECT 1 FROM fail2ban_events u
-                WHERE u.ip_address = b.ip_address
-                AND u.action = 'unban'
-                AND u.reported_at > b.reported_at
-            )
-            AND b.reported_at >= NOW() - INTERVAL 24 HOUR
+            SELECT COUNT(*) as count
+            FROM ip_blocks
+            WHERE block_source = 'fail2ban'
+              AND is_active = TRUE
         """)
         active_bans = cursor.fetchone()['count']
 
         # Today's events
         cursor.execute("""
             SELECT COUNT(*) as count FROM fail2ban_events
-            WHERE DATE(reported_at) = CURDATE()
+            WHERE DATE(timestamp) = CURDATE()
         """)
         today_events = cursor.fetchone()['count']
 
@@ -64,7 +59,7 @@ def get_fail2ban_stats():
             SELECT COUNT(*) as count FROM (
                 SELECT ip_address, COUNT(*) as ban_count
                 FROM fail2ban_events
-                WHERE action = 'ban'
+                WHERE event_type = 'ban'
                 GROUP BY ip_address
                 HAVING ban_count > 1
             ) AS repeat_ips
@@ -80,7 +75,7 @@ def get_fail2ban_stats():
               AND EXISTS (
                   SELECT 1 FROM fail2ban_events f
                   WHERE f.ip_address = ib.ip_address_text
-                  AND f.action = 'ban'
+                  AND f.event_type = 'ban'
               )
         """)
         escalated_to_ufw = cursor.fetchone()['count']
@@ -114,6 +109,7 @@ def get_fail2ban_stats():
 def get_fail2ban_events():
     """
     Get fail2ban events with filtering and pagination.
+    Returns unique IPs with ban_count for active bans and history.
 
     Query params:
     - page: Page number (default 1)
@@ -136,17 +132,13 @@ def get_fail2ban_events():
         time_range = request.args.get('time_range', '24h')
         ip_search = request.args.get('ip')
 
-        # Build query
+        # Build base where clauses
         where_clauses = []
         params = []
 
         if agent_id:
             where_clauses.append("f.agent_id = %s")
             params.append(int(agent_id))
-
-        if action_filter:
-            where_clauses.append("f.action = %s")
-            params.append(action_filter)
 
         if jail_filter:
             where_clauses.append("f.jail_name = %s")
@@ -158,57 +150,121 @@ def get_fail2ban_events():
 
         # Time range filter
         if time_range == '24h':
-            where_clauses.append("f.reported_at >= NOW() - INTERVAL 24 HOUR")
+            where_clauses.append("f.timestamp >= NOW() - INTERVAL 24 HOUR")
         elif time_range == '7d':
-            where_clauses.append("f.reported_at >= NOW() - INTERVAL 7 DAY")
+            where_clauses.append("f.timestamp >= NOW() - INTERVAL 7 DAY")
         elif time_range == '30d':
-            where_clauses.append("f.reported_at >= NOW() - INTERVAL 30 DAY")
-        # 'all' means no time filter
-
-        where_sql = ""
-        if where_clauses:
-            where_sql = "WHERE " + " AND ".join(where_clauses)
+            where_clauses.append("f.timestamp >= NOW() - INTERVAL 30 DAY")
 
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # Get total count
-        count_sql = f"""
-            SELECT COUNT(*) as total FROM fail2ban_events f
-            {where_sql}
-        """
-        cursor.execute(count_sql, params)
-        total = cursor.fetchone()['total']
-
-        # Get events with agent info
+        cursor = conn.cursor(dictionary=True, buffered=True)
         offset = (page - 1) * page_size
-        events_sql = f"""
-            SELECT
-                f.id,
-                f.agent_id,
-                f.ip_address,
-                f.jail_name,
-                f.action,
-                f.failures,
-                f.bantime_seconds,
-                f.reported_at,
-                f.created_at,
-                a.hostname as agent_hostname,
-                a.agent_id as agent_uuid
-            FROM fail2ban_events f
-            LEFT JOIN agents a ON f.agent_id = a.id
-            {where_sql}
-            ORDER BY f.reported_at DESC
-            LIMIT %s OFFSET %s
-        """
-        cursor.execute(events_sql, params + [page_size, offset])
+
+        if action_filter == 'ban':
+            # ACTIVE BANS: Unique IPs currently active in ip_blocks with ban count
+            where_clauses.append("f.event_type = 'ban'")
+            where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+            # Count unique active IPs
+            count_sql = f"""
+                SELECT COUNT(DISTINCT f.ip_address) as total
+                FROM fail2ban_events f
+                INNER JOIN ip_blocks b ON f.ip_address = b.ip_address_text
+                    AND b.block_source = 'fail2ban' AND b.is_active = TRUE
+                {where_sql}
+            """
+            cursor.execute(count_sql, params)
+            total = cursor.fetchone()['total']
+
+            # Get unique active bans with count
+            events_sql = f"""
+                SELECT
+                    MAX(f.id) as id,
+                    f.ip_address,
+                    MAX(f.jail_name) as jail_name,
+                    'ban' as event_type,
+                    SUM(f.failures) as failures,
+                    MAX(f.bantime_seconds) as bantime_seconds,
+                    MAX(f.timestamp) as reported_at,
+                    MAX(f.created_at) as created_at,
+                    COUNT(*) as ban_count,
+                    MAX(a.hostname) as agent_hostname,
+                    MAX(a.agent_id) as agent_uuid,
+                    MAX(f.agent_id) as agent_id
+                FROM fail2ban_events f
+                LEFT JOIN agents a ON f.agent_id = a.id
+                INNER JOIN ip_blocks b ON f.ip_address = b.ip_address_text
+                    AND b.block_source = 'fail2ban' AND b.is_active = TRUE
+                {where_sql}
+                GROUP BY f.ip_address
+                ORDER BY MAX(f.timestamp) DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(events_sql, params + [page_size, offset])
+
+        elif action_filter == 'unban':
+            # UNBAN HISTORY: Show all unban events (not grouped)
+            where_clauses.append("f.event_type = 'unban'")
+            where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+            count_sql = f"SELECT COUNT(*) as total FROM fail2ban_events f {where_sql}"
+            cursor.execute(count_sql, params)
+            total = cursor.fetchone()['total']
+
+            events_sql = f"""
+                SELECT f.id, f.agent_id, f.ip_address, f.jail_name, f.event_type,
+                    f.failures, f.bantime_seconds, f.timestamp as reported_at, f.created_at,
+                    a.hostname as agent_hostname, a.agent_id as agent_uuid,
+                    1 as ban_count
+                FROM fail2ban_events f
+                LEFT JOIN agents a ON f.agent_id = a.id
+                {where_sql}
+                ORDER BY f.timestamp DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(events_sql, params + [page_size, offset])
+
+        else:
+            # HISTORY (all actions): Unique IPs with total event count
+            where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+            # Count unique IPs
+            count_sql = f"SELECT COUNT(DISTINCT f.ip_address) as total FROM fail2ban_events f {where_sql}"
+            cursor.execute(count_sql, params)
+            total = cursor.fetchone()['total']
+
+            # Get unique IPs with counts
+            events_sql = f"""
+                SELECT
+                    MAX(f.id) as id,
+                    f.ip_address,
+                    MAX(f.jail_name) as jail_name,
+                    MAX(f.event_type) as event_type,
+                    SUM(CASE WHEN f.event_type = 'ban' THEN f.failures ELSE 0 END) as failures,
+                    MAX(f.bantime_seconds) as bantime_seconds,
+                    MAX(f.timestamp) as reported_at,
+                    MAX(f.created_at) as created_at,
+                    SUM(CASE WHEN f.event_type = 'ban' THEN 1 ELSE 0 END) as ban_count,
+                    SUM(CASE WHEN f.event_type = 'unban' THEN 1 ELSE 0 END) as unban_count,
+                    MAX(a.hostname) as agent_hostname,
+                    MAX(a.agent_id) as agent_uuid,
+                    MAX(f.agent_id) as agent_id
+                FROM fail2ban_events f
+                LEFT JOIN agents a ON f.agent_id = a.id
+                {where_sql}
+                GROUP BY f.ip_address
+                ORDER BY MAX(f.timestamp) DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(events_sql, params + [page_size, offset])
+
         events = cursor.fetchall()
 
         # Convert datetime objects to strings
         for event in events:
-            if event['reported_at']:
+            if event.get('reported_at'):
                 event['reported_at'] = event['reported_at'].isoformat()
-            if event['created_at']:
+            if event.get('created_at'):
                 event['created_at'] = event['created_at'].isoformat()
 
         return jsonify({
@@ -217,7 +273,7 @@ def get_fail2ban_events():
             'total': total,
             'page': page,
             'page_size': page_size,
-            'pages': (total + page_size - 1) // page_size
+            'pages': max(1, (total + page_size - 1) // page_size)
         })
 
     except Exception as e:
@@ -250,10 +306,10 @@ def get_top_banned_ips():
             SELECT
                 ip_address,
                 COUNT(*) as ban_count,
-                MAX(reported_at) as last_ban,
+                MAX(timestamp) as last_ban,
                 SUM(failures) as total_failures
             FROM fail2ban_events
-            WHERE action = 'ban'
+            WHERE event_type = 'ban'
             GROUP BY ip_address
             ORDER BY ban_count DESC
             LIMIT %s
@@ -342,12 +398,13 @@ def unban_ip():
             }), 400
 
         conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True, buffered=True)
 
         # Check if IP is blocked by fail2ban in ip_blocks
         cursor.execute("""
             SELECT id, block_source FROM ip_blocks
             WHERE ip_address_text = %s AND is_active = TRUE
+            LIMIT 1
         """, (ip_address,))
         block = cursor.fetchone()
 
@@ -362,21 +419,32 @@ def unban_ip():
                 WHERE id = %s
             """, (block['id'],))
 
-        # Also record the unban event
+        # Get agent_id for unban event (from original ban or default agent)
+        cursor.execute("""
+            SELECT agent_id FROM fail2ban_events
+            WHERE ip_address = %s AND event_type = 'ban'
+            ORDER BY timestamp DESC LIMIT 1
+        """, (ip_address,))
+        agent_row = cursor.fetchone()
+
+        if agent_row:
+            agent_id = agent_row['agent_id']
+        else:
+            # Fallback to most recently active agent
+            cursor.execute("""
+                SELECT id FROM agents WHERE is_active = TRUE
+                ORDER BY last_heartbeat DESC LIMIT 1
+            """)
+            fallback_row = cursor.fetchone()
+            agent_id = fallback_row['id'] if fallback_row else None
+
+        # Record the unban event
         cursor.execute("""
             INSERT INTO fail2ban_events (
-                agent_id, ip_address, jail_name, action,
-                failures, bantime_seconds, reported_at
-            )
-            SELECT
-                COALESCE(
-                    (SELECT agent_id FROM fail2ban_events
-                     WHERE ip_address = %s AND action = 'ban'
-                     ORDER BY reported_at DESC LIMIT 1),
-                    (SELECT id FROM agents WHERE is_active = TRUE ORDER BY last_heartbeat DESC LIMIT 1)
-                ),
-                %s, %s, 'unban', 0, 0, NOW()
-        """, (ip_address, ip_address, jail))
+                agent_id, ip_address, jail_name, event_type,
+                failures, bantime_seconds, timestamp
+            ) VALUES (%s, %s, %s, 'unban', 0, 0, NOW())
+        """, (agent_id, ip_address, jail))
 
         conn.commit()
 
@@ -423,20 +491,45 @@ def manual_ban_ip():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get a default agent_id (most recently active agent)
-        cursor.execute("""
-            SELECT id FROM agents WHERE is_active = TRUE ORDER BY last_heartbeat DESC LIMIT 1
-        """)
-        agent = cursor.fetchone()
-        if not agent:
-            return jsonify({'success': False, 'error': 'No active agent available'}), 400
-        agent_id = agent['id']
+        # Get agent_id - can be passed as numeric ID or string agent_id
+        agent_id_param = data.get('agent_id')
+        agent_id = None
 
-        # Record the ban event
+        if agent_id_param:
+            # If it's a string (like "ranaworkspace-0050565e9ee5"), look up the numeric ID
+            if isinstance(agent_id_param, str) and not agent_id_param.isdigit():
+                cursor.execute("SELECT id FROM agents WHERE agent_id = %s", (agent_id_param,))
+                agent_row = cursor.fetchone()
+                if agent_row:
+                    agent_id = agent_row['id']
+            else:
+                agent_id = int(agent_id_param) if agent_id_param else None
+
+        # If no agent_id provided or found, get default (most recently active agent)
+        if not agent_id:
+            cursor.execute("""
+                SELECT id FROM agents WHERE is_active = TRUE ORDER BY last_heartbeat DESC LIMIT 1
+            """)
+            agent = cursor.fetchone()
+            if not agent:
+                return jsonify({'success': False, 'error': 'No active agent available'}), 400
+            agent_id = agent['id']
+
+        # First, create a record in ip_blocks table (so it shows in Blocked IPs list)
+        from blocking_engine import block_ip_manual
+        block_result = block_ip_manual(
+            ip_address=ip_address,
+            reason=reason,
+            user_id=None,
+            duration_minutes=bantime // 60 if bantime > 0 else 1440,
+            agent_id=agent_id
+        )
+
+        # Also record the ban event in fail2ban_events
         cursor.execute("""
             INSERT INTO fail2ban_events (
-                agent_id, ip_address, jail_name, action,
-                failures, bantime_seconds, reported_at
+                agent_id, ip_address, jail_name, event_type,
+                failures, bantime_seconds, timestamp
             ) VALUES (%s, %s, %s, 'ban', 0, %s, NOW())
         """, (agent_id, ip_address, jail, bantime))
 
@@ -444,8 +537,9 @@ def manual_ban_ip():
 
         return jsonify({
             'success': True,
-            'message': f'Ban recorded for {ip_address}',
-            'bantime': bantime
+            'message': f'IP {ip_address} blocked successfully',
+            'bantime': bantime,
+            'block_id': block_result.get('block_id') if block_result.get('success') else None
         })
 
     except Exception as e:

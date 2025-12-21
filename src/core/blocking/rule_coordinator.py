@@ -28,10 +28,12 @@ from .ml_evaluators import (
     evaluate_impossible_travel_rule,
     evaluate_distributed_brute_force_rule,
     evaluate_account_takeover_rule,
-    evaluate_off_hours_anomaly_rule
+    evaluate_off_hours_anomaly_rule,
+    evaluate_behavioral_analysis_rule
 )
 from .threat_combo_evaluator import evaluate_threat_combo_rule
 from .ip_operations import block_ip
+from .alert_operations import create_security_alert
 
 
 def evaluate_rules_for_ip(ip_address, ml_result=None, event_id=None, event_type=None, username=None):
@@ -60,6 +62,7 @@ def evaluate_rules_for_ip(ip_address, ml_result=None, event_id=None, event_type=
                 id,
                 rule_name,
                 rule_type,
+                action_type,
                 priority,
                 conditions,
                 block_duration_minutes,
@@ -138,6 +141,15 @@ def evaluate_rules_for_ip(ip_address, ml_result=None, event_id=None, event_type=
                 eval_result = evaluate_off_hours_anomaly_rule(rule, ip_address, username)
                 eval_result['should_block'] = eval_result.get('triggered', False)
 
+            elif rule['rule_type'] == 'behavioral_analysis':
+                # ML Behavioral Analysis (PRIORITY): comprehensive behavioral detection
+                # This uses BehavioralAnalyzer for advanced pattern detection
+                eval_result = evaluate_behavioral_analysis_rule(rule, ip_address, username, event_type)
+                eval_result['should_block'] = eval_result.get('triggered', False)
+                # Store block method preference for later use
+                if eval_result.get('block_method') == 'ufw':
+                    eval_result['force_ufw'] = True
+
             elif rule['rule_type'] == 'repeat_offender':
                 # This is handled during block duration calculation
                 eval_result = {'should_block': False, 'reason': 'Duration modifier only'}
@@ -212,11 +224,63 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
             'block_id': None,
             'triggered_rules': [],
             'message': 'No rules triggered',
-            'requires_approval': False
+            'requires_approval': False,
+            'alerts_created': 0
         }
 
-    # Block based on highest priority rule
-    rule_to_apply = triggered_rules[0]  # Already sorted by priority
+    # Separate rules by action_type: 'block' vs 'alert'
+    block_rules = []
+    alert_rules = []
+
+    for r in triggered_rules:
+        action_type = r['rule'].get('action_type', 'block')
+        if action_type == 'alert':
+            alert_rules.append(r)
+        elif action_type == 'monitor':
+            # Monitor-only: log but don't block or alert
+            print(f"📊 Monitor: {r['rule']['rule_name']} triggered for {ip_address}")
+        else:
+            block_rules.append(r)
+
+    # Process alerts (non-blocking)
+    alerts_created = 0
+    for alert_rule in alert_rules:
+        rule = alert_rule['rule']
+        alert_result = create_security_alert(
+            ip_address=ip_address,
+            alert_type=rule['rule_type'],
+            title=f"{rule['rule_name']}: {alert_rule.get('reason', 'Suspicious activity detected')}",
+            description=alert_rule.get('description', alert_rule.get('reason')),
+            severity=alert_rule.get('threat_level', 'medium'),
+            username=username,
+            event_id=event_id,
+            ml_score=alert_rule.get('ml_score', 0),
+            ml_factors=alert_rule.get('risk_factors', [])
+        )
+        if alert_result.get('success'):
+            alerts_created += 1
+
+    # If no blocking rules, return with alert info
+    if not block_rules:
+        return {
+            'blocked': False,
+            'block_id': None,
+            'triggered_rules': [r['rule']['rule_name'] for r in alert_rules],
+            'message': f'Alert(s) created, no blocking rules triggered',
+            'requires_approval': False,
+            'alerts_created': alerts_created,
+            'alert_only': True
+        }
+
+    # Prioritize ML behavioral analysis rule if triggered (highest priority)
+    ml_behavioral_rules = [r for r in block_rules if r['rule']['rule_type'] == 'behavioral_analysis']
+    if ml_behavioral_rules:
+        # ML behavioral analysis takes priority
+        rule_to_apply = ml_behavioral_rules[0]
+    else:
+        # Use highest priority rule
+        rule_to_apply = block_rules[0]  # Already sorted by priority
+
     rule = rule_to_apply['rule']
 
     # Check if approval is required
@@ -224,7 +288,10 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
 
     # Determine block source based on rule type
     rule_type = rule['rule_type']
-    if rule_type in ('ml_threshold', 'anomaly_pattern'):
+    if rule_type == 'behavioral_analysis':
+        # ML behavioral analysis - highest priority
+        block_source = 'ml_behavioral'
+    elif rule_type in ('ml_threshold', 'anomaly_pattern'):
         block_source = 'ml_threshold'
     elif rule_type == 'api_reputation':
         block_source = 'api_reputation'
@@ -241,6 +308,18 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
     # Apply repeat offender escalation
     adjusted_duration = get_repeat_offender_duration(ip_address, base_duration)
 
+    # Check if ML behavioral analysis recommends permanent UFW block
+    force_ufw = rule_to_apply.get('force_ufw', False)
+    ml_risk_factors = rule_to_apply.get('risk_factors', [])
+
+    # For behavioral analysis with critical threat level, override auto_unblock
+    auto_unblock = rule['auto_unblock']
+    if rule_type == 'behavioral_analysis':
+        threat_level = rule_to_apply.get('threat_level', 'low')
+        if threat_level == 'critical' or force_ufw:
+            auto_unblock = False  # Permanent block for critical threats
+            adjusted_duration = 0  # 0 = permanent
+
     # Block the IP
     block_result = block_ip(
         ip_address=ip_address,
@@ -251,7 +330,7 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
         failed_attempts=rule_to_apply.get('failed_attempts', 0),
         threat_level=rule_to_apply.get('threat_level'),
         block_duration_minutes=adjusted_duration,
-        auto_unblock=rule['auto_unblock']
+        auto_unblock=auto_unblock
     )
 
     return {
@@ -262,5 +341,11 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
         'requires_approval': requires_approval,
         'ufw_commands_created': block_result.get('ufw_commands_created', 0),
         'base_duration': base_duration,
-        'adjusted_duration': adjusted_duration
+        'adjusted_duration': adjusted_duration,
+        'ml_behavioral_analysis': {
+            'risk_factors': ml_risk_factors,
+            'recommendations': rule_to_apply.get('recommendations', []),
+            'confidence': rule_to_apply.get('confidence', 0),
+            'force_ufw': force_ufw
+        } if rule_type == 'behavioral_analysis' else None
     }

@@ -1,0 +1,152 @@
+/* ========================================
+   AGENT CARDS GRID
+   ======================================== */
+
+.agents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    padding: 16px;
+}
+
+.agent-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.agent-card:hover {
+    border-color: var(--azure-blue);
+    box-shadow: 0 4px 12px rgba(0, 120, 212, 0.1);
+}
+
+.agent-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+}
+
+.agent-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.agent-card-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+}
+
+.agent-card-avatar.online { background: linear-gradient(135deg, var(--color-success-light), var(--color-success-dark)); }
+.agent-card-avatar.offline { background: linear-gradient(135deg, var(--color-muted-light), var(--text-secondary)); }
+
+.agent-card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.agent-status-pill {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.agent-status-pill.online {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.agent-status-pill.offline {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
+.agent-card-body {
+    padding: 16px;
+}
+
+.agent-card-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+}
+
+.agent-card-row:last-child {
+    border-bottom: none;
+}
+
+.agent-card-label {
+    color: var(--text-secondary);
+}
+
+.agent-card-value {
+    color: var(--text-primary);
+    font-weight: 500;
+    text-align: right;
+    word-break: break-all;
+}
+
+.agent-card-value.mono {
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+}
+
+.agent-card-footer {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--background);
+}
+
+.agent-card-footer .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+/* Agent badges */
+.agent-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.agent-badge.approved {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.agent-badge.pending {
+    background: var(--color-warning-bg);
+    color: var(--color-olive-dark);
+}
+
+.agent-badge.inactive {
+    background: var(--color-muted-bg);
+    color: var(--color-muted);
+}
+

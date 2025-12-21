@@ -1,5 +1,5 @@
 """
-SSH Guardian v3.0 - Database Connection Module
+SSH Guardian v3.1 - Database Connection Module
 Centralized database connection with pooling and utilities
 """
 
@@ -10,6 +10,12 @@ import struct
 from typing import Optional, Tuple
 import os
 import sys
+from pathlib import Path
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(PROJECT_ROOT / '.env')
 
 # Database Configuration
 DB_CONFIG = {
@@ -68,33 +74,54 @@ def initialize_pool():
             return False
 
 
-def get_connection():
+def get_connection(max_retries=3, retry_delay=0.1):
     """
-    Get a connection from the pool.
+    Get a connection from the pool with retry logic.
+
+    Args:
+        max_retries: Number of retries if pool is exhausted
+        retry_delay: Initial delay between retries (doubles each retry)
 
     Returns:
         mysql.connector connection object
 
     Raises:
-        Error: If connection cannot be established
+        Error: If connection cannot be established after retries
     """
     global connection_pool
+    import time
 
-    try:
-        if connection_pool is None:
-            initialize_pool()
+    last_error = None
 
-        if connection_pool:
-            conn = connection_pool.get_connection()
-            return conn
-        else:
-            # Fallback to direct connection if pool initialization failed
-            print("⚠️  Connection pool not available, using direct connection")
-            return mysql.connector.connect(**DB_CONFIG)
+    for attempt in range(max_retries + 1):
+        try:
+            if connection_pool is None:
+                initialize_pool()
 
-    except Error as e:
-        print(f"❌ Error getting connection: {e}")
-        raise
+            if connection_pool:
+                conn = connection_pool.get_connection()
+                return conn
+            else:
+                # Fallback to direct connection if pool initialization failed
+                print("⚠️  Connection pool not available, using direct connection")
+                return mysql.connector.connect(**DB_CONFIG)
+
+        except pooling.PoolError as e:
+            last_error = e
+            if attempt < max_retries:
+                # Pool exhausted - wait and retry
+                wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                print(f"⚠️  Pool exhausted, retrying in {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            continue
+
+        except Error as e:
+            print(f"❌ Error getting connection: {e}")
+            raise
+
+    # All retries exhausted
+    print(f"❌ Failed to get connection after {max_retries} retries: {last_error}")
+    raise last_error
 
 
 def test_connection():
@@ -261,15 +288,17 @@ def is_valid_ip(ip_str: str) -> bool:
 # DATABASE UTILITIES
 # ============================================================================
 
-def execute_query(query: str, params: Optional[Tuple] = None, fetch_one=False, fetch_all=False):
+def execute_query(query: str, params: Optional[Tuple] = None, fetch_one=False, fetch_all=False, invalidate_cache=True):
     """
     Execute a query and return results.
+    Automatically invalidates cache for INSERT/UPDATE/DELETE queries.
 
     Args:
         query: SQL query to execute
         params: Query parameters (optional)
         fetch_one: If True, return single row
         fetch_all: If True, return all rows
+        invalidate_cache: If True, auto-invalidate cache for write operations
 
     Returns:
         Result set or None
@@ -288,6 +317,11 @@ def execute_query(query: str, params: Optional[Tuple] = None, fetch_one=False, f
             result = None
 
         conn.commit()
+
+        # Auto-invalidate cache for write operations
+        if invalidate_cache:
+            _auto_invalidate_cache(query)
+
         return result
 
     except Error as e:
@@ -297,6 +331,58 @@ def execute_query(query: str, params: Optional[Tuple] = None, fetch_one=False, f
     finally:
         cursor.close()
         conn.close()
+
+
+def _auto_invalidate_cache(query: str):
+    """
+    Automatically invalidate cache based on the SQL query.
+    Detects INSERT/UPDATE/DELETE and invalidates appropriate caches.
+    """
+    import re
+
+    query_upper = query.upper().strip()
+
+    # Skip SELECT queries
+    if query_upper.startswith('SELECT'):
+        return
+
+    # Extract table name from query
+    table_name = None
+
+    if query_upper.startswith('INSERT'):
+        # INSERT INTO table_name ...
+        match = re.search(r'INSERT\s+INTO\s+(\w+)', query_upper)
+        if match:
+            table_name = match.group(1).lower()
+
+    elif query_upper.startswith('UPDATE'):
+        # UPDATE table_name SET ...
+        match = re.search(r'UPDATE\s+(\w+)\s+SET', query_upper)
+        if match:
+            table_name = match.group(1).lower()
+
+    elif query_upper.startswith('DELETE'):
+        # DELETE FROM table_name ...
+        match = re.search(r'DELETE\s+FROM\s+(\w+)', query_upper)
+        if match:
+            table_name = match.group(1).lower()
+
+    if table_name:
+        try:
+            # Import here to avoid circular imports
+            import sys
+            from pathlib import Path
+            PROJECT_ROOT = Path(__file__).parent.parent
+            if str(PROJECT_ROOT / "src" / "core") not in sys.path:
+                sys.path.insert(0, str(PROJECT_ROOT / "src" / "core"))
+
+            from cache import invalidate_for_table
+            invalidate_for_table(table_name)
+        except ImportError:
+            # Cache module not available, skip invalidation
+            pass
+        except Exception as e:
+            print(f"⚠️ Cache invalidation error: {e}")
 
 
 def get_table_info(table_name: str):

@@ -97,11 +97,12 @@ def create_ufw_block_commands(ip_address: str, block_id: int,
             agent_names = []
 
             for agent in agents_to_block:
+                ufw_command = f"ufw deny from {ip_address}"
                 cursor.execute("""
                     INSERT INTO agent_ufw_commands
-                    (agent_id, command_uuid, command_type, params_json, status, created_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
-                """, (agent['id'], str(uuid.uuid4()), 'deny_from', json.dumps(params), 'pending'))
+                    (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                """, (agent['id'], str(uuid.uuid4()), 'deny_from', json.dumps(params), ufw_command, 'pending'))
                 commands_created += 1
                 agent_names.append(agent.get('display_name') or agent.get('hostname') or str(agent['id']))
 
@@ -162,12 +163,13 @@ def create_ufw_unblock_commands(ip_address: str, block_id: int) -> Dict[str, Any
             commands_created = 0
 
             for agent in agents:
+                ufw_command = f"ufw delete deny from {ip_address}"
                 cursor.execute("""
                     INSERT INTO agent_ufw_commands
-                    (agent_id, command_uuid, command_type, params_json, status, created_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
                 """, (agent['agent_id'], str(uuid.uuid4()), 'delete_deny_from',
-                      json.dumps(params), 'pending'))
+                      json.dumps(params), ufw_command, 'pending'))
                 commands_created += 1
 
             conn.commit()
@@ -184,3 +186,138 @@ def create_ufw_unblock_commands(ip_address: str, block_id: int) -> Dict[str, Any
         print(f"❌ Error creating UFW unblock commands for {ip_address}: {e}")
         return {'success': False, 'commands_created': 0,
                 'message': f'Failed to create UFW unblock commands: {str(e)}'}
+
+
+def reconcile_ufw_with_ip_blocks(agent_id: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Reconcile UFW rules with ip_blocks table.
+
+    Compares actual UFW DENY rules (from agent_ufw_rules) with ip_blocks records.
+    If an IP is marked as blocked in ip_blocks but NOT in UFW rules, mark it as unblocked.
+
+    Args:
+        agent_id: Specific agent to reconcile (None = all agents)
+
+    Returns:
+        dict: {
+            'success': bool,
+            'reconciled_count': int,
+            'details': list of {ip, agent_id, action}
+        }
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            # Get all active blocks from ip_blocks
+            if agent_id:
+                cursor.execute("""
+                    SELECT ib.id, ib.ip_address_text, ib.agent_id, ib.block_source
+                    FROM ip_blocks ib
+                    WHERE ib.is_active = TRUE
+                      AND ib.agent_id = %s
+                """, (agent_id,))
+            else:
+                cursor.execute("""
+                    SELECT ib.id, ib.ip_address_text, ib.agent_id, ib.block_source
+                    FROM ip_blocks ib
+                    WHERE ib.is_active = TRUE
+                      AND ib.agent_id IS NOT NULL
+                """)
+
+            active_blocks = cursor.fetchall()
+
+            if not active_blocks:
+                return {
+                    'success': True,
+                    'reconciled_count': 0,
+                    'details': [],
+                    'message': 'No active blocks to reconcile'
+                }
+
+            # Get all DENY rules from UFW (grouped by agent)
+            if agent_id:
+                cursor.execute("""
+                    SELECT agent_id, from_ip
+                    FROM agent_ufw_rules
+                    WHERE action = 'DENY'
+                      AND from_ip IS NOT NULL
+                      AND from_ip != ''
+                      AND from_ip != 'Anywhere'
+                      AND agent_id = %s
+                """, (agent_id,))
+            else:
+                cursor.execute("""
+                    SELECT agent_id, from_ip
+                    FROM agent_ufw_rules
+                    WHERE action = 'DENY'
+                      AND from_ip IS NOT NULL
+                      AND from_ip != ''
+                      AND from_ip != 'Anywhere'
+                """)
+
+            ufw_rules = cursor.fetchall()
+
+            # Build a set of (agent_id, ip) tuples for quick lookup
+            ufw_blocked_ips = set()
+            for rule in ufw_rules:
+                ufw_blocked_ips.add((rule['agent_id'], rule['from_ip']))
+
+            # Find blocks in ip_blocks that are NOT in UFW
+            reconciled = []
+            for block in active_blocks:
+                block_key = (block['agent_id'], block['ip_address_text'])
+
+                if block_key not in ufw_blocked_ips:
+                    # This IP is marked as blocked but not in UFW - mark as unblocked
+                    cursor.execute("""
+                        UPDATE ip_blocks
+                        SET is_active = FALSE,
+                            unblocked_at = NOW(),
+                            unblock_reason = 'Auto-reconciled: Not found in UFW rules'
+                        WHERE id = %s
+                    """, (block['id'],))
+
+                    # Add history record
+                    cursor.execute("""
+                        INSERT INTO blocking_actions
+                        (action_uuid, ip_block_id, ip_address_text, action_type, action_source, reason, created_at)
+                        VALUES (%s, %s, %s, 'unblocked', 'system', 'Auto-reconciled: Removed from UFW externally', NOW())
+                    """, (str(uuid.uuid4()), block['id'], block['ip_address_text']))
+
+                    reconciled.append({
+                        'ip': block['ip_address_text'],
+                        'agent_id': block['agent_id'],
+                        'block_id': block['id'],
+                        'action': 'marked_unblocked'
+                    })
+
+                    print(f"🔄 Reconciled: {block['ip_address_text']} marked as unblocked (not in UFW)")
+
+            conn.commit()
+
+            return {
+                'success': True,
+                'reconciled_count': len(reconciled),
+                'details': reconciled,
+                'message': f'Reconciled {len(reconciled)} IP(s) - marked as unblocked'
+            }
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Error reconciling UFW with ip_blocks: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'reconciled_count': 0,
+            'details': [],
+            'message': f'Reconciliation failed: {str(e)}'
+        }

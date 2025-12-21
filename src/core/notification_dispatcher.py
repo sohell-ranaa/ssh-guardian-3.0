@@ -42,18 +42,32 @@ class NotificationDispatcher:
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # Use integrations table with JSON config/credentials columns
             cursor.execute("""
-                SELECT ic.config_key, ic.config_value
-                FROM integration_config ic
-                WHERE ic.integration_id = 'telegram'
+                SELECT config, credentials, is_enabled
+                FROM integrations
+                WHERE integration_type = 'telegram'
             """)
-            rows = cursor.fetchall()
+            row = cursor.fetchone()
 
-            if rows:
-                config = {r['config_key']: r['config_value'] for r in rows}
-                if config.get('enabled') == 'true' and config.get('bot_token') and config.get('chat_id'):
-                    self._telegram_config = config
-                    return config
+            if row and row.get('is_enabled'):
+                config = row.get('config') or {}
+                credentials = row.get('credentials') or {}
+
+                # Parse JSON if needed
+                if isinstance(config, str):
+                    import json
+                    config = json.loads(config)
+                if isinstance(credentials, str):
+                    import json
+                    credentials = json.loads(credentials)
+
+                # Merge config and credentials
+                merged = {**config, **credentials}
+
+                if merged.get('bot_token') and merged.get('chat_id'):
+                    self._telegram_config = merged
+                    return merged
             return None
         finally:
             cursor.close()
@@ -68,19 +82,102 @@ class NotificationDispatcher:
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # Use integrations table with JSON config/credentials columns
             cursor.execute("""
-                SELECT ic.config_key, ic.config_value
-                FROM integration_config ic
-                WHERE ic.integration_id = 'smtp'
+                SELECT config, credentials, is_enabled
+                FROM integrations
+                WHERE integration_type = 'smtp'
             """)
-            rows = cursor.fetchall()
+            row = cursor.fetchone()
 
-            if rows:
-                config = {r['config_key']: r['config_value'] for r in rows}
-                if config.get('host') and config.get('from_email'):
-                    self._smtp_config = config
-                    return config
+            if row and row.get('is_enabled'):
+                config = row.get('config') or {}
+                credentials = row.get('credentials') or {}
+
+                # Parse JSON if needed
+                if isinstance(config, str):
+                    import json
+                    config = json.loads(config)
+                if isinstance(credentials, str):
+                    import json
+                    credentials = json.loads(credentials)
+
+                # Merge config and credentials
+                merged = {**config, **credentials}
+
+                if merged.get('host') and merged.get('from_email'):
+                    self._smtp_config = merged
+                    return merged
             return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def _get_email_routing_recipients(self, agent_id: str = None, rule_type: str = None) -> List[str]:
+        """
+        Get email recipients from routing rules based on agent and rule type.
+
+        Args:
+            agent_id: Agent ID triggering the notification
+            rule_type: Type of rule/trigger (e.g., 'brute_force', 'ml_threshold')
+
+        Returns:
+            List of email addresses to send notification to
+        """
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT setting_value FROM system_settings
+                WHERE setting_key = 'email_routing_rules'
+            """)
+            row = cursor.fetchone()
+
+            if not row or not row['setting_value']:
+                return []
+
+            try:
+                rules = json.loads(row['setting_value'])
+            except json.JSONDecodeError:
+                return []
+
+            matched_emails = set()
+
+            # Sort by priority (lower = higher priority)
+            rules_sorted = sorted(
+                [r for r in rules if r.get('is_enabled', True)],
+                key=lambda x: x.get('priority', 50)
+            )
+
+            for rule in rules_sorted:
+                agents = rule.get('agents', ['all'])
+                rule_types = rule.get('rule_types', ['all'])
+
+                # Check if agent matches
+                agent_match = False
+                if 'all' in agents:
+                    agent_match = True
+                elif agent_id and agent_id in agents:
+                    agent_match = True
+
+                # Check if rule type matches
+                type_match = False
+                if 'all' in rule_types:
+                    type_match = True
+                elif rule_type and rule_type in rule_types:
+                    type_match = True
+
+                # If both match, add emails
+                if agent_match and type_match:
+                    for email in rule.get('email_addresses', []):
+                        matched_emails.add(email)
+
+            return list(matched_emails)
+
+        except Exception as e:
+            self._log(f"  [EMAIL ROUTING] Error getting routing rules: {e}")
+            return []
         finally:
             cursor.close()
             conn.close()
@@ -128,9 +225,33 @@ class NotificationDispatcher:
             cursor.close()
             conn.close()
 
-    def check_rate_limit(self, rule_id: int, rate_limit_minutes: int) -> bool:
-        """Check if notification is rate-limited"""
-        if rate_limit_minutes <= 0:
+    def _get_event_data(self, event_id: int) -> Optional[Dict]:
+        """Get event data including agent info from database"""
+        if not event_id:
+            return None
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT ae.id, ae.source_ip_text, ae.target_username, ae.event_type,
+                       ae.agent_id, a.display_name as agent_name, a.hostname as agent_hostname
+                FROM auth_events ae
+                LEFT JOIN agents a ON ae.agent_id = a.id
+                WHERE ae.id = %s
+            """, (event_id,))
+            return cursor.fetchone()
+        except Exception as e:
+            self._log(f"Event lookup error: {e}")
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def check_rate_limit(self, rule_id: int, cooldown_minutes: int) -> bool:
+        """Check if notification is rate-limited (cooldown period)"""
+        if cooldown_minutes <= 0:
             return True
 
         conn = get_connection()
@@ -142,7 +263,7 @@ class NotificationDispatcher:
                 WHERE notification_rule_id = %s
                 AND created_at > DATE_SUB(NOW(), INTERVAL %s MINUTE)
                 AND status = 'sent'
-            """, (rule_id, rate_limit_minutes))
+            """, (rule_id, cooldown_minutes))
 
             count = cursor.fetchone()[0]
             return count == 0  # True if no recent notifications
@@ -151,17 +272,17 @@ class NotificationDispatcher:
             conn.close()
 
     def get_matching_rules(self, trigger_type: str) -> List[Dict]:
-        """Get all enabled rules matching a trigger type"""
+        """Get all enabled rules matching a trigger type (event_type)"""
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # Use event_type column (actual schema) instead of trigger_on
             cursor.execute("""
-                SELECT id, rule_name, trigger_on, channels, conditions,
-                       message_template, message_format, rate_limit_minutes,
-                       email_recipients
+                SELECT id, rule_name, event_type as trigger_on, channels, conditions,
+                       message_template, cooldown_minutes as rate_limit_minutes
                 FROM notification_rules
-                WHERE trigger_on = %s AND is_enabled = TRUE
+                WHERE event_type = %s AND is_enabled = TRUE
             """, (trigger_type,))
 
             return cursor.fetchall()
@@ -317,9 +438,9 @@ class NotificationDispatcher:
 
     def create_notification_record(self, rule_id: int, trigger_type: str,
                                    event_id: Optional[int], channels: List[str],
-                                   message: str, priority: str = 'normal') -> int:
-        """Create notification record in database"""
-        import uuid
+                                   message: str, priority: str = 'normal',
+                                   ip_address: str = None, context: Dict = None) -> int:
+        """Create notification record in database for each channel"""
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -327,16 +448,22 @@ class NotificationDispatcher:
         # Extract title from message (first line or first 100 chars)
         title = message.split('\n')[0][:100] if '\n' in message else message[:100]
 
+        # Determine if this is a security alert based on trigger type
+        is_security_alert = trigger_type in ['high_risk_detected', 'brute_force_detected', 'anomaly_detected', 'ip_blocked']
+
         try:
+            # Create one notification record per channel
+            # Use the first channel as the main channel for the record
+            main_channel = channels[0] if channels else 'telegram'
+
             cursor.execute("""
                 INSERT INTO notifications (
-                    notification_uuid, notification_rule_id, trigger_type,
-                    trigger_event_id, channels, message_title, message_body,
-                    message_format, priority, status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'html', %s, 'pending')
+                    notification_rule_id, channel, subject, message,
+                    status, ip_address, is_security_alert
+                ) VALUES (%s, %s, %s, %s, 'pending', %s, %s)
             """, (
-                str(uuid.uuid4()), rule_id, trigger_type,
-                event_id, json.dumps(channels), title, message, priority
+                rule_id, main_channel, title, message,
+                ip_address, is_security_alert
             ))
             conn.commit()
             return cursor.lastrowid
@@ -351,12 +478,11 @@ class NotificationDispatcher:
         cursor = conn.cursor()
 
         try:
-            if delivery_status:
+            # Table doesn't have delivery_status column, just update status
+            if status == 'sent':
                 cursor.execute("""
-                    UPDATE notifications
-                    SET status = %s, delivery_status = %s, sent_at = NOW()
-                    WHERE id = %s
-                """, (status, json.dumps(delivery_status), notif_id))
+                    UPDATE notifications SET status = %s, sent_at = NOW() WHERE id = %s
+                """, (status, notif_id))
             else:
                 cursor.execute("""
                     UPDATE notifications SET status = %s WHERE id = %s
@@ -416,9 +542,13 @@ class NotificationDispatcher:
             # Determine priority
             priority = 'high' if trigger_type in ['high_risk_detected', 'brute_force_detected'] else 'normal'
 
+            # Get IP address from context
+            ip_address = context.get('ip_address')
+
             # Create notification record
             notif_id = self.create_notification_record(
-                rule_id, trigger_type, event_id, channels, message, priority
+                rule_id, trigger_type, event_id, channels, message, priority,
+                ip_address=ip_address, context=context
             )
 
             delivery_status = {}
@@ -438,20 +568,41 @@ class NotificationDispatcher:
                     config = self._get_smtp_config()
                     if config:
                         subject = f"SSH Guardian Alert: {trigger_type.replace('_', ' ').title()}"
-                        # Parse email_recipients from rule (JSON array or comma-separated string)
-                        email_recipients = None
+
+                        # Collect recipients from multiple sources
+                        all_recipients = set()
+
+                        # 1. Get recipients from email routing rules
+                        agent_id = context.get('agent_id') or context.get('agent_name')
+                        routing_recipients = self._get_email_routing_recipients(
+                            agent_id=agent_id,
+                            rule_type=trigger_type
+                        )
+                        if routing_recipients:
+                            self._log(f"  [EMAIL ROUTING] Found {len(routing_recipients)} recipients from routing rules")
+                            all_recipients.update(routing_recipients)
+
+                        # 2. Parse email_recipients from rule (JSON array or comma-separated string)
                         raw_recipients = rule.get('email_recipients')
                         if raw_recipients:
                             if isinstance(raw_recipients, str):
                                 try:
-                                    email_recipients = json.loads(raw_recipients)
+                                    rule_recipients = json.loads(raw_recipients)
                                 except json.JSONDecodeError:
                                     # Treat as comma-separated string
-                                    email_recipients = [e.strip() for e in raw_recipients.split(',') if e.strip()]
+                                    rule_recipients = [e.strip() for e in raw_recipients.split(',') if e.strip()]
                             elif isinstance(raw_recipients, list):
-                                email_recipients = raw_recipients
+                                rule_recipients = raw_recipients
+                            else:
+                                rule_recipients = []
+                            if rule_recipients:
+                                self._log(f"  [EMAIL] Rule-specific recipients: {rule_recipients}")
+                                all_recipients.update(rule_recipients)
 
-                        self._log(f"  [EMAIL] Rule recipients: {email_recipients}")
+                        # Convert to list
+                        email_recipients = list(all_recipients) if all_recipients else None
+
+                        self._log(f"  [EMAIL] Final recipients: {email_recipients}")
                         sent = self.send_email(subject, message, config, recipients=email_recipients)
                         delivery_status['email'] = 'sent' if sent else 'failed'
                         if sent:
@@ -484,7 +635,8 @@ def get_dispatcher(verbose: bool = True) -> NotificationDispatcher:
 
 def notify_high_risk(event_id: int, ip_address: str, risk_score: int,
                      threat_type: str, geo_data: Dict = None,
-                     threat_data: Dict = None, verbose: bool = True) -> Dict:
+                     threat_data: Dict = None, verbose: bool = True,
+                     agent_name: str = None, username: str = None) -> Dict:
     """
     Send notification for high-risk IP detection.
 
@@ -496,6 +648,8 @@ def notify_high_risk(event_id: int, ip_address: str, risk_score: int,
         geo_data: GeoIP data
         threat_data: Threat intelligence data
         verbose: Print progress
+        agent_name: Agent name (if not provided, will be fetched from event)
+        username: Target username
 
     Returns:
         Dispatch result
@@ -508,6 +662,15 @@ def notify_high_risk(event_id: int, ip_address: str, risk_score: int,
     if not threat_data:
         threat_data = dispatcher._get_threat_from_db(ip_address)
 
+    # Get agent name and username from event if not provided
+    if not agent_name or not username:
+        event_data = dispatcher._get_event_data(event_id)
+        if event_data:
+            if not agent_name:
+                agent_name = event_data.get('agent_name') or event_data.get('agent_hostname') or 'Unknown Agent'
+            if not username:
+                username = event_data.get('target_username') or 'unknown'
+
     # Build context with all available data
     context = {
         'ip_address': ip_address,
@@ -515,7 +678,8 @@ def notify_high_risk(event_id: int, ip_address: str, risk_score: int,
         'threat_type': threat_type or 'unknown',
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'event_id': event_id,
-        'agent_name': 'SSH Guardian',
+        'agent_name': agent_name or 'Unknown Agent',
+        'username': username or 'unknown',
         # Geo data
         'country': geo_data.get('country_name') or geo_data.get('country') or 'Unknown' if geo_data else 'Unknown',
         'city': geo_data.get('city') or 'Unknown' if geo_data else 'Unknown',
@@ -532,17 +696,22 @@ def notify_high_risk(event_id: int, ip_address: str, risk_score: int,
 
 def notify_anomaly(event_id: int, ip_address: str, risk_score: int,
                    threat_type: str, confidence: float,
-                   geo_data: Dict = None, verbose: bool = True) -> Dict:
+                   geo_data: Dict = None, username: str = None,
+                   anomaly_factors: List[str] = None, anomaly_details: List[str] = None,
+                   verbose: bool = True) -> Dict:
     """
-    Send notification for anomaly detection.
+    Send notification for anomaly detection (including behavioral anomalies).
 
     Args:
         event_id: auth_events.id
         ip_address: Detected IP
-        risk_score: ML risk score
-        threat_type: Detected anomaly type
-        confidence: ML confidence
+        risk_score: ML risk score (0-100)
+        threat_type: Detected anomaly type (e.g., 'unusual_time', 'new_location')
+        confidence: ML confidence (0-1)
         geo_data: GeoIP data
+        username: Username associated with the anomaly
+        anomaly_factors: List of detected factors ['unusual_time', 'new_location']
+        anomaly_details: Human-readable factor details
         verbose: Print progress
 
     Returns:
@@ -554,11 +723,18 @@ def notify_anomaly(event_id: int, ip_address: str, risk_score: int,
     if not geo_data:
         geo_data = dispatcher._get_geo_from_db(ip_address)
 
+    # Format factor details
+    factor_str = ', '.join(anomaly_factors) if anomaly_factors else threat_type or 'behavioral_anomaly'
+    details_str = '; '.join(anomaly_details) if anomaly_details else f"Risk Score: {risk_score}/100"
+
     context = {
         'ip_address': ip_address,
+        'username': username or 'unknown',
         'risk_score': risk_score,
+        'threat_type': threat_type or 'behavioral_anomaly',
         'anomaly_type': threat_type or 'behavioral_anomaly',
-        'anomaly_details': f"Risk Score: {risk_score}/100, Confidence: {confidence*100:.1f}%",
+        'anomaly_factors': factor_str,
+        'anomaly_details': details_str,
         'confidence': f"{confidence*100:.1f}",
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'event_id': event_id,

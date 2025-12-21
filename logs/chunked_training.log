@@ -436,3 +436,318 @@
 2025-12-07 05:27:41,512 [INFO] F1 Score: 0.9187
 2025-12-07 05:27:41,512 [INFO] Status: production
 2025-12-07 05:27:41,512 [INFO] ======================================================================
+2025-12-21 06:29:27,641 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:29:27.641742
+2025-12-21 06:29:29,310 [INFO] ======================================================================
+2025-12-21 06:29:29,311 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:29:29,311 [INFO] ======================================================================
+2025-12-21 06:29:31,245 [INFO] Total events in range: 749
+2025-12-21 06:29:31,245 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:29:31,245 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:29:31,245 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:29:31,593 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:29:31,594 [INFO] Converting to numpy arrays...
+2025-12-21 06:29:31,681 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:29:31,685 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:29:31,686 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:29:31,686 [INFO] Label distribution (after noise): 0=330, 1=419
+2025-12-21 06:29:31,686 [INFO] Splitting data 80/20...
+2025-12-21 06:29:31,699 [INFO] Training samples: 599
+2025-12-21 06:29:31,700 [INFO] Test samples: 150
+2025-12-21 06:29:31,700 [INFO] Scaling features...
+2025-12-21 06:29:31,703 [INFO] Training Random Forest model...
+2025-12-21 06:29:31,703 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:29:32,279 [INFO] Training complete!
+2025-12-21 06:29:32,280 [INFO] Evaluating model...
+2025-12-21 06:29:32,420 [INFO] ==================================================
+2025-12-21 06:29:32,420 [INFO] METRICS:
+2025-12-21 06:29:32,420 [INFO]   Accuracy:  0.9333
+2025-12-21 06:29:32,421 [INFO]   Precision: 0.9405
+2025-12-21 06:29:32,421 [INFO]   Recall:    0.9405
+2025-12-21 06:29:32,421 [INFO]   F1 Score:  0.9405
+2025-12-21 06:29:32,421 [INFO]   ROC AUC:   0.9379
+2025-12-21 06:29:32,421 [INFO]   Confusion Matrix:
+[[61  5]
+ [ 5 79]]
+2025-12-21 06:29:32,421 [INFO] ==================================================
+2025-12-21 06:29:32,432 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_062932.pkl
+2025-12-21 06:29:32,435 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'feature_names' in 'field list'
+2025-12-21 06:29:32,441 [ERROR] Failed to promote model: 1054 (42S22): Unknown column 'promoted_to_production_at' in 'field list'
+2025-12-21 06:29:32,448 [INFO] ======================================================================
+2025-12-21 06:29:32,449 [INFO] TRAINING COMPLETE!
+2025-12-21 06:29:32,449 [INFO] ======================================================================
+2025-12-21 06:29:32,449 [INFO] Model: random_forest_20251221_062932
+2025-12-21 06:29:32,449 [INFO] Samples: 599
+2025-12-21 06:29:32,449 [INFO] Accuracy: 0.9333
+2025-12-21 06:29:32,449 [INFO] F1 Score: 0.9405
+2025-12-21 06:29:32,449 [INFO] Status: production
+2025-12-21 06:29:32,449 [INFO] ======================================================================
+2025-12-21 06:29:45,482 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:29:45.482643
+2025-12-21 06:29:47,117 [INFO] ======================================================================
+2025-12-21 06:29:47,117 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:29:47,117 [INFO] ======================================================================
+2025-12-21 06:29:49,122 [INFO] Total events in range: 749
+2025-12-21 06:29:49,122 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:29:49,122 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:29:49,122 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:29:49,504 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:29:49,504 [INFO] Converting to numpy arrays...
+2025-12-21 06:29:49,607 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:29:49,608 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:29:49,609 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:29:49,609 [INFO] Label distribution (after noise): 0=338, 1=411
+2025-12-21 06:29:49,609 [INFO] Splitting data 80/20...
+2025-12-21 06:29:49,612 [INFO] Training samples: 599
+2025-12-21 06:29:49,612 [INFO] Test samples: 150
+2025-12-21 06:29:49,612 [INFO] Scaling features...
+2025-12-21 06:29:49,615 [INFO] Training Random Forest model...
+2025-12-21 06:29:49,615 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:29:50,232 [INFO] Training complete!
+2025-12-21 06:29:50,233 [INFO] Evaluating model...
+2025-12-21 06:29:50,350 [INFO] ==================================================
+2025-12-21 06:29:50,351 [INFO] METRICS:
+2025-12-21 06:29:50,351 [INFO]   Accuracy:  0.9533
+2025-12-21 06:29:50,351 [INFO]   Precision: 0.9630
+2025-12-21 06:29:50,351 [INFO]   Recall:    0.9512
+2025-12-21 06:29:50,351 [INFO]   F1 Score:  0.9571
+2025-12-21 06:29:50,351 [INFO]   ROC AUC:   0.9353
+2025-12-21 06:29:50,351 [INFO]   Confusion Matrix:
+[[65  3]
+ [ 4 78]]
+2025-12-21 06:29:50,351 [INFO] ==================================================
+2025-12-21 06:29:50,362 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_062950.pkl
+2025-12-21 06:29:50,365 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'feature_names' in 'field list'
+2025-12-21 06:29:50,370 [ERROR] Failed to promote model: 1054 (42S22): Unknown column 'promoted_to_production_at' in 'field list'
+2025-12-21 06:29:50,376 [INFO] ======================================================================
+2025-12-21 06:29:50,376 [INFO] TRAINING COMPLETE!
+2025-12-21 06:29:50,376 [INFO] ======================================================================
+2025-12-21 06:29:50,376 [INFO] Model: random_forest_20251221_062950
+2025-12-21 06:29:50,376 [INFO] Samples: 599
+2025-12-21 06:29:50,376 [INFO] Accuracy: 0.9533
+2025-12-21 06:29:50,376 [INFO] F1 Score: 0.9571
+2025-12-21 06:29:50,376 [INFO] Status: production
+2025-12-21 06:29:50,377 [INFO] ======================================================================
+2025-12-21 06:29:58,265 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:29:58.265547
+2025-12-21 06:29:59,864 [INFO] ======================================================================
+2025-12-21 06:29:59,864 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:29:59,865 [INFO] ======================================================================
+2025-12-21 06:30:02,267 [INFO] Total events in range: 749
+2025-12-21 06:30:02,268 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:30:02,268 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:30:02,268 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:30:02,772 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:30:02,772 [INFO] Converting to numpy arrays...
+2025-12-21 06:30:02,864 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:30:02,864 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:30:02,865 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:30:02,865 [INFO] Label distribution (after noise): 0=338, 1=411
+2025-12-21 06:30:02,865 [INFO] Splitting data 80/20...
+2025-12-21 06:30:02,868 [INFO] Training samples: 599
+2025-12-21 06:30:02,868 [INFO] Test samples: 150
+2025-12-21 06:30:02,868 [INFO] Scaling features...
+2025-12-21 06:30:02,870 [INFO] Training Random Forest model...
+2025-12-21 06:30:02,870 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:30:03,630 [INFO] Training complete!
+2025-12-21 06:30:03,630 [INFO] Evaluating model...
+2025-12-21 06:30:03,770 [INFO] ==================================================
+2025-12-21 06:30:03,772 [INFO] METRICS:
+2025-12-21 06:30:03,772 [INFO]   Accuracy:  0.9067
+2025-12-21 06:30:03,772 [INFO]   Precision: 0.9048
+2025-12-21 06:30:03,772 [INFO]   Recall:    0.9268
+2025-12-21 06:30:03,772 [INFO]   F1 Score:  0.9157
+2025-12-21 06:30:03,773 [INFO]   ROC AUC:   0.9275
+2025-12-21 06:30:03,773 [INFO]   Confusion Matrix:
+[[60  8]
+ [ 6 76]]
+2025-12-21 06:30:03,773 [INFO] ==================================================
+2025-12-21 06:30:03,789 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_063003.pkl
+2025-12-21 06:30:03,793 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'feature_names' in 'field list'
+2025-12-21 06:30:03,803 [ERROR] Failed to promote model: 1054 (42S22): Unknown column 'promoted_to_production_at' in 'field list'
+2025-12-21 06:30:03,818 [INFO] ======================================================================
+2025-12-21 06:30:03,819 [INFO] TRAINING COMPLETE!
+2025-12-21 06:30:03,819 [INFO] ======================================================================
+2025-12-21 06:30:03,819 [INFO] Model: random_forest_20251221_063003
+2025-12-21 06:30:03,819 [INFO] Samples: 599
+2025-12-21 06:30:03,819 [INFO] Accuracy: 0.9067
+2025-12-21 06:30:03,819 [INFO] F1 Score: 0.9157
+2025-12-21 06:30:03,819 [INFO] Status: production
+2025-12-21 06:30:03,819 [INFO] ======================================================================
+2025-12-21 06:30:16,512 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:30:16.512109
+2025-12-21 06:30:18,458 [INFO] ======================================================================
+2025-12-21 06:30:18,458 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:30:18,458 [INFO] ======================================================================
+2025-12-21 06:30:20,452 [INFO] Total events in range: 749
+2025-12-21 06:30:20,470 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:30:20,470 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:30:20,470 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:30:20,917 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:30:20,917 [INFO] Converting to numpy arrays...
+2025-12-21 06:30:21,001 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:30:21,002 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:30:21,002 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:30:21,002 [INFO] Label distribution (after noise): 0=332, 1=417
+2025-12-21 06:30:21,002 [INFO] Splitting data 80/20...
+2025-12-21 06:30:21,006 [INFO] Training samples: 599
+2025-12-21 06:30:21,006 [INFO] Test samples: 150
+2025-12-21 06:30:21,006 [INFO] Scaling features...
+2025-12-21 06:30:21,008 [INFO] Training Random Forest model...
+2025-12-21 06:30:21,009 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:30:21,750 [INFO] Training complete!
+2025-12-21 06:30:21,750 [INFO] Evaluating model...
+2025-12-21 06:30:21,848 [INFO] ==================================================
+2025-12-21 06:30:21,848 [INFO] METRICS:
+2025-12-21 06:30:21,848 [INFO]   Accuracy:  0.9533
+2025-12-21 06:30:21,848 [INFO]   Precision: 0.9753
+2025-12-21 06:30:21,848 [INFO]   Recall:    0.9405
+2025-12-21 06:30:21,848 [INFO]   F1 Score:  0.9576
+2025-12-21 06:30:21,849 [INFO]   ROC AUC:   0.9642
+2025-12-21 06:30:21,849 [INFO]   Confusion Matrix:
+[[64  2]
+ [ 5 79]]
+2025-12-21 06:30:21,849 [INFO] ==================================================
+2025-12-21 06:30:21,860 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_063021.pkl
+2025-12-21 06:30:21,866 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'feature_names' in 'field list'
+2025-12-21 06:30:21,873 [ERROR] Failed to promote model: 1054 (42S22): Unknown column 'promoted_to_production_at' in 'field list'
+2025-12-21 06:30:21,880 [INFO] ======================================================================
+2025-12-21 06:30:21,880 [INFO] TRAINING COMPLETE!
+2025-12-21 06:30:21,880 [INFO] ======================================================================
+2025-12-21 06:30:21,880 [INFO] Model: random_forest_20251221_063021
+2025-12-21 06:30:21,880 [INFO] Samples: 599
+2025-12-21 06:30:21,880 [INFO] Accuracy: 0.9533
+2025-12-21 06:30:21,880 [INFO] F1 Score: 0.9576
+2025-12-21 06:30:21,880 [INFO] Status: production
+2025-12-21 06:30:21,881 [INFO] ======================================================================
+2025-12-21 06:30:34,275 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:30:34.275840
+2025-12-21 06:30:36,071 [INFO] ======================================================================
+2025-12-21 06:30:36,071 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:30:36,071 [INFO] ======================================================================
+2025-12-21 06:30:38,076 [INFO] Total events in range: 749
+2025-12-21 06:30:38,076 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:30:38,076 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:30:38,076 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:30:38,436 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:30:38,436 [INFO] Converting to numpy arrays...
+2025-12-21 06:30:38,511 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:30:38,512 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:30:38,512 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:30:38,512 [INFO] Label distribution (after noise): 0=334, 1=415
+2025-12-21 06:30:38,512 [INFO] Splitting data 80/20...
+2025-12-21 06:30:38,516 [INFO] Training samples: 599
+2025-12-21 06:30:38,516 [INFO] Test samples: 150
+2025-12-21 06:30:38,516 [INFO] Scaling features...
+2025-12-21 06:30:38,519 [INFO] Training Random Forest model...
+2025-12-21 06:30:38,519 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:30:39,170 [INFO] Training complete!
+2025-12-21 06:30:39,171 [INFO] Evaluating model...
+2025-12-21 06:30:39,305 [INFO] ==================================================
+2025-12-21 06:30:39,305 [INFO] METRICS:
+2025-12-21 06:30:39,305 [INFO]   Accuracy:  0.9400
+2025-12-21 06:30:39,305 [INFO]   Precision: 0.9405
+2025-12-21 06:30:39,306 [INFO]   Recall:    0.9518
+2025-12-21 06:30:39,306 [INFO]   F1 Score:  0.9461
+2025-12-21 06:30:39,306 [INFO]   ROC AUC:   0.9369
+2025-12-21 06:30:39,306 [INFO]   Confusion Matrix:
+[[62  5]
+ [ 4 79]]
+2025-12-21 06:30:39,306 [INFO] ==================================================
+2025-12-21 06:30:39,319 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_063039.pkl
+2025-12-21 06:30:39,322 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'feature_names' in 'field list'
+2025-12-21 06:30:39,329 [ERROR] Failed to promote model: 1054 (42S22): Unknown column 'promoted_to_production_at' in 'field list'
+2025-12-21 06:30:39,339 [INFO] ======================================================================
+2025-12-21 06:30:39,340 [INFO] TRAINING COMPLETE!
+2025-12-21 06:30:39,340 [INFO] ======================================================================
+2025-12-21 06:30:39,340 [INFO] Model: random_forest_20251221_063039
+2025-12-21 06:30:39,340 [INFO] Samples: 599
+2025-12-21 06:30:39,340 [INFO] Accuracy: 0.9400
+2025-12-21 06:30:39,340 [INFO] F1 Score: 0.9461
+2025-12-21 06:30:39,340 [INFO] Status: production
+2025-12-21 06:30:39,340 [INFO] ======================================================================
+2025-12-21 06:31:02,810 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:31:02.810751
+2025-12-21 06:31:04,544 [INFO] ======================================================================
+2025-12-21 06:31:04,544 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:31:04,544 [INFO] ======================================================================
+2025-12-21 06:31:06,610 [INFO] Total events in range: 749
+2025-12-21 06:31:06,610 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:31:06,610 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:31:06,610 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:31:07,028 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:31:07,029 [INFO] Converting to numpy arrays...
+2025-12-21 06:31:07,123 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:31:07,124 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:31:07,124 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:31:07,125 [INFO] Label distribution (after noise): 0=350, 1=399
+2025-12-21 06:31:07,125 [INFO] Splitting data 80/20...
+2025-12-21 06:31:07,127 [INFO] Training samples: 599
+2025-12-21 06:31:07,128 [INFO] Test samples: 150
+2025-12-21 06:31:07,128 [INFO] Scaling features...
+2025-12-21 06:31:07,130 [INFO] Training Random Forest model...
+2025-12-21 06:31:07,130 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:31:07,772 [INFO] Training complete!
+2025-12-21 06:31:07,772 [INFO] Evaluating model...
+2025-12-21 06:31:07,926 [INFO] ==================================================
+2025-12-21 06:31:07,926 [INFO] METRICS:
+2025-12-21 06:31:07,926 [INFO]   Accuracy:  0.9533
+2025-12-21 06:31:07,926 [INFO]   Precision: 0.9398
+2025-12-21 06:31:07,926 [INFO]   Recall:    0.9750
+2025-12-21 06:31:07,926 [INFO]   F1 Score:  0.9571
+2025-12-21 06:31:07,926 [INFO]   ROC AUC:   0.9292
+2025-12-21 06:31:07,927 [INFO]   Confusion Matrix:
+[[65  5]
+ [ 2 78]]
+2025-12-21 06:31:07,927 [INFO] ==================================================
+2025-12-21 06:31:07,939 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_063107.pkl
+2025-12-21 06:31:07,941 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'feature_names' in 'field list'
+2025-12-21 06:31:07,948 [ERROR] Failed to promote model: 1054 (42S22): Unknown column 'promoted_to_production_at' in 'field list'
+2025-12-21 06:31:07,956 [INFO] ======================================================================
+2025-12-21 06:31:07,956 [INFO] TRAINING COMPLETE!
+2025-12-21 06:31:07,956 [INFO] ======================================================================
+2025-12-21 06:31:07,956 [INFO] Model: random_forest_20251221_063107
+2025-12-21 06:31:07,957 [INFO] Samples: 599
+2025-12-21 06:31:07,957 [INFO] Accuracy: 0.9533
+2025-12-21 06:31:07,957 [INFO] F1 Score: 0.9571
+2025-12-21 06:31:07,957 [INFO] Status: production
+2025-12-21 06:31:07,957 [INFO] ======================================================================
+2025-12-21 06:32:10,227 [INFO] Starting chunked training from 2024-01-01 00:00:00 to 2025-12-21 06:32:10.227234
+2025-12-21 06:32:11,848 [INFO] ======================================================================
+2025-12-21 06:32:11,848 [INFO] SSH GUARDIAN v3.0 - CHUNKED ML TRAINING
+2025-12-21 06:32:11,848 [INFO] ======================================================================
+2025-12-21 06:32:13,717 [INFO] Total events in range: 749
+2025-12-21 06:32:13,718 [INFO] Processing 1 chunks of 30,000 events each...
+2025-12-21 06:32:13,718 [INFO] Using FeatureExtractor with 50 features
+2025-12-21 06:32:13,718 [INFO] [Chunk 1/1] Loading events 0 to 30,000...
+2025-12-21 06:32:14,076 [INFO] [Chunk 1/1] Processed. Total samples: 749
+2025-12-21 06:32:14,077 [INFO] Converting to numpy arrays...
+2025-12-21 06:32:14,173 [INFO] Feature matrix shape: (749, 50)
+2025-12-21 06:32:14,173 [INFO] Label distribution (before noise): 0=333, 1=416
+2025-12-21 06:32:14,174 [INFO] Injected 5.0% label noise (37 labels flipped)
+2025-12-21 06:32:14,174 [INFO] Label distribution (after noise): 0=332, 1=417
+2025-12-21 06:32:14,174 [INFO] Splitting data 80/20...
+2025-12-21 06:32:14,177 [INFO] Training samples: 599
+2025-12-21 06:32:14,177 [INFO] Test samples: 150
+2025-12-21 06:32:14,177 [INFO] Scaling features...
+2025-12-21 06:32:14,180 [INFO] Training Random Forest model...
+2025-12-21 06:32:14,181 [INFO] Parameters: {'n_estimators': 150, 'max_depth': 20, 'min_samples_split': 10, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'class_weight': 'balanced', 'bootstrap': True, 'oob_score': True, 'random_state': 42, 'n_jobs': 3}
+2025-12-21 06:32:14,882 [INFO] Training complete!
+2025-12-21 06:32:14,882 [INFO] Evaluating model...
+2025-12-21 06:32:14,992 [INFO] ==================================================
+2025-12-21 06:32:14,992 [INFO] METRICS:
+2025-12-21 06:32:14,993 [INFO]   Accuracy:  0.9333
+2025-12-21 06:32:14,993 [INFO]   Precision: 0.9405
+2025-12-21 06:32:14,993 [INFO]   Recall:    0.9405
+2025-12-21 06:32:14,994 [INFO]   F1 Score:  0.9405
+2025-12-21 06:32:14,994 [INFO]   ROC AUC:   0.9324
+2025-12-21 06:32:14,995 [INFO]   Confusion Matrix:
+[[61  5]
+ [ 5 79]]
+2025-12-21 06:32:14,996 [INFO] ==================================================
+2025-12-21 06:32:15,015 [INFO] Model saved to: /home/rana-workspace/ssh_guardian_v3.0/ml_models/random_forest_20251221_063214.pkl
+2025-12-21 06:32:15,017 [ERROR] Failed to save model to database: 1054 (42S22): Unknown column 'training_data_start' in 'field list'
+2025-12-21 06:32:15,029 [INFO] Model random_forest_20251221_063214 promoted to production!
+2025-12-21 06:32:15,033 [INFO] ======================================================================
+2025-12-21 06:32:15,034 [INFO] TRAINING COMPLETE!
+2025-12-21 06:32:15,034 [INFO] ======================================================================
+2025-12-21 06:32:15,035 [INFO] Model: random_forest_20251221_063214
+2025-12-21 06:32:15,035 [INFO] Samples: 599
+2025-12-21 06:32:15,035 [INFO] Accuracy: 0.9333
+2025-12-21 06:32:15,036 [INFO] F1 Score: 0.9405
+2025-12-21 06:32:15,036 [INFO] Status: production
+2025-12-21 06:32:15,036 [INFO] ======================================================================

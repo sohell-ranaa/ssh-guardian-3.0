@@ -1,8 +1,10 @@
 """
 Notification Channels Routes - API endpoints for notification channel management
 Manages Telegram, Email, and Webhook notification channels
+Updated to match actual database schema (integrations table)
 """
 import sys
+import json
 from pathlib import Path
 from flask import Blueprint, jsonify, request
 
@@ -14,6 +16,59 @@ from connection import get_connection
 
 notification_channels_routes = Blueprint('notification_channels', __name__)
 
+# Channel definitions with icons and metadata
+CHANNEL_DEFINITIONS = {
+    'telegram': {
+        'name': 'Telegram',
+        'icon': '📱',
+        'category': 'notifications',
+        'description': 'Send notifications via Telegram bot',
+        'config_fields': [
+            {'key': 'bot_token', 'label': 'Bot Token', 'type': 'password', 'required': True, 'description': 'Telegram bot API token from @BotFather'},
+            {'key': 'chat_id', 'label': 'Chat ID', 'type': 'text', 'required': True, 'description': 'Target chat or channel ID'}
+        ]
+    },
+    'smtp': {
+        'name': 'Email (SMTP)',
+        'icon': '📧',
+        'category': 'email',
+        'description': 'Send notifications via email',
+        'config_fields': [
+            {'key': 'host', 'label': 'SMTP Host', 'type': 'text', 'required': True, 'description': 'SMTP server address'},
+            {'key': 'port', 'label': 'Port', 'type': 'number', 'required': True, 'description': 'SMTP port (587 for TLS, 465 for SSL)'},
+            {'key': 'user', 'label': 'Username', 'type': 'text', 'required': True, 'description': 'SMTP username/email'},
+            {'key': 'password', 'label': 'Password', 'type': 'password', 'required': True, 'description': 'SMTP password or app password'},
+            {'key': 'from_email', 'label': 'From Email', 'type': 'email', 'required': False, 'description': 'Sender email address'},
+            {'key': 'from_name', 'label': 'From Name', 'type': 'text', 'required': False, 'description': 'Sender display name'},
+            {'key': 'to_email', 'label': 'Default Recipient', 'type': 'email', 'required': False, 'description': 'Default email to receive alerts (can be overridden per rule)'},
+            {'key': 'use_tls', 'label': 'Use TLS', 'type': 'boolean', 'required': False, 'description': 'Enable STARTTLS'}
+        ]
+    },
+    'webhook': {
+        'name': 'Webhook',
+        'icon': '🔗',
+        'category': 'notifications',
+        'description': 'Send notifications to webhook URL',
+        'config_fields': [
+            {'key': 'url', 'label': 'Webhook URL', 'type': 'url', 'required': True, 'description': 'Target webhook endpoint'},
+            {'key': 'secret', 'label': 'Secret Key', 'type': 'password', 'required': False, 'description': 'HMAC secret for request signing'},
+            {'key': 'headers', 'label': 'Custom Headers', 'type': 'json', 'required': False, 'description': 'Additional HTTP headers as JSON'}
+        ]
+    }
+}
+
+
+def parse_json_field(value, default=None):
+    """Safely parse JSON field"""
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return default
+
 
 @notification_channels_routes.route('/list', methods=['GET'])
 def list_channels():
@@ -24,52 +79,75 @@ def list_channels():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get notification-related integrations
+        # Get all integrations from the table
         cursor.execute("""
             SELECT
-                i.id, i.integration_id, i.name, i.description, i.icon,
-                i.category, i.is_enabled, i.status, i.last_test_at,
-                i.last_test_result, i.error_message, i.created_at, i.updated_at
-            FROM integrations i
-            WHERE i.category IN ('notifications', 'email')
-            ORDER BY i.id
+                id, integration_type, name, is_enabled, config, credentials,
+                last_used_at, last_error, error_count, created_at, updated_at
+            FROM integrations
+            WHERE integration_type IN ('telegram', 'smtp', 'webhook')
+            ORDER BY id
         """)
-        channels = cursor.fetchall()
+        db_channels = cursor.fetchall()
 
-        # Get config for each channel
-        for channel in channels:
-            cursor.execute("""
-                SELECT config_key, config_value, value_type, is_sensitive,
-                       is_required, display_name, description, display_order
-                FROM integration_config
-                WHERE integration_id = %s
-                ORDER BY display_order
-            """, (channel['integration_id'],))
+        # Build channel list from DB + definitions
+        channels = []
+        found_types = set()
 
-            config_rows = cursor.fetchall()
-            config = {}
-            for row in config_rows:
-                # Mask sensitive values
-                value = row['config_value']
-                if row['is_sensitive'] and value:
-                    value = '********'
-                config[row['config_key']] = {
-                    'value': value,
-                    'type': row['value_type'],
-                    'is_sensitive': bool(row['is_sensitive']),
-                    'is_required': bool(row['is_required']),
-                    'display_name': row['display_name'],
-                    'description': row['description']
-                }
-            channel['config'] = config
+        for ch in db_channels:
+            found_types.add(ch['integration_type'])
+            definition = CHANNEL_DEFINITIONS.get(ch['integration_type'], {})
 
-            # Format timestamps
-            if channel['last_test_at']:
-                channel['last_test_at'] = channel['last_test_at'].isoformat()
-            if channel['created_at']:
-                channel['created_at'] = channel['created_at'].isoformat()
-            if channel['updated_at']:
-                channel['updated_at'] = channel['updated_at'].isoformat()
+            config = parse_json_field(ch['config'], {})
+            credentials = parse_json_field(ch['credentials'], {})
+
+            # Mask sensitive values
+            masked_config = {}
+            for key, value in {**config, **credentials}.items():
+                field_def = next((f for f in definition.get('config_fields', []) if f['key'] == key), None)
+                if field_def and field_def.get('type') == 'password' and value:
+                    masked_config[key] = '********'
+                else:
+                    masked_config[key] = value
+
+            channels.append({
+                'id': ch['id'],
+                'integration_type': ch['integration_type'],
+                'name': ch['name'] or definition.get('name', ch['integration_type']),
+                'icon': definition.get('icon', '📌'),
+                'description': definition.get('description', ''),
+                'category': definition.get('category', 'notifications'),
+                'is_enabled': bool(ch['is_enabled']),
+                'status': 'error' if ch['last_error'] else ('active' if ch['is_enabled'] else 'inactive'),
+                'config': masked_config,
+                'config_fields': definition.get('config_fields', []),
+                'last_used_at': ch['last_used_at'].isoformat() if ch['last_used_at'] else None,
+                'last_error': ch['last_error'],
+                'error_count': ch['error_count'] or 0,
+                'created_at': ch['created_at'].isoformat() if ch['created_at'] else None,
+                'updated_at': ch['updated_at'].isoformat() if ch['updated_at'] else None
+            })
+
+        # Add missing channel types as "not configured"
+        for ch_type, definition in CHANNEL_DEFINITIONS.items():
+            if ch_type not in found_types:
+                channels.append({
+                    'id': None,
+                    'integration_type': ch_type,
+                    'name': definition['name'],
+                    'icon': definition['icon'],
+                    'description': definition['description'],
+                    'category': definition['category'],
+                    'is_enabled': False,
+                    'status': 'not_configured',
+                    'config': {},
+                    'config_fields': definition['config_fields'],
+                    'last_used_at': None,
+                    'last_error': None,
+                    'error_count': 0,
+                    'created_at': None,
+                    'updated_at': None
+                })
 
         return jsonify({
             'success': True,
@@ -90,60 +168,72 @@ def list_channels():
             conn.close()
 
 
-@notification_channels_routes.route('/<channel_id>', methods=['GET'])
-def get_channel(channel_id):
+@notification_channels_routes.route('/<channel_type>', methods=['GET'])
+def get_channel(channel_type):
     """Get a specific channel with full configuration"""
     conn = None
     cursor = None
     try:
+        if channel_type not in CHANNEL_DEFINITIONS:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown channel type: {channel_type}'
+            }), 404
+
+        definition = CHANNEL_DEFINITIONS[channel_type]
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
             SELECT
-                i.id, i.integration_id, i.name, i.description, i.icon,
-                i.category, i.is_enabled, i.status, i.last_test_at,
-                i.last_test_result, i.error_message, i.created_at, i.updated_at
-            FROM integrations i
-            WHERE i.integration_id = %s
-        """, (channel_id,))
-        channel = cursor.fetchone()
+                id, integration_type, name, is_enabled, config, credentials,
+                last_used_at, last_error, error_count, created_at, updated_at
+            FROM integrations
+            WHERE integration_type = %s
+        """, (channel_type,))
+        ch = cursor.fetchone()
 
-        if not channel:
-            return jsonify({
-                'success': False,
-                'error': 'Channel not found'
-            }), 404
+        if ch:
+            config = parse_json_field(ch['config'], {})
+            credentials = parse_json_field(ch['credentials'], {})
 
-        # Get config (with actual values for editing)
-        cursor.execute("""
-            SELECT config_key, config_value, value_type, is_sensitive,
-                   is_required, display_name, description, display_order
-            FROM integration_config
-            WHERE integration_id = %s
-            ORDER BY display_order
-        """, (channel_id,))
-
-        config_rows = cursor.fetchall()
-        config = {}
-        for row in config_rows:
-            config[row['config_key']] = {
-                'value': row['config_value'],
-                'type': row['value_type'],
-                'is_sensitive': bool(row['is_sensitive']),
-                'is_required': bool(row['is_required']),
-                'display_name': row['display_name'],
-                'description': row['description']
+            channel = {
+                'id': ch['id'],
+                'integration_type': ch['integration_type'],
+                'name': ch['name'] or definition['name'],
+                'icon': definition['icon'],
+                'description': definition['description'],
+                'category': definition['category'],
+                'is_enabled': bool(ch['is_enabled']),
+                'status': 'error' if ch['last_error'] else ('active' if ch['is_enabled'] else 'inactive'),
+                'config': {**config, **credentials},  # Full values for editing
+                'config_fields': definition['config_fields'],
+                'last_used_at': ch['last_used_at'].isoformat() if ch['last_used_at'] else None,
+                'last_error': ch['last_error'],
+                'error_count': ch['error_count'] or 0,
+                'created_at': ch['created_at'].isoformat() if ch['created_at'] else None,
+                'updated_at': ch['updated_at'].isoformat() if ch['updated_at'] else None
             }
-        channel['config'] = config
-
-        # Format timestamps
-        if channel['last_test_at']:
-            channel['last_test_at'] = channel['last_test_at'].isoformat()
-        if channel['created_at']:
-            channel['created_at'] = channel['created_at'].isoformat()
-        if channel['updated_at']:
-            channel['updated_at'] = channel['updated_at'].isoformat()
+        else:
+            # Return unconfigured channel template
+            channel = {
+                'id': None,
+                'integration_type': channel_type,
+                'name': definition['name'],
+                'icon': definition['icon'],
+                'description': definition['description'],
+                'category': definition['category'],
+                'is_enabled': False,
+                'status': 'not_configured',
+                'config': {},
+                'config_fields': definition['config_fields'],
+                'last_used_at': None,
+                'last_error': None,
+                'error_count': 0,
+                'created_at': None,
+                'updated_at': None
+            }
 
         return jsonify({
             'success': True,
@@ -162,45 +252,67 @@ def get_channel(channel_id):
             conn.close()
 
 
-@notification_channels_routes.route('/<channel_id>/configure', methods=['POST'])
-def configure_channel(channel_id):
+@notification_channels_routes.route('/<channel_type>/configure', methods=['POST'])
+def configure_channel(channel_type):
     """Update channel configuration"""
     conn = None
     cursor = None
     try:
-        data = request.get_json() or {}
+        if channel_type not in CHANNEL_DEFINITIONS:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown channel type: {channel_type}'
+            }), 404
 
+        data = request.get_json() or {}
         if not data:
             return jsonify({
                 'success': False,
                 'error': 'No configuration data provided'
             }), 400
 
+        definition = CHANNEL_DEFINITIONS[channel_type]
+
+        # Separate config and credentials (sensitive fields)
+        config = {}
+        credentials = {}
+        for field in definition['config_fields']:
+            key = field['key']
+            if key in data:
+                value = data[key]
+                # Skip unchanged masked values
+                if value == '********':
+                    continue
+                if field.get('type') == 'password':
+                    credentials[key] = value
+                else:
+                    config[key] = value
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Check channel exists
-        cursor.execute("SELECT id FROM integrations WHERE integration_id = %s", (channel_id,))
-        if not cursor.fetchone():
-            return jsonify({
-                'success': False,
-                'error': 'Channel not found'
-            }), 404
+        # Check if exists
+        cursor.execute("SELECT id, config, credentials FROM integrations WHERE integration_type = %s", (channel_type,))
+        existing = cursor.fetchone()
 
-        # Update each config value
-        for key, value in data.items():
+        if existing:
+            # Merge with existing values (for unchanged masked fields)
+            existing_config = parse_json_field(existing['config'], {})
+            existing_creds = parse_json_field(existing['credentials'], {})
+            existing_config.update(config)
+            existing_creds.update(credentials)
+
             cursor.execute("""
-                UPDATE integration_config
-                SET config_value = %s, updated_at = NOW()
-                WHERE integration_id = %s AND config_key = %s
-            """, (value, channel_id, key))
-
-        # Update integration status
-        cursor.execute("""
-            UPDATE integrations
-            SET status = 'configured', updated_at = NOW()
-            WHERE integration_id = %s
-        """, (channel_id,))
+                UPDATE integrations
+                SET config = %s, credentials = %s, last_error = NULL, error_count = 0, updated_at = NOW()
+                WHERE integration_type = %s
+            """, (json.dumps(existing_config), json.dumps(existing_creds), channel_type))
+        else:
+            # Create new
+            cursor.execute("""
+                INSERT INTO integrations (integration_type, name, is_enabled, config, credentials)
+                VALUES (%s, %s, 0, %s, %s)
+            """, (channel_type, definition['name'], json.dumps(config), json.dumps(credentials)))
 
         conn.commit()
 
@@ -221,8 +333,8 @@ def configure_channel(channel_id):
             conn.close()
 
 
-@notification_channels_routes.route('/<channel_id>/enable', methods=['POST'])
-def enable_channel(channel_id):
+@notification_channels_routes.route('/<channel_type>/enable', methods=['POST'])
+def enable_channel(channel_type):
     """Enable a notification channel"""
     conn = None
     cursor = None
@@ -232,22 +344,21 @@ def enable_channel(channel_id):
 
         cursor.execute("""
             UPDATE integrations
-            SET is_enabled = 1, status = 'active', updated_at = NOW()
-            WHERE integration_id = %s
-        """, (channel_id,))
+            SET is_enabled = 1, updated_at = NOW()
+            WHERE integration_type = %s
+        """, (channel_type,))
 
-        # Also update enabled config if exists
-        cursor.execute("""
-            UPDATE integration_config
-            SET config_value = 'true'
-            WHERE integration_id = %s AND config_key = 'enabled'
-        """, (channel_id,))
+        if cursor.rowcount == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Channel not found or not configured'
+            }), 404
 
         conn.commit()
 
         return jsonify({
             'success': True,
-            'message': f'{channel_id} enabled successfully'
+            'message': f'{channel_type} enabled successfully'
         })
 
     except Exception as e:
@@ -262,8 +373,8 @@ def enable_channel(channel_id):
             conn.close()
 
 
-@notification_channels_routes.route('/<channel_id>/disable', methods=['POST'])
-def disable_channel(channel_id):
+@notification_channels_routes.route('/<channel_type>/disable', methods=['POST'])
+def disable_channel(channel_type):
     """Disable a notification channel"""
     conn = None
     cursor = None
@@ -273,22 +384,21 @@ def disable_channel(channel_id):
 
         cursor.execute("""
             UPDATE integrations
-            SET is_enabled = 0, status = 'inactive', updated_at = NOW()
-            WHERE integration_id = %s
-        """, (channel_id,))
+            SET is_enabled = 0, updated_at = NOW()
+            WHERE integration_type = %s
+        """, (channel_type,))
 
-        # Also update enabled config if exists
-        cursor.execute("""
-            UPDATE integration_config
-            SET config_value = 'false'
-            WHERE integration_id = %s AND config_key = 'enabled'
-        """, (channel_id,))
+        if cursor.rowcount == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Channel not found'
+            }), 404
 
         conn.commit()
 
         return jsonify({
             'success': True,
-            'message': f'{channel_id} disabled successfully'
+            'message': f'{channel_type} disabled successfully'
         })
 
     except Exception as e:
@@ -303,8 +413,8 @@ def disable_channel(channel_id):
             conn.close()
 
 
-@notification_channels_routes.route('/<channel_id>/test', methods=['POST'])
-def test_channel(channel_id):
+@notification_channels_routes.route('/<channel_type>/test', methods=['POST'])
+def test_channel(channel_type):
     """Test a notification channel"""
     conn = None
     cursor = None
@@ -314,14 +424,30 @@ def test_channel(channel_id):
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        if channel_id == 'telegram':
-            result = test_telegram_channel(cursor, data)
-        elif channel_id == 'smtp':
-            result = test_smtp_channel(cursor, data)
+        # Get channel config
+        cursor.execute("""
+            SELECT config, credentials FROM integrations WHERE integration_type = %s
+        """, (channel_type,))
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({
+                'success': False,
+                'error': 'Channel not configured'
+            }), 404
+
+        config = {**parse_json_field(row['config'], {}), **parse_json_field(row['credentials'], {})}
+
+        if channel_type == 'telegram':
+            result = test_telegram_channel(config, data)
+        elif channel_type == 'smtp':
+            result = test_smtp_channel(config, data)
+        elif channel_type == 'webhook':
+            result = test_webhook_channel(config, data)
         else:
             return jsonify({
                 'success': False,
-                'error': f'Unknown channel: {channel_id}'
+                'error': f'Unknown channel: {channel_type}'
             }), 404
 
         # Update test result
@@ -330,17 +456,15 @@ def test_channel(channel_id):
 
         cursor.execute("""
             UPDATE integrations
-            SET last_test_at = NOW(),
-                last_test_result = %s,
-                status = %s,
-                error_message = %s,
+            SET last_used_at = NOW(),
+                last_error = %s,
+                error_count = CASE WHEN %s THEN 0 ELSE error_count + 1 END,
                 updated_at = NOW()
-            WHERE integration_id = %s
+            WHERE integration_type = %s
         """, (
-            message,
-            'active' if success else 'error',
             None if success else message,
-            channel_id
+            success,
+            channel_type
         ))
 
         conn.commit()
@@ -359,18 +483,10 @@ def test_channel(channel_id):
             conn.close()
 
 
-def test_telegram_channel(cursor, params):
+def test_telegram_channel(config, params):
     """Test Telegram bot connection"""
     import requests
     from datetime import datetime
-
-    # Get config
-    cursor.execute("""
-        SELECT config_key, config_value
-        FROM integration_config
-        WHERE integration_id = 'telegram'
-    """)
-    config = {row['config_key']: row['config_value'] for row in cursor.fetchall()}
 
     token = config.get('bot_token')
     chat_id = config.get('chat_id')
@@ -430,20 +546,12 @@ def test_telegram_channel(cursor, params):
         return {'success': False, 'error': f'Connection failed: {str(e)}'}
 
 
-def test_smtp_channel(cursor, params):
+def test_smtp_channel(config, params):
     """Test SMTP connection"""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     from datetime import datetime
-
-    # Get config
-    cursor.execute("""
-        SELECT config_key, config_value
-        FROM integration_config
-        WHERE integration_id = 'smtp'
-    """)
-    config = {row['config_key']: row['config_value'] for row in cursor.fetchall()}
 
     host = config.get('host')
     port = int(config.get('port') or 587)
@@ -451,7 +559,7 @@ def test_smtp_channel(cursor, params):
     password = config.get('password')
     from_email = config.get('from_email') or user
     from_name = config.get('from_name') or 'SSH Guardian'
-    use_tls = config.get('use_tls', 'true').lower() == 'true'
+    use_tls = str(config.get('use_tls', 'true')).lower() == 'true'
 
     if not host or not user:
         return {'success': False, 'error': 'SMTP not configured'}
@@ -511,6 +619,42 @@ def test_smtp_channel(cursor, params):
         return {'success': False, 'error': f'SMTP error: {str(e)}'}
 
 
+def test_webhook_channel(config, params):
+    """Test webhook endpoint"""
+    import requests
+    from datetime import datetime
+
+    url = config.get('url')
+    secret = config.get('secret')
+    headers = parse_json_field(config.get('headers'), {})
+
+    if not url:
+        return {'success': False, 'error': 'Webhook URL not configured'}
+
+    try:
+        payload = {
+            'type': 'test',
+            'message': 'SSH Guardian test notification',
+            'timestamp': datetime.now().isoformat()
+        }
+
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+
+        if response.status_code < 400:
+            return {
+                'success': True,
+                'message': f'Webhook test successful (HTTP {response.status_code})'
+            }
+        else:
+            return {
+                'success': False,
+                'error': f'Webhook returned HTTP {response.status_code}'
+            }
+
+    except requests.RequestException as e:
+        return {'success': False, 'error': f'Connection failed: {str(e)}'}
+
+
 @notification_channels_routes.route('/stats', methods=['GET'])
 def get_channel_stats():
     """Get notification channel statistics"""
@@ -525,23 +669,23 @@ def get_channel_stats():
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN is_enabled = 1 THEN 1 ELSE 0 END) as enabled,
-                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors
+                SUM(CASE WHEN is_enabled = 1 AND last_error IS NULL THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN last_error IS NOT NULL THEN 1 ELSE 0 END) as errors
             FROM integrations
-            WHERE category IN ('notifications', 'email')
+            WHERE integration_type IN ('telegram', 'smtp', 'webhook')
         """)
         stats = cursor.fetchone()
 
         # Get recent notification counts by channel
         cursor.execute("""
             SELECT
-                JSON_UNQUOTE(JSON_EXTRACT(channels, '$[0]')) as channel,
+                channel,
                 COUNT(*) as count,
                 SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
                 SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
             FROM notifications
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            GROUP BY JSON_UNQUOTE(JSON_EXTRACT(channels, '$[0]'))
+            GROUP BY channel
         """)
         by_channel = cursor.fetchall()
 

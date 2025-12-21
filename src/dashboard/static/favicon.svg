@@ -1,7 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="8" fill="#0078D4"/>
-  <path d="M20 18h24v4H20zM20 26h24v4H20zM20 34h24v4H20z" fill="#FFF" opacity="0.3"/>
-  <path d="M16 18h2v24h-2zM46 18h2v24h-2z" fill="#FFF"/>
-  <circle cx="32" cy="48" r="4" fill="#FFD700"/>
-  <path d="M30 48l-2 6h8l-2-6" fill="#FFD700"/>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4"/>
+      <stop offset="100%" style="stop-color:#004C87"/>
+    </linearGradient>
+  </defs>
+  <!-- Main circle -->
+  <circle cx="32" cy="32" r="30" fill="url(#bg)"/>
+  <!-- Shield icon -->
+  <text x="32" y="40" font-size="32" text-anchor="middle" fill="white" font-family="Arial">&#128737;</text>
+  <!-- Version badge -->
+  <rect x="38" y="48" width="22" height="12" rx="6" fill="#2EA44F"/>
+  <text x="49" y="57" font-size="8" text-anchor="middle" fill="white" font-weight="bold" font-family="Arial">v3.0</text>
 </svg>

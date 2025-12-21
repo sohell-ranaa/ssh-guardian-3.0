@@ -10,12 +10,9 @@
             </p>
         </div>
         <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="ml_performance">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadMLPerformance()" title="Refresh data">↻</button>
-            </div>
+            <button class="refresh-btn" onclick="loadMLPerformance()">
+                <span class="refresh-icon">↻</span> Refresh
+            </button>
         </div>
     </div>
 
@@ -241,7 +238,18 @@ async function viewModelDetails(modelId) {
             document.getElementById('ml-detail-test-samples').textContent = m.test_samples?.toLocaleString() || '-';
             document.getElementById('ml-detail-total-events').textContent = ((m.training_samples || 0) + (m.test_samples || 0)).toLocaleString();
             document.getElementById('ml-detail-predictions').textContent = m.predictions_made?.toLocaleString() || '0';
-            document.getElementById('ml-detail-trained-at').textContent = m.training_completed_at ? new Date(m.training_completed_at).toLocaleString() : '-';
+            // Format trained-at time using TimeSettings or browser fallback
+            let trainedAtDisplay = '-';
+            if (m.training_completed_at) {
+                if (window.TimeSettings?.isLoaded()) {
+                    trainedAtDisplay = window.TimeSettings.formatFull(m.training_completed_at);
+                } else {
+                    let ts = String(m.training_completed_at).replace(' ', 'T');
+                    if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+                    trainedAtDisplay = new Date(ts).toLocaleString();
+                }
+            }
+            document.getElementById('ml-detail-trained-at').textContent = trainedAtDisplay;
 
             // Training summary
             const featureCount = m.feature_names ? (Array.isArray(m.feature_names) ? m.feature_names.length : Object.keys(m.feature_names).length) : (m.feature_importance ? Object.keys(m.feature_importance).length : '-');

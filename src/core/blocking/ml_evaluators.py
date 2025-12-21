@@ -711,23 +711,184 @@ def evaluate_off_hours_anomaly_rule(rule, ip_address, username=None, event_times
                 'requires_approval': False, 'off_hours_attempts': 0, 'is_weekend': False, 'hour_of_day': 0}
 
 
+def evaluate_behavioral_analysis_rule(rule, ip_address, username=None, event_type=None, geo_data=None):
+    """
+    Evaluate behavioral analysis rule using the BehavioralAnalyzer.
+
+    This is the PRIORITY ML rule that combines multiple behavioral signals:
+    - Impossible travel detection
+    - Unusual login time
+    - New location/IP for user
+    - Credential stuffing patterns
+    - Success after failures (possible brute force success)
+
+    Rule conditions:
+        - min_risk_score: Minimum behavioral risk score to trigger (default 40)
+        - min_confidence: Minimum confidence level (default 0.5)
+        - priority_factors: List of factor types that auto-trigger block
+        - block_method: 'ufw' for permanent, 'fail2ban' for temporary (default based on score)
+        - requires_approval: Whether to require manual approval
+
+    Returns: triggered, reason, risk_score, risk_factors, recommendations, block_method
+    """
+    try:
+        conditions = rule['conditions']
+        min_risk_score = conditions.get('min_risk_score', 40)
+        min_confidence = conditions.get('min_confidence', 0.5)
+        priority_factors = conditions.get('priority_factors', ['impossible_travel', 'credential_stuffing', 'brute_force'])
+        requires_approval = conditions.get('requires_approval', False)
+
+        if not username:
+            return {
+                'triggered': False,
+                'reason': 'No username provided for behavioral analysis',
+                'requires_approval': False,
+                'risk_score': 0,
+                'risk_factors': [],
+                'recommendations': [],
+                'block_method': 'none'
+            }
+
+        # Import and use BehavioralAnalyzer
+        try:
+            import sys
+            from pathlib import Path
+            PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+            sys.path.append(str(PROJECT_ROOT / "src" / "core"))
+            from behavioral_analyzer import BehavioralAnalyzer
+
+            analyzer = BehavioralAnalyzer()
+            analysis = analyzer.analyze(
+                ip_address=ip_address,
+                username=username,
+                event_type=event_type or 'failed',
+                current_geo=geo_data
+            )
+
+            risk_score = analysis.get('risk_score', 0)
+            confidence = analysis.get('confidence', 0.5)
+            risk_factors = analysis.get('risk_factors', [])
+            recommendations = analysis.get('recommendations', [])
+
+            # Check for priority factors (immediate block)
+            detected_types = [f.get('type') for f in risk_factors]
+            has_priority_factor = any(pf in detected_types for pf in priority_factors)
+
+            # Determine block method based on score
+            if risk_score >= 80 or (has_priority_factor and risk_score >= 60):
+                block_method = 'ufw'  # Permanent block for high-risk
+            elif risk_score >= 60:
+                block_method = 'fail2ban'  # Extended ban for medium-high risk
+            elif risk_score >= min_risk_score:
+                block_method = 'fail2ban'  # Standard ban
+            else:
+                block_method = 'none'
+
+            # Check if should trigger
+            if risk_score < min_risk_score:
+                return {
+                    'triggered': False,
+                    'reason': f"Behavioral risk score {risk_score} below threshold {min_risk_score}",
+                    'requires_approval': False,
+                    'risk_score': risk_score,
+                    'risk_factors': risk_factors,
+                    'recommendations': recommendations,
+                    'block_method': 'none',
+                    'confidence': confidence
+                }
+
+            if confidence < min_confidence:
+                return {
+                    'triggered': False,
+                    'reason': f"Confidence {confidence:.2f} below threshold {min_confidence}",
+                    'requires_approval': False,
+                    'risk_score': risk_score,
+                    'risk_factors': risk_factors,
+                    'recommendations': recommendations,
+                    'block_method': 'none',
+                    'confidence': confidence
+                }
+
+            # Build detailed reason
+            factor_names = [f.get('title', f.get('type')) for f in risk_factors[:3]]
+            reason = f"ML Behavioral Analysis: {risk_score} risk score"
+            if factor_names:
+                reason += f" ({', '.join(factor_names)})"
+            reason += f" - confidence: {confidence:.2f}"
+
+            # Determine threat level
+            if risk_score >= 80:
+                threat_level = 'critical'
+            elif risk_score >= 60:
+                threat_level = 'high'
+            elif risk_score >= 40:
+                threat_level = 'medium'
+            else:
+                threat_level = 'low'
+
+            return {
+                'triggered': True,
+                'reason': reason,
+                'requires_approval': requires_approval,
+                'risk_score': risk_score,
+                'risk_factors': risk_factors,
+                'recommendations': recommendations,
+                'block_method': block_method,
+                'confidence': confidence,
+                'threat_level': threat_level,
+                'has_priority_factor': has_priority_factor,
+                'detected_types': detected_types
+            }
+
+        except ImportError as e:
+            print(f"BehavioralAnalyzer not available: {e}")
+            return {
+                'triggered': False,
+                'reason': 'BehavioralAnalyzer module not available',
+                'requires_approval': False,
+                'risk_score': 0,
+                'risk_factors': [],
+                'recommendations': [],
+                'block_method': 'none'
+            }
+
+    except Exception as e:
+        print(f"Error evaluating behavioral analysis rule: {e}")
+        return {
+            'triggered': False,
+            'reason': f"Error: {str(e)}",
+            'requires_approval': False,
+            'risk_score': 0,
+            'risk_factors': [],
+            'recommendations': [],
+            'block_method': 'none'
+        }
+
+
 def evaluate_impossible_travel_rule(rule, ip_address, username=None):
     """Evaluate impossible travel detection rule.
 
     Rule conditions: max_distance_km, time_window_hours
     Returns: triggered, reason, distance_km, time_diff_hours
     """
-    import math
-
-    def haversine_distance(lat1, lon1, lat2, lon2):
-        """Calculate distance between two points in km."""
-        R = 6371  # Earth's radius in km
-        lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-        c = 2 * math.asin(math.sqrt(a))
-        return R * c
+    # Use shared haversine function from geoip
+    try:
+        import sys
+        from pathlib import Path
+        PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+        sys.path.append(str(PROJECT_ROOT / "src" / "core"))
+        from geoip import haversine_distance
+    except ImportError:
+        # Fallback if geoip not available
+        import math
+        def haversine_distance(lat1, lon1, lat2, lon2):
+            R = 6371
+            lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+            c = 2 * math.asin(math.sqrt(a))
+            return R * c
 
     try:
         conditions = rule['conditions']

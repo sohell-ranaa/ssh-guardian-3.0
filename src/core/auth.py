@@ -1,7 +1,7 @@
 """
-SSH Guardian v3.0 - Authentication System
+SSH Guardian v3.1 - Authentication System
 RBAC with password + OTP, session management, and email integration
-Adapted from v2.0 for v3.0 database schema
+Updated for v3.1 database schema
 """
 
 import os
@@ -31,7 +31,7 @@ _email_config_loaded_at = None
 
 
 def get_email_config():
-    """Get email configuration from database integrations table"""
+    """Get email configuration from database integrations table (v3.1 schema)"""
     global _email_config_cache, _email_config_loaded_at
 
     # Cache config for 5 minutes
@@ -43,32 +43,37 @@ def get_email_config():
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get SMTP integration config directly from integration_config table
+        # Get SMTP integration from new schema (config and credentials are JSON)
         cursor.execute("""
-            SELECT config_key, config_value
-            FROM integration_config
-            WHERE integration_id = 'smtp'
+            SELECT config, credentials
+            FROM integrations
+            WHERE integration_type = 'smtp' AND is_enabled = TRUE
         """)
-        rows = cursor.fetchall()
+        row = cursor.fetchone()
         cursor.close()
         conn.close()
 
-        if rows:
-            config = {row['config_key']: row['config_value'] for row in rows}
+        if row:
+            config = json.loads(row['config']) if isinstance(row['config'], str) else (row['config'] or {})
+            credentials = json.loads(row['credentials']) if isinstance(row['credentials'], str) else (row['credentials'] or {})
+
+            # Check both config and credentials for all values (they might be in either)
             _email_config_cache = {
-                'smtp_host': config.get('host', ''),
-                'smtp_port': int(config.get('port', 587)),
-                'smtp_user': config.get('user', ''),
-                'smtp_password': config.get('password', ''),
-                'from_email': config.get('from_email', ''),
+                'smtp_host': config.get('host', '') or credentials.get('host', ''),
+                'smtp_port': int(config.get('port', 587) or credentials.get('port', 587)),
+                'smtp_user': config.get('user', '') or config.get('username', '') or credentials.get('user', '') or credentials.get('username', ''),
+                'smtp_password': config.get('password', '') or credentials.get('password', ''),
+                'from_email': config.get('from_email', '') or credentials.get('from_email', ''),
                 'from_name': config.get('from_name', 'SSH Guardian v3.0'),
-                'use_tls': config.get('use_tls', 'true').lower() == 'true'
+                'use_tls': str(config.get('use_tls', 'true')).lower() in ('true', '1', 'yes')
             }
             _email_config_loaded_at = datetime.now()
+
+            print(f"[Auth] Loaded SMTP config: host={_email_config_cache['smtp_host']}, port={_email_config_cache['smtp_port']}, user={_email_config_cache['smtp_user']}, use_tls={_email_config_cache['use_tls']}")
             return _email_config_cache
 
     except Exception as e:
-        print(f"⚠️  Failed to load email config from database: {e}")
+        print(f"[Auth] Failed to load email config from database: {e}")
 
     # Fallback to environment variables
     return {
@@ -81,8 +86,9 @@ def get_email_config():
         'use_tls': True
     }
 
+
 # Session configuration
-SESSION_DURATION_DAYS = 30  # Remember me for 30 days (persistent across browser sessions)
+SESSION_DURATION_DAYS = 30  # Remember me for 30 days
 OTP_VALIDITY_MINUTES = 5
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 30
@@ -98,16 +104,14 @@ class EmailService:
 
     @staticmethod
     def send_email(to_email, subject, body_html, body_text=None):
-        """Send email using SMTP - reads config from database integrations"""
+        """Send email using SMTP"""
         try:
-            # Get email config from database
             email_config = get_email_config()
 
             if not email_config['smtp_user'] or not email_config['smtp_password']:
-                print(f"⚠️  Email not configured. OTP for {to_email}: Would send email")
+                print(f"[Auth] Email not configured. OTP for {to_email}: Would send email")
                 print(f"   Subject: {subject}")
-                print(f"   Body: {body_text or 'See HTML body'}")
-                return False  # Return False so OTP is shown in dev mode
+                return False
 
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
@@ -121,35 +125,30 @@ class EmailService:
             part2 = MIMEText(body_html, 'html')
             msg.attach(part2)
 
-            # Connect to SMTP server
             smtp_host = email_config['smtp_host']
             smtp_port = email_config['smtp_port']
             use_tls = email_config.get('use_tls', True)
 
-            print(f"📧 Sending email to {to_email} via {smtp_host}:{smtp_port} (TLS: {use_tls})")
+            print(f"[Auth] Sending email to {to_email} via {smtp_host}:{smtp_port}")
 
             if smtp_port == 465:
-                # SSL connection
                 import ssl
                 context = ssl.create_default_context()
                 with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
                     server.login(email_config['smtp_user'], email_config['smtp_password'])
                     server.send_message(msg)
             else:
-                # Standard or TLS connection
                 with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
                     if use_tls:
                         server.starttls()
                     server.login(email_config['smtp_user'], email_config['smtp_password'])
                     server.send_message(msg)
 
-            print(f"✅ Email sent successfully to {to_email}")
+            print(f"[Auth] Email sent successfully to {to_email}")
             return True
 
         except Exception as e:
-            print(f"❌ Email send error: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[Auth] Email send error: {e}")
             return False
 
     @staticmethod
@@ -192,12 +191,11 @@ class EmailService:
                     <p class="info">This code expires in <strong>{OTP_VALIDITY_MINUTES} minutes</strong>.</p>
                     <p class="info">If you didn't request this code, please ignore this email.</p>
                     <div class="warning">
-                        ⚠️ Never share this code with anyone. SSH Guardian will never ask for your code.
+                        Never share this code with anyone. SSH Guardian will never ask for your code.
                     </div>
                 </div>
                 <div class="footer">
                     <p>SSH Guardian v3.0 - Enterprise SSH Security Platform</p>
-                    <p>This is an automated message, please do not reply.</p>
                 </div>
             </div>
         </body>
@@ -214,8 +212,6 @@ class EmailService:
         This code expires in {OTP_VALIDITY_MINUTES} minutes.
 
         If you didn't request this code, please ignore this email.
-
-        SSH Guardian v3.0
         """
 
         return EmailService.send_email(to_email, subject, body_html, body_text)
@@ -239,22 +235,16 @@ class PasswordManager:
     def validate_password_strength(password):
         """Validate password meets security requirements"""
         errors = []
-
         if len(password) < 8:
             errors.append("Password must be at least 8 characters long")
-
         if not any(c.isupper() for c in password):
             errors.append("Password must contain at least one uppercase letter")
-
         if not any(c.islower() for c in password):
             errors.append("Password must contain at least one lowercase letter")
-
         if not any(c.isdigit() for c in password):
             errors.append("Password must contain at least one digit")
-
         if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password):
             errors.append("Password must contain at least one special character")
-
         return len(errors) == 0, errors
 
 
@@ -267,8 +257,8 @@ class OTPManager:
         return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
 
     @staticmethod
-    def create_otp(user_id, purpose='login', ip_address=None):
-        """Create and store OTP"""
+    def create_otp(user_id, purpose='login'):
+        """Create and store OTP (v3.1 schema - no ip_address column)"""
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -277,9 +267,9 @@ class OTPManager:
             expires_at = datetime.now() + timedelta(minutes=OTP_VALIDITY_MINUTES)
 
             cursor.execute("""
-                INSERT INTO user_otps (user_id, otp_code, purpose, expires_at, ip_address)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (user_id, otp_code, purpose, expires_at, ip_address))
+                INSERT INTO user_otps (user_id, otp_code, purpose, expires_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, otp_code, purpose, expires_at))
 
             conn.commit()
             return otp_code
@@ -290,7 +280,7 @@ class OTPManager:
 
     @staticmethod
     def verify_otp(user_id, otp_code, purpose='login'):
-        """Verify OTP is valid and not expired"""
+        """Verify OTP is valid and not expired (v3.1 schema - no used_at column)"""
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
@@ -311,11 +301,9 @@ class OTPManager:
             if not otp:
                 return False
 
-            # Mark as used
+            # Mark as used (no used_at column in v3.1)
             cursor.execute("""
-                UPDATE user_otps
-                SET is_used = TRUE, used_at = NOW()
-                WHERE id = %s
+                UPDATE user_otps SET is_used = TRUE WHERE id = %s
             """, (otp['id'],))
 
             conn.commit()
@@ -337,14 +325,13 @@ class OTPManager:
                 WHERE expires_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
             """)
             conn.commit()
-
         finally:
             cursor.close()
             conn.close()
 
 
 class SessionManager:
-    """Session management with secure cookies - persistent across browser sessions"""
+    """Session management with secure cookies"""
 
     @staticmethod
     def generate_session_token():
@@ -353,13 +340,12 @@ class SessionManager:
 
     @staticmethod
     def create_session(user_id, ip_address=None, user_agent=None):
-        """Create new session - always 30 days for persistent login"""
+        """Create new session"""
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
             session_token = SessionManager.generate_session_token()
-            # Always use 30 days - persistent across browser restarts
             expires_at = datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
 
             cursor.execute("""
@@ -368,7 +354,6 @@ class SessionManager:
             """, (user_id, session_token, ip_address, user_agent, expires_at))
 
             conn.commit()
-
             return session_token, expires_at
 
         finally:
@@ -389,16 +374,17 @@ class SessionManager:
                 JOIN roles r ON u.role_id = r.id
                 WHERE s.session_token = %s
                 AND s.expires_at > NOW()
+                AND s.is_active = TRUE
                 AND u.is_active = TRUE
             """, (session_token,))
 
             session_data = cursor.fetchone()
 
             if session_data:
-                # Update last activity
+                # Update last activity (v3.1: last_activity_at)
                 cursor.execute("""
                     UPDATE user_sessions
-                    SET last_activity = NOW()
+                    SET last_activity_at = NOW()
                     WHERE session_token = %s
                 """, (session_token,))
                 conn.commit()
@@ -417,12 +403,9 @@ class SessionManager:
 
         try:
             cursor.execute("""
-                DELETE FROM user_sessions
-                WHERE session_token = %s
+                DELETE FROM user_sessions WHERE session_token = %s
             """, (session_token,))
-
             conn.commit()
-
         finally:
             cursor.close()
             conn.close()
@@ -434,12 +417,8 @@ class SessionManager:
         cursor = conn.cursor()
 
         try:
-            cursor.execute("""
-                DELETE FROM user_sessions
-                WHERE expires_at < NOW()
-            """)
+            cursor.execute("DELETE FROM user_sessions WHERE expires_at < NOW()")
             conn.commit()
-
         finally:
             cursor.close()
             conn.close()
@@ -456,7 +435,7 @@ class SessionManager:
             'email': session_data['email'],
             'full_name': session_data['full_name'],
             'role': session_data['role_name'],
-            'permissions': json.loads(session_data['permissions']) if isinstance(session_data['permissions'], str) else session_data['permissions']
+            'permissions': _parse_permissions(session_data['permissions'])
         }
 
 
@@ -476,9 +455,7 @@ class UserManager:
                 JOIN roles r ON u.role_id = r.id
                 WHERE u.email = %s
             """, (email,))
-
             return cursor.fetchone()
-
         finally:
             cursor.close()
             conn.close()
@@ -496,9 +473,24 @@ class UserManager:
                 JOIN roles r ON u.role_id = r.id
                 WHERE u.id = %s
             """, (user_id,))
-
             return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
 
+    @staticmethod
+    def update_last_login(user_id, ip_address=None):
+        """Update last login timestamp and IP (v3.1: last_login_at, last_login_ip)"""
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("""
+                UPDATE users
+                SET last_login_at = NOW(), last_login_ip = %s, failed_login_attempts = 0, locked_until = NULL
+                WHERE id = %s
+            """, (ip_address, user_id))
+            conn.commit()
         finally:
             cursor.close()
             conn.close()
@@ -510,11 +502,7 @@ class UserManager:
         cursor = conn.cursor(dictionary=True)
 
         try:
-            cursor.execute("""
-                SELECT locked_until FROM users
-                WHERE id = %s
-            """, (user_id,))
-
+            cursor.execute("SELECT locked_until FROM users WHERE id = %s", (user_id,))
             result = cursor.fetchone()
 
             if result and result['locked_until']:
@@ -523,14 +511,11 @@ class UserManager:
                 else:
                     # Unlock account
                     cursor.execute("""
-                        UPDATE users
-                        SET locked_until = NULL, failed_login_attempts = 0
-                        WHERE id = %s
+                        UPDATE users SET locked_until = NULL, failed_login_attempts = 0 WHERE id = %s
                     """, (user_id,))
                     conn.commit()
 
             return False, None
-
         finally:
             cursor.close()
             conn.close()
@@ -543,28 +528,17 @@ class UserManager:
 
         try:
             cursor.execute("""
-                UPDATE users
-                SET failed_login_attempts = failed_login_attempts + 1
-                WHERE id = %s
+                UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = %s
             """, (user_id,))
 
-            # Check if should lock
-            cursor.execute("""
-                SELECT failed_login_attempts FROM users WHERE id = %s
-            """, (user_id,))
-
+            cursor.execute("SELECT failed_login_attempts FROM users WHERE id = %s", (user_id,))
             result = cursor.fetchone()
 
             if result and result[0] >= MAX_FAILED_ATTEMPTS:
                 locked_until = datetime.now() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
-                cursor.execute("""
-                    UPDATE users
-                    SET locked_until = %s
-                    WHERE id = %s
-                """, (locked_until, user_id))
+                cursor.execute("UPDATE users SET locked_until = %s WHERE id = %s", (locked_until, user_id))
 
             conn.commit()
-
         finally:
             cursor.close()
             conn.close()
@@ -577,25 +551,24 @@ class UserManager:
 
         try:
             cursor.execute("""
-                UPDATE users
-                SET failed_login_attempts = 0, locked_until = NULL
-                WHERE id = %s
+                UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = %s
             """, (user_id,))
-
             conn.commit()
-
         finally:
             cursor.close()
             conn.close()
 
 
 class AuditLogger:
-    """Audit logging for security actions"""
+    """Audit logging for security actions (v3.1 schema)"""
 
     @staticmethod
     def log_action(user_id, action, resource_type=None, resource_id=None, details=None,
                    ip_address=None, user_agent=None):
-        """Log user action"""
+        """
+        Log user action (v3.1 schema uses entity_type, entity_id, new_values)
+        Kept old param names for backwards compatibility
+        """
         conn = get_connection()
         cursor = conn.cursor()
 
@@ -603,17 +576,37 @@ class AuditLogger:
             details_json = json.dumps(details) if details else None
 
             cursor.execute("""
-                INSERT INTO audit_logs (user_id, action, resource_type, resource_id,
-                                       details, ip_address, user_agent)
+                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address, user_agent)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (user_id, action, resource_type, resource_id, details_json,
-                  ip_address, user_agent))
+            """, (user_id, action, resource_type, resource_id, details_json, ip_address, user_agent))
 
             conn.commit()
-
         finally:
             cursor.close()
             conn.close()
+
+
+# Helper functions
+def _parse_permissions(permissions):
+    """Parse permissions JSON if string"""
+    if isinstance(permissions, str):
+        return json.loads(permissions)
+    return permissions or {}
+
+
+def _is_api_request():
+    """Check if request is an API call or browser request"""
+    accept = request.headers.get('Accept', '')
+    if 'application/json' in accept and 'text/html' not in accept:
+        return True
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return True
+    if request.path.startswith('/api/'):
+        return True
+    content_type = request.headers.get('Content-Type', '')
+    if 'application/json' in content_type:
+        return True
+    return False
 
 
 # Authentication decorators
@@ -626,51 +619,21 @@ def login_required(f):
         session_token = request.cookies.get('session_token')
 
         if not session_token:
-            # Check if this is an API request (expects JSON) or browser request
             if _is_api_request():
                 return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
-            else:
-                # Browser request - redirect to login
-                return redirect(url_for('login'))
+            return redirect(url_for('login'))
 
         session_data = SessionManager.validate_session(session_token)
 
         if not session_data:
             if _is_api_request():
                 return jsonify({'error': 'Invalid or expired session', 'code': 'INVALID_SESSION'}), 401
-            else:
-                # Browser request - redirect to login
-                return redirect(url_for('login'))
+            return redirect(url_for('login'))
 
-        # Add user data to request context
         request.current_user = session_data
-
         return f(*args, **kwargs)
 
     return decorated_function
-
-
-def _is_api_request():
-    """Check if request is an API call (expects JSON) or browser request"""
-    # Check Accept header
-    accept = request.headers.get('Accept', '')
-    if 'application/json' in accept and 'text/html' not in accept:
-        return True
-
-    # Check X-Requested-With header (AJAX requests)
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return True
-
-    # Check if request path starts with /api/
-    if request.path.startswith('/api/'):
-        return True
-
-    # Check Content-Type for JSON
-    content_type = request.headers.get('Content-Type', '')
-    if 'application/json' in content_type:
-        return True
-
-    return False
 
 
 def permission_required(permission_name):
@@ -694,8 +657,7 @@ def permission_required(permission_name):
                     return jsonify({'error': 'Invalid session'}), 401
                 return redirect(url_for('login'))
 
-            # Check permission
-            permissions = json.loads(session_data['permissions']) if isinstance(session_data['permissions'], str) else session_data['permissions']
+            permissions = _parse_permissions(session_data['permissions'])
 
             if not permissions.get(permission_name, False):
                 if _is_api_request():
@@ -703,11 +665,9 @@ def permission_required(permission_name):
                 abort(403)
 
             request.current_user = session_data
-
             return f(*args, **kwargs)
 
         return decorated_function
-
     return decorator
 
 
@@ -732,16 +692,13 @@ def role_required(*role_names):
                     return jsonify({'error': 'Invalid session'}), 401
                 return redirect(url_for('login'))
 
-            # Check role
             if session_data['role_name'] not in role_names:
                 if _is_api_request():
                     return jsonify({'error': 'Insufficient permissions'}), 403
                 abort(403)
 
             request.current_user = session_data
-
             return f(*args, **kwargs)
 
         return decorated_function
-
     return decorator

@@ -10,12 +10,9 @@
             </p>
         </div>
         <div class="page-header-actions">
-            <div class="cache-indicator loading" data-cache-endpoint="ml_comparison">
-                <span class="cache-status-dot"></span>
-                <span class="cache-indicator-text">Loading...</span>
-                <span class="cache-time"></span>
-                <button class="cache-refresh-btn" onclick="loadComparison()" title="Refresh data">↻</button>
-            </div>
+            <button class="refresh-btn" onclick="loadComparison()">
+                <span class="refresh-icon">↻</span> Refresh
+            </button>
             <select id="comparison-days" onchange="loadComparison()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); color: var(--text-primary);">
                 <option value="7" selected>Last 7 days</option>
                 <option value="14">Last 14 days</option>

@@ -450,17 +450,11 @@ SELECT config_key, config_value,
 FROM ssh_guardian_v3.system_config
 WHERE config_key NOT IN (SELECT setting_key FROM system_settings);
 
--- From cache_settings
-INSERT INTO system_settings (setting_key, setting_value, value_type, category, description,
-    created_at, updated_at)
-SELECT CONCAT('cache.', endpoint_key),
-    JSON_OBJECT('ttl_seconds', ttl_seconds, 'enabled', is_enabled, 'priority', priority),
-    'json', 'cache', endpoint_description, COALESCE(created_at, NOW()), COALESCE(updated_at, NOW())
-FROM ssh_guardian_v3.cache_settings;
+-- Note: cache_settings is no longer migrated - caching now uses hardcoded values in code
 
 INSERT INTO _migration_log (migration_name, source_table, target_table, records_migrated, notes)
-VALUES ('system_settings', 'system_settings + system_config + cache_settings', 'system_settings',
-    (SELECT COUNT(*) FROM system_settings), 'Consolidated from 3 tables');
+VALUES ('system_settings', 'system_settings + system_config', 'system_settings',
+    (SELECT COUNT(*) FROM system_settings), 'Consolidated from 2 tables (cache_settings removed)');
 
 -- 9.2 Integrations (merge with integration_config)
 INSERT INTO integrations (id, integration_type, name, is_enabled, config, credentials,

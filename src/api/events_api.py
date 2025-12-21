@@ -21,6 +21,9 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 from geoip import enrich_event
 from threat_intel import check_ip_threat
 
+# Import unified ThreatEvaluator
+from threat_evaluator import evaluate_ip_threat
+
 # Create Blueprint
 events_api = Blueprint('events_api', __name__, url_prefix='/api/events')
 
@@ -230,13 +233,74 @@ def submit_event():
                 # Don't fail the request if threat intel lookup fails
                 print(f"⚠️  Threat Intel enrichment failed for event {event_id}: {threat_error}")
 
-            return jsonify({
+            # Run comprehensive threat evaluation
+            threat_evaluation = None
+            try:
+                print(f"🔬 Running unified threat evaluation for {source_ip}...")
+                event_context = {
+                    'username': username,
+                    'status': status,
+                    'auth_method': auth_method,
+                    'port': port,
+                    'timestamp': event_timestamp.isoformat(),
+                    'agent_id': agent_id
+                }
+                threat_evaluation = evaluate_ip_threat(source_ip, event_context)
+
+                if threat_evaluation:
+                    composite_score = threat_evaluation.get('composite_score', 0)
+                    risk_level = threat_evaluation.get('risk_level', 'minimal')
+                    recommended_action = threat_evaluation.get('recommended_action', 'allow')
+
+                    print(f"✅ Threat Evaluation Complete:")
+                    print(f"   Composite Score: {composite_score}/100")
+                    print(f"   Risk Level: {risk_level}")
+                    print(f"   Recommended: {recommended_action}")
+
+                    # Update event with evaluation result
+                    conn_eval = get_connection()
+                    cursor_eval = conn_eval.cursor()
+                    try:
+                        cursor_eval.execute("""
+                            UPDATE auth_events
+                            SET processing_status = 'evaluated',
+                                ml_risk_score = %s,
+                                ml_risk_level = %s
+                            WHERE id = %s
+                        """, (composite_score, risk_level, event_id))
+                        conn_eval.commit()
+                    finally:
+                        cursor_eval.close()
+                        conn_eval.close()
+
+                    # Check if automatic blocking should be triggered
+                    if composite_score >= 80 and status == 'failed':
+                        print(f"🛡️  HIGH THREAT: Auto-blocking may be triggered for {source_ip}")
+                        # Note: Actual blocking is handled by the blocking module
+                        # based on configured policies
+
+            except Exception as eval_error:
+                print(f"⚠️  Threat evaluation error: {eval_error}")
+
+            # Build response with evaluation data
+            response_data = {
                 'success': True,
                 'event_id': event_id,
                 'event_uuid': event_uuid,
-                'message': 'Event received and queued for processing',
+                'message': 'Event received and processed',
                 'agent': request.agent['display_name']
-            }), 201
+            }
+
+            # Include evaluation summary in response
+            if threat_evaluation:
+                response_data['evaluation'] = {
+                    'composite_score': threat_evaluation.get('composite_score', 0),
+                    'risk_level': threat_evaluation.get('risk_level', 'minimal'),
+                    'recommended_action': threat_evaluation.get('recommended_action', 'allow'),
+                    'factors_count': len(threat_evaluation.get('factors', []))
+                }
+
+            return jsonify(response_data), 201
 
         except Exception as e:
             conn.rollback()

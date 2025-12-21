@@ -100,8 +100,8 @@
     <div class="card" style="margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Data Preview</h3>
-            <button onclick="refreshExportPreview()" style="padding: 6px 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; cursor: pointer; font-size: 12px;">
-                Refresh Preview
+            <button class="refresh-btn" onclick="refreshExportPreview()">
+                <span class="refresh-icon">↻</span> Refresh Preview
             </button>
         </div>
         <div id="export-preview-container" style="overflow-x: auto;">

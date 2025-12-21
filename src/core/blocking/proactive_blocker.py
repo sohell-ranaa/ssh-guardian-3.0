@@ -20,6 +20,7 @@ Decision Matrix:
 """
 
 import sys
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List, Tuple
@@ -32,11 +33,27 @@ sys.path.append(str(PROJECT_ROOT / "src" / "core"))
 
 from connection import get_connection
 
+# Import unified ThreatEvaluator
+try:
+    from threat_evaluator import evaluate_ip_threat
+    THREAT_EVALUATOR_AVAILABLE = True
+except ImportError:
+    THREAT_EVALUATOR_AVAILABLE = False
+
+# Import BehavioralAnalyzer for ML-first blocking
+try:
+    from behavioral_analyzer import BehavioralAnalyzer
+    BEHAVIORAL_ANALYZER_AVAILABLE = True
+except ImportError:
+    BEHAVIORAL_ANALYZER_AVAILABLE = False
+
 # Configuration
 PROACTIVE_BLOCKING_ENABLED = True  # Master switch
 BLOCK_THRESHOLD_UFW = 80           # Score >= this → permanent UFW block
 BLOCK_THRESHOLD_FAIL2BAN = 60      # Score >= this → extended fail2ban ban
 WARNING_THRESHOLD = 30             # Score >= this → log warning
+USE_UNIFIED_EVALUATOR = True       # Use ThreatEvaluator for scoring
+USE_BEHAVIORAL_ANALYZER = True     # Prioritize ML behavioral analysis
 
 # High-risk indicators and their scores
 THREAT_SCORES = {
@@ -54,6 +71,8 @@ THREAT_SCORES = {
     'time_anomaly': 5,             # Off-hours attack
     'root_attempt': 10,            # Trying to login as root
     'invalid_user': 5,             # Unknown username
+    'greynoise_scanner': 15,       # GreyNoise noise=True (known internet scanner)
+    'greynoise_benign': -20,       # GreyNoise riot=True (known benign service - reduces score)
 }
 
 
@@ -96,6 +115,20 @@ class ProactiveBlocker:
         ip = event.get('source_ip')
         if not ip:
             return self._no_action_result()
+
+        # Skip private IPs early
+        if self._is_private_ip(ip):
+            return self._no_action_result()
+
+        # PRIORITY: ML Behavioral Analysis first (most advanced detection)
+        if USE_BEHAVIORAL_ANALYZER and BEHAVIORAL_ANALYZER_AVAILABLE:
+            behavioral_result = self._evaluate_with_behavioral_analyzer(ip, event)
+            if behavioral_result.get('should_block'):
+                return behavioral_result
+
+        # Use unified ThreatEvaluator if available
+        if USE_UNIFIED_EVALUATOR and THREAT_EVALUATOR_AVAILABLE:
+            return self._evaluate_with_unified(ip, event)
 
         # Skip private IPs
         if self._is_private_ip(ip):
@@ -140,6 +173,16 @@ class ProactiveBlocker:
             if enrichment.get('is_high_risk_country'):
                 score += THREAT_SCORES['high_risk_country']
                 factors.append(f"High-risk country: {enrichment.get('country_code', 'Unknown')}")
+
+            # GreyNoise - Known scanner (adds to threat score)
+            if enrichment.get('greynoise_noise'):
+                score += THREAT_SCORES['greynoise_scanner']
+                factors.append('GreyNoise: Known internet scanner')
+
+            # GreyNoise - Benign service (reduces threat score)
+            if enrichment.get('greynoise_riot'):
+                score += THREAT_SCORES['greynoise_benign']  # This is negative
+                factors.append('GreyNoise: Benign service (reduced threat)')
 
         # 3. Score based on behavioral analysis
         behavior = self._analyze_behavior(ip, event)
@@ -189,6 +232,301 @@ class ProactiveBlocker:
         # Log the evaluation
         self._log_evaluation(ip, event, result)
 
+        return result
+
+    def _evaluate_with_behavioral_analyzer(self, ip: str, event: Dict) -> Dict:
+        """
+        PRIORITY ML evaluation using BehavioralAnalyzer.
+
+        This method runs FIRST and can short-circuit to block high-risk threats
+        based on behavioral patterns that rule-based systems can't detect:
+        - Impossible travel
+        - Credential stuffing
+        - Success after brute force
+        - Unusual login times/locations for specific users
+
+        Decision Matrix for Behavioral Analysis:
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │  Behavioral Score │  Action                                         │
+        ├─────────────────────────────────────────────────────────────────────┤
+        │  80-100 + priority│  IMMEDIATE UFW BLOCK (permanent)                │
+        │  60-79            │  EXTENDED FAIL2BAN BLOCK (48h)                  │
+        │  40-59            │  STANDARD FAIL2BAN BLOCK (24h)                  │
+        │  0-39             │  Pass to next evaluator (ThreatEvaluator)       │
+        └─────────────────────────────────────────────────────────────────────┘
+        """
+        try:
+            username = event.get('username')
+            event_type = event.get('event_type', 'failed')
+
+            if not username:
+                # Can't do behavioral analysis without username
+                return {'should_block': False}
+
+            # Get geo data for the IP
+            geo_data = self._get_geo_for_behavioral(ip)
+
+            # Run behavioral analysis
+            analyzer = BehavioralAnalyzer()
+            analysis = analyzer.analyze(
+                ip_address=ip,
+                username=username,
+                event_type=event_type,
+                current_geo=geo_data,
+                timestamp=datetime.now()
+            )
+
+            risk_score = analysis.get('risk_score', 0)
+            confidence = analysis.get('confidence', 0.5)
+            risk_factors = analysis.get('risk_factors', [])
+            recommendations = analysis.get('recommendations', [])
+
+            # Check for priority factors (immediate block regardless of total score)
+            priority_types = ['impossible_travel', 'credential_stuffing', 'brute_force']
+            detected_types = [f.get('type') for f in risk_factors]
+            has_priority_factor = any(pt in detected_types for pt in priority_types)
+
+            # Build human-readable factors list
+            factor_descriptions = [
+                f"{f.get('title', f.get('type'))}: +{f.get('score', 0)}"
+                for f in risk_factors[:5]
+            ]
+
+            # Determine action based on behavioral score
+            if risk_score >= 80 or (has_priority_factor and risk_score >= 60):
+                # CRITICAL: Permanent UFW block
+                success = self._block_via_ufw(ip, risk_score, factor_descriptions)
+                result = {
+                    'should_block': True,
+                    'block_method': 'ufw',
+                    'threat_score': risk_score,
+                    'risk_level': 'critical',
+                    'factors': factor_descriptions,
+                    'action_taken': 'ML BEHAVIORAL: Permanent UFW block' if success else 'UFW block failed',
+                    'ml_analysis': {
+                        'source': 'BehavioralAnalyzer',
+                        'risk_factors': risk_factors,
+                        'recommendations': recommendations,
+                        'confidence': confidence,
+                        'has_priority_factor': has_priority_factor,
+                        'detected_types': detected_types
+                    }
+                }
+                self._log_evaluation(ip, event, result)
+                self._create_notification(
+                    ip, risk_score, factor_descriptions, 'ufw',
+                    f"ML Behavioral: {ip} blocked permanently (score: {risk_score})"
+                )
+                return result
+
+            elif risk_score >= 60:
+                # HIGH: Extended fail2ban block (48h)
+                success = self._block_via_fail2ban(ip, risk_score, factor_descriptions, bantime=172800)
+                result = {
+                    'should_block': True,
+                    'block_method': 'fail2ban',
+                    'threat_score': risk_score,
+                    'risk_level': 'high',
+                    'factors': factor_descriptions,
+                    'action_taken': 'ML BEHAVIORAL: Extended fail2ban block (48h)' if success else 'Block failed',
+                    'ml_analysis': {
+                        'source': 'BehavioralAnalyzer',
+                        'risk_factors': risk_factors,
+                        'recommendations': recommendations,
+                        'confidence': confidence
+                    }
+                }
+                self._log_evaluation(ip, event, result)
+                return result
+
+            elif risk_score >= 40:
+                # MEDIUM: Standard fail2ban block (24h)
+                success = self._block_via_fail2ban(ip, risk_score, factor_descriptions, bantime=86400)
+                result = {
+                    'should_block': True,
+                    'block_method': 'fail2ban',
+                    'threat_score': risk_score,
+                    'risk_level': 'medium',
+                    'factors': factor_descriptions,
+                    'action_taken': 'ML BEHAVIORAL: Standard fail2ban block (24h)' if success else 'Block failed',
+                    'ml_analysis': {
+                        'source': 'BehavioralAnalyzer',
+                        'risk_factors': risk_factors,
+                        'recommendations': recommendations,
+                        'confidence': confidence
+                    }
+                }
+                self._log_evaluation(ip, event, result)
+                return result
+
+            # Below blocking threshold but still anomalous - create ALERT (not block)
+            if risk_score >= 20 and risk_factors:
+                # Import alert_operations to create behavioral alert
+                try:
+                    from .alert_operations import create_security_alert
+
+                    # Get username from event
+                    username = event.get('username', 'unknown')
+
+                    # Determine alert type from factors
+                    alert_type = 'behavioral_anomaly'
+                    for factor in risk_factors:
+                        factor_type = factor.get('type', '')
+                        if factor_type in ['unusual_time', 'new_location', 'new_ip', 'weekend_login']:
+                            alert_type = factor_type
+                            break
+
+                    # Get geo data for the alert
+                    geo_data = self._get_geo_for_behavioral(ip)
+
+                    create_security_alert(
+                        ip_address=ip,
+                        alert_type=alert_type,
+                        title=f"Behavioral Anomaly Detected",
+                        description=f"User: {username}\nAnomaly Score: {risk_score}/100\n\nFactors:\n" + "; ".join(factor_descriptions),
+                        severity='medium' if risk_score >= 30 else 'low',
+                        username=username,
+                        ml_score=risk_score,
+                        ml_factors=factor_descriptions,
+                        geo_data=geo_data
+                    )
+                    print(f"  [ML Behavioral] Alert created for {ip} (score: {risk_score})")
+                except Exception as alert_err:
+                    print(f"  [ML Behavioral] Warning: Could not create alert: {alert_err}")
+
+            # Pass to next evaluator (no block)
+            return {
+                'should_block': False,
+                'threat_score': risk_score,
+                'ml_analysis': {
+                    'source': 'BehavioralAnalyzer',
+                    'risk_factors': risk_factors,
+                    'confidence': confidence
+                }
+            }
+
+        except Exception as e:
+            logging.error(f"[ProactiveBlocker] Behavioral analysis error: {e}")
+            return {'should_block': False}
+
+    def _get_geo_for_behavioral(self, ip: str) -> Optional[Dict]:
+        """Get geo data for behavioral analysis."""
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT latitude, longitude, country_code, country_name, city
+                FROM ip_geolocation
+                WHERE ip_address_text = %s
+            """, (ip,))
+            return cursor.fetchone()
+        except Exception as e:
+            logging.error(f"Error getting geo for {ip}: {e}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    def _evaluate_with_unified(self, ip: str, event: Dict) -> Dict:
+        """
+        Use unified ThreatEvaluator for comprehensive scoring.
+        This combines ML, threat intel, behavioral, network, and geo analysis.
+        """
+        try:
+            # Build event context for evaluator
+            event_context = {
+                'username': event.get('username'),
+                'status': event.get('event_type'),
+                'timestamp': event.get('timestamp'),
+            }
+
+            # Run unified evaluation
+            evaluation = evaluate_ip_threat(ip, event_context)
+
+            score = evaluation.get('composite_score', 0)
+            risk_level = evaluation.get('risk_level', 'low')
+            factors = evaluation.get('factors', [])
+            recommended_action = evaluation.get('recommended_action', 'allow')
+
+            # Determine blocking action based on unified score
+            if score >= BLOCK_THRESHOLD_UFW:
+                success = self._block_via_ufw(ip, score, factors)
+                return {
+                    'should_block': True,
+                    'block_method': 'ufw',
+                    'threat_score': score,
+                    'risk_level': risk_level,
+                    'factors': factors,
+                    'action_taken': 'Blocked via UFW (permanent)' if success else 'UFW block failed',
+                    'evaluation': evaluation
+                }
+
+            elif score >= BLOCK_THRESHOLD_FAIL2BAN:
+                success = self._block_via_fail2ban(ip, score, factors, bantime=86400)
+                return {
+                    'should_block': True,
+                    'block_method': 'fail2ban',
+                    'threat_score': score,
+                    'risk_level': risk_level,
+                    'factors': factors,
+                    'action_taken': 'Pre-emptive block via fail2ban (24h)' if success else 'Fail2ban block failed',
+                    'evaluation': evaluation
+                }
+
+            elif score >= WARNING_THRESHOLD:
+                logging.warning(f"⚠️ Medium threat: {ip} (score={score})")
+                return {
+                    'should_block': False,
+                    'block_method': 'none',
+                    'threat_score': score,
+                    'risk_level': risk_level,
+                    'factors': factors,
+                    'action_taken': 'Warning logged - monitoring',
+                    'evaluation': evaluation
+                }
+
+            else:
+                return {
+                    'should_block': False,
+                    'block_method': 'none',
+                    'threat_score': score,
+                    'risk_level': risk_level,
+                    'factors': factors,
+                    'action_taken': 'No action - standard fail2ban handling',
+                    'evaluation': evaluation
+                }
+
+        except Exception as e:
+            logging.error(f"[ProactiveBlocker] Unified evaluation error: {e}")
+            # Fall back to legacy scoring
+            return self._legacy_evaluate(ip, event)
+
+    def _legacy_evaluate(self, ip: str, event: Dict) -> Dict:
+        """Legacy scoring method as fallback."""
+        # Skip private IPs
+        if self._is_private_ip(ip):
+            return self._no_action_result()
+
+        score = 0
+        factors = []
+
+        # Basic enrichment check
+        enrichment = self._get_enrichment(ip)
+        if enrichment:
+            abuse_score = enrichment.get('abuseipdb_score', 0)
+            if abuse_score >= 80:
+                score += 30
+                factors.append(f'AbuseIPDB: {abuse_score}%')
+            if enrichment.get('is_tor'):
+                score += 25
+                factors.append('Tor exit node')
+
+        result = self._determine_action(ip, score, factors)
+        self._log_evaluation(ip, event, result)
         return result
 
     def _determine_action(self, ip: str, score: int, factors: List[str]) -> Dict:
@@ -256,12 +594,16 @@ class ProactiveBlocker:
             conn = get_connection()
             cursor = conn.cursor(dictionary=True)
 
+            # Query from ip_geolocation table (v3.1 schema) with GreyNoise fields
             cursor.execute("""
-                SELECT abuseipdb_score, virustotal_malicious, is_tor, is_vpn,
-                       is_proxy, country_code, is_high_risk_country
-                FROM ip_enrichment
-                WHERE ip_address = %s
-                  AND enriched_at >= NOW() - INTERVAL 24 HOUR
+                SELECT abuseipdb_score, virustotal_positives as virustotal_malicious,
+                       is_tor, is_vpn, is_proxy, country_code,
+                       CASE WHEN country_code IN ('CN', 'RU', 'KP', 'IR', 'VN', 'IN', 'BR', 'PK', 'ID', 'NG')
+                            THEN 1 ELSE 0 END as is_high_risk_country,
+                       greynoise_noise, greynoise_riot, greynoise_classification
+                FROM ip_geolocation
+                WHERE ip_address_text = %s
+                  AND last_seen >= NOW() - INTERVAL 24 HOUR
             """, (ip,))
 
             result = cursor.fetchone()
@@ -294,29 +636,35 @@ class ProactiveBlocker:
             conn = get_connection()
             cursor = conn.cursor(dictionary=True)
 
-            # Previous bans
+            # Previous bans (event_type = 'ban' in current schema)
             cursor.execute("""
                 SELECT COUNT(*) as count FROM fail2ban_events
-                WHERE ip_address = %s AND action = 'ban'
+                WHERE ip_address = %s AND event_type = 'ban'
             """, (ip,))
             result = cursor.fetchone()
             behavior['previous_bans'] = result['count'] if result else 0
 
-            # Unique usernames in last hour
-            cursor.execute("""
-                SELECT COUNT(DISTINCT username) as count FROM auth_events
-                WHERE source_ip = %s AND timestamp >= NOW() - INTERVAL 1 HOUR
-            """, (ip,))
-            result = cursor.fetchone()
-            behavior['unique_usernames'] = result['count'] if result else 0
+            # Unique usernames in last hour (check both possible column names)
+            try:
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT COALESCE(username, target_username)) as count FROM auth_events
+                    WHERE source_ip_text = %s AND timestamp >= NOW() - INTERVAL 1 HOUR
+                """, (ip,))
+                result = cursor.fetchone()
+                behavior['unique_usernames'] = result['count'] if result else 0
+            except:
+                behavior['unique_usernames'] = 0
 
             # Recent attempts (last 5 min)
-            cursor.execute("""
-                SELECT COUNT(*) as count FROM auth_events
-                WHERE source_ip = %s AND timestamp >= NOW() - INTERVAL 5 MINUTE
-            """, (ip,))
-            result = cursor.fetchone()
-            behavior['recent_attempts'] = result['count'] if result else 0
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) as count FROM auth_events
+                    WHERE source_ip_text = %s AND timestamp >= NOW() - INTERVAL 5 MINUTE
+                """, (ip,))
+                result = cursor.fetchone()
+                behavior['recent_attempts'] = result['count'] if result else 0
+            except:
+                behavior['recent_attempts'] = 0
 
         except Exception as e:
             logging.error(f"Error analyzing behavior for {ip}: {e}")
@@ -343,6 +691,11 @@ class ProactiveBlocker:
 
             if result.get('success'):
                 logging.info(f"🛡️ PROACTIVE UFW BLOCK: {ip} (score={score})")
+                # Create notification for auto-block
+                self._create_notification(
+                    ip, score, factors, 'ufw',
+                    f"Auto-blocked {ip} via UFW (score: {score})"
+                )
                 return True
             return False
 
@@ -366,12 +719,60 @@ class ProactiveBlocker:
 
             if result.get('success'):
                 logging.info(f"🛡️ PROACTIVE FAIL2BAN BLOCK: {ip} (score={score}, {bantime}s)")
+                # Create notification for auto-block
+                self._create_notification(
+                    ip, score, factors, 'fail2ban',
+                    f"Auto-blocked {ip} via Fail2ban for {bantime//3600}h (score: {score})"
+                )
                 return True
             return False
 
         except Exception as e:
             logging.error(f"Error blocking {ip} via fail2ban: {e}")
             return False
+
+    def _create_notification(self, ip: str, score: int, factors: List[str], method: str, message: str):
+        """Create a notification for auto-blocking action."""
+        import uuid as uuid_module
+        conn = None
+        cursor = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            priority = 'critical' if method == 'ufw' else 'high'
+            notification_uuid = str(uuid_module.uuid4())
+
+            cursor.execute("""
+                INSERT INTO notifications (
+                    notification_uuid, trigger_type, message_title, message_body,
+                    message_format, priority, status, channels, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, 'pending', '["dashboard"]', NOW())
+            """, (
+                notification_uuid,
+                'auto_block',
+                f"Auto-Block: {ip}",
+                json.dumps({
+                    'message': message,
+                    'ip_address': ip,
+                    'threat_score': score,
+                    'factors': factors[:5],
+                    'block_method': method
+                }),
+                'json',
+                priority
+            ))
+
+            conn.commit()
+            logging.info(f"📢 Notification created for auto-block: {ip}")
+
+        except Exception as e:
+            logging.error(f"Error creating notification: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     def _log_evaluation(self, ip: str, event: Dict, result: Dict):
         """Log the proactive evaluation."""

@@ -52,19 +52,25 @@ window.NotificationPane = {
     },
 
     /**
-     * Update the notification badge
+     * Update the notification badge and pane count
      */
     updateBadge(count) {
         const badge = document.getElementById('notificationBadge');
-        if (!badge) return;
+        const paneCount = document.getElementById('paneUnreadCount');
 
-        if (count > 0) {
-            badge.textContent = count > 99 ? '99+' : count;
-            badge.classList.remove('hidden');
-            badge.style.display = 'flex';
-        } else {
-            badge.classList.add('hidden');
-            badge.style.display = 'none';
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                badge.style.display = 'flex';
+            } else {
+                badge.classList.add('hidden');
+                badge.style.display = 'none';
+            }
+        }
+
+        if (paneCount) {
+            paneCount.textContent = count > 0 ? `${count} unread` : '';
         }
     },
 
@@ -99,6 +105,9 @@ window.NotificationPane = {
 
         // Load notifications
         await this.loadNotifications();
+
+        // Mark all as read silently (just update backend, keep showing notifications)
+        this.markAllReadSilent();
     },
 
     /**
@@ -153,7 +162,67 @@ window.NotificationPane = {
     },
 
     /**
-     * Render notifications in the pane
+     * Category definitions for grouping notifications
+     */
+    categories: {
+        security: {
+            label: 'Security Alerts',
+            icon: '🛡️',
+            types: ['high_risk_detected', 'brute_force_detected', 'suspicious_activity', 'failed_auth', 'brute_force', 'distributed_brute_force', 'account_takeover', 'credential_stuffing']
+        },
+        blocking: {
+            label: 'IP Blocking',
+            icon: '🚫',
+            types: ['ip_blocked', 'ip_unblocked', 'auto_blocked', 'manual_block']
+        },
+        system: {
+            label: 'System',
+            icon: '⚙️',
+            types: ['system', 'agent_status', 'config_change', 'service_status']
+        },
+        other: {
+            label: 'Other',
+            icon: '📋',
+            types: []
+        }
+    },
+
+    /**
+     * Get category for a notification based on trigger_type
+     */
+    getCategory(triggerType) {
+        for (const [key, cat] of Object.entries(this.categories)) {
+            if (cat.types.includes(triggerType)) {
+                return key;
+            }
+        }
+        return 'other';
+    },
+
+    /**
+     * Group notifications by category
+     */
+    groupByCategory(notifications) {
+        const groups = {};
+
+        notifications.forEach(n => {
+            const category = this.getCategory(n.trigger_type || '');
+            if (!groups[category]) {
+                groups[category] = [];
+            }
+            groups[category].push(n);
+        });
+
+        return groups;
+    },
+
+    /**
+     * Current active tab
+     */
+    activeTab: 'all',
+
+    /**
+     * Render notifications in the pane with tabs
      */
     renderNotifications(notifications) {
         const container = document.getElementById('notificationList');
@@ -170,7 +239,51 @@ window.NotificationPane = {
             return;
         }
 
-        container.innerHTML = notifications.map(n => this.renderNotificationItem(n)).join('');
+        // Group notifications by category
+        const grouped = this.groupByCategory(notifications);
+
+        // Build tabs
+        const categoryOrder = ['security', 'blocking', 'system', 'other'];
+        let tabsHtml = `
+            <div class="notif-tabs">
+                <button class="notif-tab ${this.activeTab === 'all' ? 'active' : ''}" data-tab="all">
+                    All <span class="tab-count">${notifications.length}</span>
+                </button>
+        `;
+
+        categoryOrder.forEach(catKey => {
+            const count = grouped[catKey]?.length || 0;
+            if (count > 0) {
+                const cat = this.categories[catKey];
+                tabsHtml += `
+                    <button class="notif-tab ${this.activeTab === catKey ? 'active' : ''}" data-tab="${catKey}">
+                        ${cat.icon} <span class="tab-count">${count}</span>
+                    </button>
+                `;
+            }
+        });
+        tabsHtml += '</div>';
+
+        // Build notification list based on active tab
+        let itemsHtml = '<div class="notif-items">';
+        const itemsToShow = this.activeTab === 'all'
+            ? notifications
+            : (grouped[this.activeTab] || []);
+
+        itemsHtml += itemsToShow.map(n => this.renderNotificationItem(n)).join('');
+        itemsHtml += '</div>';
+
+        container.innerHTML = tabsHtml + itemsHtml;
+
+        // Add tab click handlers
+        container.querySelectorAll('.notif-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.activeTab = e.currentTarget.dataset.tab;
+                this.renderNotifications(this.notifications);
+            });
+        });
     },
 
     /**
@@ -183,8 +296,8 @@ window.NotificationPane = {
         // Strip HTML and truncate body
         let title = this.stripHtml(notification.message_title || '');
         let body = this.stripHtml(notification.message_body || '');
-        if (body.length > 100) {
-            body = body.substring(0, 100) + '...';
+        if (body.length > 80) {
+            body = body.substring(0, 80) + '...';
         }
 
         // Store IP and event ID as data attributes for click handling
@@ -193,24 +306,32 @@ window.NotificationPane = {
         const triggerType = notification.trigger_type || '';
 
         return `
-            <div class="notification-item unread ${priority}"
+            <div class="notification-item ${priority}"
                  data-id="${notification.id}"
                  data-ip="${this.escapeHtml(ipAddress)}"
                  data-event-id="${eventId}"
                  data-trigger-type="${this.escapeHtml(triggerType)}">
-                <div class="notification-content">
-                    <h4 class="notification-title">${this.escapeHtml(title)}</h4>
-                    <p class="notification-body">${this.escapeHtml(body)}</p>
+                <div class="notification-main">
+                    <div class="notification-content">
+                        <h4 class="notification-title">${this.escapeHtml(title)}</h4>
+                        ${body ? `<p class="notification-body">${this.escapeHtml(body)}</p>` : ''}
+                    </div>
+                    <div class="notification-actions-mini">
+                        <button class="notification-btn-mini" data-action="mark-read" title="Mark as read">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </button>
+                        <button class="notification-btn-mini danger" data-action="delete" title="Delete">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="notification-meta">
                     <span class="notification-time">${timeAgo}</span>
-                    <span class="notification-priority ${priority}">${priority}</span>
-                </div>
-                <div class="notification-actions">
-                    <button class="notification-action-btn" data-action="mark-read" title="Mark as read">✓</button>
-                    ${eventId ? `<button class="notification-action-btn" data-action="view-event" title="View event">👁</button>` : ''}
-                    ${this.shouldShowBlockIP(triggerType, ipAddress) ? `<button class="notification-action-btn danger" data-action="block-ip" title="Block IP">🚫</button>` : ''}
-                    <button class="notification-action-btn" data-action="delete" title="Delete">🗑</button>
+                    ${ipAddress ? `<span class="notification-ip">${this.escapeHtml(ipAddress)}</span>` : ''}
                 </div>
             </div>
         `;
@@ -234,6 +355,7 @@ window.NotificationPane = {
 
         container.addEventListener('click', (event) => {
             const target = event.target;
+            const actionBtn = target.closest('.notification-btn-mini') || target.closest('.notification-action-btn');
             const notificationItem = target.closest('.notification-item');
 
             if (!notificationItem) return;
@@ -243,19 +365,19 @@ window.NotificationPane = {
             const eventId = notificationItem.dataset.eventId;
 
             // Handle action button clicks
-            if (target.classList.contains('notification-action-btn')) {
+            if (actionBtn) {
                 event.stopPropagation();
-                const action = target.dataset.action;
+                const action = actionBtn.dataset.action;
 
                 switch (action) {
                     case 'mark-read':
-                        this.markRead(notificationId, target);
+                        this.markRead(notificationId, actionBtn);
                         break;
                     case 'view-event':
                         this.viewEvent(eventId);
                         break;
                     case 'block-ip':
-                        this.blockIP(ipAddress, notificationId, target);
+                        this.blockIP(ipAddress, notificationId, actionBtn);
                         break;
                     case 'delete':
                         this.deleteNotification(notificationId);
@@ -273,14 +395,178 @@ window.NotificationPane = {
      * Handle click on notification item (not on buttons)
      */
     handleItemClick(notificationId, eventId) {
-        // Mark as read
-        this.markRead(notificationId);
-
-        // Navigate to event if available
-        if (eventId) {
-            this.close();
-            window.location.hash = `events-live?event=${eventId}`;
+        // Find the notification data
+        const notification = this.notifications.find(n => n.id === notificationId);
+        if (notification) {
+            this.showNotificationDetail(notification);
         }
+    },
+
+    /**
+     * Show notification detail modal - enhanced with more info like event detail modal
+     */
+    showNotificationDetail(notification) {
+        // Remove existing detail modal if any
+        const existing = document.getElementById('notificationDetailModal');
+        if (existing) existing.remove();
+
+        const priority = notification.priority || 'normal';
+        const timeAgo = this.formatTimeAgo(notification.created_at);
+        const title = this.stripHtml(notification.message_title || 'Notification');
+        const body = this.stripHtml(notification.message_body || '');
+        const ipAddress = notification.ip_address || '';
+        const username = notification.username || '';
+        const agentName = notification.agent_name || '';
+        const triggerType = notification.trigger_type || '';
+        const category = this.getCategory(triggerType);
+        const categoryInfo = this.categories[category];
+        const mlScore = notification.ml_score || 0;
+        const mlFactors = notification.ml_factors || [];
+        const geoData = notification.geo_data || {};
+        const channel = notification.channel || '';
+        const ruleName = notification.rule_name || '';
+
+        // Priority badge styling
+        const priorityBadge = {
+            critical: { bg: TC.dangerBg, color: TC.danger, label: 'CRITICAL' },
+            high: { bg: TC.warningBg, color: TC.orange, label: 'HIGH' },
+            normal: { bg: TC.primaryBg, color: TC.primary, label: 'NORMAL' },
+            low: { bg: TC.successBg, color: TC.teal, label: 'LOW' }
+        }[priority] || { bg: 'var(--surface-alt)', color: TC.textSecondary, label: 'INFO' };
+
+        // Build sections
+        let sectionsHtml = '';
+
+        // Event Info Section
+        sectionsHtml += `
+            <div class="detail-section">
+                <div class="detail-section-title">Event Information</div>
+                <div class="detail-grid">
+                    ${ipAddress ? `<div><span class="detail-label">IP Address:</span> <span style="font-family: monospace;">${this.escapeHtml(ipAddress)}</span></div>` : ''}
+                    ${username ? `<div><span class="detail-label">Username:</span> ${this.escapeHtml(username)}</div>` : ''}
+                    ${agentName ? `<div><span class="detail-label">Agent:</span> ${this.escapeHtml(agentName)}</div>` : ''}
+                    ${channel ? `<div><span class="detail-label">Channel:</span> ${this.escapeHtml(channel)}</div>` : ''}
+                    ${ruleName ? `<div><span class="detail-label">Rule:</span> ${this.escapeHtml(ruleName)}</div>` : ''}
+                    <div><span class="detail-label">Time:</span> ${timeAgo}</div>
+                </div>
+            </div>
+        `;
+
+        // Location Section (if geo_data exists)
+        if (geoData && (geoData.country || geoData.city)) {
+            sectionsHtml += `
+                <div class="detail-section">
+                    <div class="detail-section-title">Location</div>
+                    <div class="detail-grid">
+                        ${geoData.country ? `<div><span class="detail-label">Country:</span> ${this.escapeHtml(geoData.country)} ${geoData.country_code ? `(${geoData.country_code})` : ''}</div>` : ''}
+                        ${geoData.city ? `<div><span class="detail-label">City:</span> ${this.escapeHtml(geoData.city)}</div>` : ''}
+                        ${geoData.isp ? `<div><span class="detail-label">ISP:</span> ${this.escapeHtml(geoData.isp)}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ML Score Section (if ml_score exists)
+        if (mlScore > 0) {
+            const scoreClass = mlScore >= 80 ? 'critical' : mlScore >= 60 ? 'high' : mlScore >= 40 ? 'moderate' : 'low';
+            const scoreColor = mlScore >= 80 ? TC.danger : mlScore >= 60 ? TC.orange : mlScore >= 40 ? TC.primary : TC.teal;
+
+            sectionsHtml += `
+                <div class="detail-section">
+                    <div class="detail-section-title">ML Risk Assessment</div>
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+                        <div style="width: 60px; height: 60px; border-radius: 50%; background: ${scoreColor}15; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                            <span style="font-size: 20px; font-weight: 700; color: ${scoreColor};">${mlScore}</span>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: var(--text-primary);">Risk Score</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">${scoreClass.charAt(0).toUpperCase() + scoreClass.slice(1)} Risk</div>
+                        </div>
+                    </div>
+                    ${mlFactors && mlFactors.length > 0 ? `
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${mlFactors.map(f => `<span style="padding: 4px 8px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-secondary);">${this.escapeHtml(f)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Message Section
+        sectionsHtml += `
+            <div class="detail-section">
+                <div class="detail-section-title">Message</div>
+                <div style="background: var(--surface-alt); padding: 12px; border-radius: 6px; border: 1px solid var(--border); font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 150px; overflow-y: auto;">
+                    ${this.escapeHtml(body || 'No message content')}
+                </div>
+            </div>
+        `;
+
+        const modal = document.createElement('div');
+        modal.id = 'notificationDetailModal';
+        modal.className = 'notif-detail-overlay';
+        modal.innerHTML = `
+            <div class="notif-detail-modal" style="max-width: 560px;">
+                <div class="notif-detail-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 20px;">${categoryInfo.icon}</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">${this.escapeHtml(title)}</h3>
+                            <div style="display: flex; gap: 8px; margin-top: 4px;">
+                                <span style="padding: 2px 8px; font-size: 10px; font-weight: 600; border-radius: 4px; background: ${priorityBadge.bg}; color: ${priorityBadge.color};">${priorityBadge.label}</span>
+                                <span style="font-size: 12px; color: var(--text-secondary);">${categoryInfo.label}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="notif-detail-close" onclick="NotificationPane.closeDetail()" style="background: none; border: none; font-size: 24px; color: var(--text-secondary); cursor: pointer; padding: 4px;">&times;</button>
+                </div>
+                <div class="notif-detail-body" style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+                    ${sectionsHtml}
+                </div>
+                <div class="notif-detail-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border);">
+                    <button class="btn btn-secondary" onclick="NotificationPane.closeDetail()">Close</button>
+                    <button class="btn btn-primary" onclick="NotificationPane.markReadAndClose(${notification.id})">
+                        Mark as Read
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeDetail();
+            }
+        });
+
+        // Close on escape
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeDetail();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    },
+
+    /**
+     * Close notification detail modal
+     */
+    closeDetail() {
+        const modal = document.getElementById('notificationDetailModal');
+        if (modal) {
+            modal.remove();
+        }
+    },
+
+    /**
+     * Mark notification as read and close detail modal
+     */
+    markReadAndClose(notificationId) {
+        this.markRead(notificationId);
+        this.closeDetail();
     },
 
     /**
@@ -294,22 +580,7 @@ window.NotificationPane = {
             const data = await response.json();
 
             if (data.success) {
-                // Remove from UI with animation (since we only show unread)
-                const item = document.querySelector(`.notification-item[data-id="${notificationId}"]`);
-                if (item) {
-                    item.style.opacity = '0';
-                    item.style.transform = 'translateX(-20px)';
-                    item.style.transition = 'all 0.2s ease';
-                    setTimeout(() => {
-                        item.remove();
-
-                        // Check if list is empty
-                        const container = document.getElementById('notificationList');
-                        if (container && container.querySelectorAll('.notification-item').length === 0) {
-                            this.renderNotifications([]);
-                        }
-                    }, 200);
-                }
+                this.removeNotificationFromUI(notificationId);
 
                 // Update notifications array
                 this.notifications = this.notifications.filter(n => n.id !== notificationId);
@@ -317,6 +588,57 @@ window.NotificationPane = {
                 // Update badge
                 this.unreadCount = Math.max(0, this.unreadCount - 1);
                 this.updateBadge(this.unreadCount);
+
+                // Sync with history page if it's visible
+                this.syncHistoryPage();
+            }
+        } catch (error) {
+            console.error('[NotificationPane] Error marking as read:', error);
+        }
+    },
+
+    /**
+     * Sync with history page stats
+     */
+    syncHistoryPage() {
+        // Update history page unread stat if visible
+        const unreadEl = document.getElementById('stat-notif-unread');
+        if (unreadEl) {
+            unreadEl.textContent = this.unreadCount.toLocaleString();
+        }
+    },
+
+    /**
+     * Remove notification from UI with animation
+     */
+    removeNotificationFromUI(notificationId) {
+        const item = document.querySelector(`.notification-item[data-id="${notificationId}"]`);
+        if (!item) return;
+
+        item.style.opacity = '0';
+        item.style.transform = 'translateX(-20px)';
+        item.style.transition = 'all 0.2s ease';
+
+        setTimeout(() => {
+            item.remove();
+
+            // Re-render to update tab counts
+            this.renderNotifications(this.notifications);
+        }, 200);
+    },
+
+    /**
+     * Mark all as read silently (update backend + badge, keep list visible)
+     */
+    async markAllReadSilent() {
+        try {
+            const response = await fetch('/api/notifications/mark-all-read', {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.unreadCount = 0;
+                this.updateBadge(0);
             }
         } catch (error) {
             console.error('[NotificationPane] Error marking as read:', error);
@@ -344,6 +666,9 @@ window.NotificationPane = {
                 // Show empty state
                 this.renderNotifications([]);
 
+                // Sync with history page
+                this.syncHistoryPage();
+
                 console.log(`[NotificationPane] Marked ${data.data?.marked_read_count || 0} notifications as read`);
             }
         } catch (error) {
@@ -362,24 +687,17 @@ window.NotificationPane = {
             const data = await response.json();
 
             if (data.success) {
-                // Remove from UI with animation
-                const item = document.querySelector(`.notification-item[data-id="${notificationId}"]`);
-                if (item) {
-                    item.style.opacity = '0';
-                    item.style.transform = 'translateX(20px)';
-                    setTimeout(() => {
-                        item.remove();
+                this.removeNotificationFromUI(notificationId);
 
-                        // Check if list is empty
-                        const container = document.getElementById('notificationList');
-                        if (container && container.querySelectorAll('.notification-item').length === 0) {
-                            this.renderNotifications([]);
-                        }
-                    }, 200);
-                }
-
-                // Update notifications array
+                // Update notifications array and badge
+                const wasUnread = this.notifications.find(n => n.id === notificationId);
                 this.notifications = this.notifications.filter(n => n.id !== notificationId);
+
+                if (wasUnread) {
+                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                    this.updateBadge(this.unreadCount);
+                    this.syncHistoryPage();
+                }
             }
         } catch (error) {
             console.error('[NotificationPane] Error deleting notification:', error);
@@ -514,16 +832,20 @@ window.NotificationPane = {
      */
     formatTimeAgo(timestamp) {
         if (!timestamp) return '';
-
-        // Ensure UTC parsing - append Z if no timezone info
-        let dateStr = String(timestamp);
-        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-            dateStr += 'Z';
+        // Use TimeSettings for proper timezone handling
+        if (window.TimeSettings?.isLoaded()) {
+            return window.TimeSettings.relative(timestamp);
+        }
+        // Server timestamps are in +08:00 (Asia/Kuala_Lumpur)
+        let dateStr = String(timestamp).replace(' ', 'T');
+        if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.match(/T\d{2}:\d{2}:\d{2}-/)) {
+            dateStr += '+08:00';
         }
         const date = new Date(dateStr);
         const now = new Date();
         const seconds = Math.floor((now - date) / 1000);
 
+        if (seconds < 0) return 'Just now';
         if (seconds < 60) return 'Just now';
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
         if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -547,8 +869,10 @@ window.NotificationPane = {
      */
     stripHtml(text) {
         if (!text) return '';
+        // Convert literal \n to actual newlines
+        let cleaned = text.replace(/\\n/g, '\n');
         // Remove HTML tags
-        let cleaned = text.replace(/<[^>]*>/g, '');
+        cleaned = cleaned.replace(/<[^>]*>/g, '');
         // Remove common emojis
         cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '');
         // Clean up extra whitespace

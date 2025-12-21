@@ -1,0 +1,798 @@
+/**
+ * Events Live Page Styles
+ * Modular CSS for live events table, modals, badges, and utilities
+ */
+
+/* ===================================
+   Table Row Styles
+   =================================== */
+.events-table-row {
+    border-bottom: 1px solid var(--border);
+}
+
+.events-table-cell {
+    padding: 12px;
+    font-size: 12px;
+}
+
+.events-table-cell--mono {
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.events-table-cell--centered {
+    text-align: center;
+}
+
+/* Empty state */
+.events-empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+/* ===================================
+   IP Display & Status Indicators
+   =================================== */
+.ip-display-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ip-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    display: inline-block;
+}
+
+.ip-status-indicator--blocked {
+    background: var(--color-orange-dark);
+}
+
+.ip-status-indicator--whitelisted {
+    background: var(--color-success-dark);
+}
+
+.ip-status-indicator--watched {
+    background: var(--color-gold);
+}
+
+.ip-status-indicator--clean {
+    background: var(--text-secondary);
+}
+
+.ip-address-text {
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.ip-flags {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    margin-left: 16px;
+}
+
+/* ===================================
+   Location Cell
+   =================================== */
+.location-isp {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.flag-image {
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+/* ===================================
+   Threat Info
+   =================================== */
+.threat-info {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* ===================================
+   Agent Display
+   =================================== */
+.agent-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.agent-server {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ===================================
+   Status Badges (Event Type)
+   =================================== */
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-badge--failed {
+    background: rgba(200, 80, 60, 0.15);
+    color: var(--color-rust);
+    border: 1px solid rgba(200, 80, 60, 0.3);
+}
+
+.status-badge--success {
+    background: rgba(56, 142, 60, 0.15);
+    color: var(--color-success-dark);
+    border: 1px solid rgba(56, 142, 60, 0.3);
+}
+
+.status-badge--invalid {
+    background: rgba(117, 117, 117, 0.15);
+    color: var(--text-secondary);
+    border: 1px solid rgba(117, 117, 117, 0.3);
+}
+
+.status-badge--unknown {
+    background: rgba(117, 117, 117, 0.15);
+    color: var(--text-secondary);
+    border: 1px solid rgba(117, 117, 117, 0.3);
+}
+
+/* ===================================
+   Threat Level Badges
+   =================================== */
+.threat-badge {
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.threat-badge--clean {
+    background: rgba(56, 142, 60, 0.15);
+    color: var(--color-success-dark);
+    border: 1px solid rgba(56, 142, 60, 0.3);
+}
+
+.threat-badge--low {
+    background: rgba(251, 192, 45, 0.2);
+    color: var(--color-amber-700);
+    border: 1px solid rgba(251, 192, 45, 0.4);
+}
+
+.threat-badge--medium {
+    background: rgba(245, 124, 0, 0.15);
+    color: var(--color-orange-700);
+    border: 1px solid rgba(245, 124, 0, 0.3);
+}
+
+.threat-badge--high {
+    background: rgba(200, 80, 60, 0.15);
+    color: var(--color-rust);
+    border: 1px solid rgba(200, 80, 60, 0.3);
+}
+
+.threat-badge--critical {
+    background: rgba(183, 28, 28, 0.15);
+    color: var(--color-red-900);
+    border: 1px solid rgba(183, 28, 28, 0.3);
+}
+
+.threat-badge--unknown {
+    background: rgba(117, 117, 117, 0.15);
+    color: var(--text-secondary);
+    border: 1px solid rgba(117, 117, 117, 0.3);
+}
+
+/* ===================================
+   View Details Button
+   =================================== */
+.view-details-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.view-details-btn:hover {
+    background: var(--background);
+    border-color: var(--azure-blue);
+}
+
+/* ===================================
+   Event Detail Modal Overlay
+   =================================== */
+.event-detail-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: eventModalFade 0.15s ease;
+}
+
+@keyframes eventModalFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ===================================
+   Event Detail Modal
+   =================================== */
+.event-detail-modal {
+    background: var(--card-bg, #fff);
+    border-radius: 12px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    width: 100%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: eventModalSlide 0.2s ease;
+}
+
+@keyframes eventModalSlide {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.event-detail-modal-header {
+    padding: 16px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.event-detail-modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.event-detail-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.event-detail-modal-close:hover {
+    background: var(--background);
+    color: var(--text-primary);
+}
+
+.event-detail-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.event-detail-modal-footer {
+    padding: 16px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* ===================================
+   Modal Buttons
+   =================================== */
+.event-modal-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.event-modal-btn.primary {
+    background: var(--azure-blue);
+    color: white;
+    border: none;
+}
+
+.event-modal-btn.primary:hover {
+    background: var(--color-azure-dark-alt);
+}
+
+.event-modal-btn.danger {
+    background: rgba(209, 52, 56, 0.1);
+    color: var(--color-danger);
+    border: 1px solid rgba(209, 52, 56, 0.3);
+}
+
+.event-modal-btn.danger:hover {
+    background: var(--color-danger);
+    color: white;
+}
+
+.event-modal-badge.blocked {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(16, 124, 16, 0.15);
+    color: var(--color-success-dark);
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+/* ===================================
+   Detail Body Content
+   =================================== */
+.block-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Header Section */
+.detail-header-section {
+    background: var(--background);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.detail-ip-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.detail-ip-address {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.detail-meta-row {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 16px;
+}
+
+/* Detail Section */
+.detail-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.detail-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Detail Grid */
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.detail-label {
+    color: var(--text-secondary);
+}
+
+/* Detail Badges */
+.detail-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.detail-badge.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success-light);
+}
+
+.detail-badge.critical {
+    background: rgba(209, 52, 56, 0.15);
+    color: var(--color-danger);
+}
+
+.detail-badge.high {
+    background: rgba(255, 140, 0, 0.15);
+    color: var(--color-orange);
+}
+
+.detail-badge.warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--color-warning-dark);
+}
+
+.detail-badge.moderate {
+    background: rgba(255, 185, 0, 0.15);
+    color: var(--color-warning-dark);
+}
+
+.detail-badge.low {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success-light);
+}
+
+.detail-badge.info {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--azure-blue);
+}
+
+.detail-badge.purple {
+    background: rgba(147, 51, 234, 0.15);
+    color: var(--color-purple-dark);
+}
+
+/* ===================================
+   Threat Intelligence Grid
+   =================================== */
+.threat-intel-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.threat-intel-item {
+    text-align: center;
+}
+
+.threat-intel-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.threat-intel-value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.threat-intel-value.critical {
+    color: var(--color-danger);
+}
+
+.threat-intel-value.high {
+    color: var(--color-orange);
+}
+
+.threat-intel-value.moderate {
+    color: var(--color-warning-dark);
+}
+
+.threat-intel-value.low {
+    color: var(--color-success-light);
+}
+
+.threat-intel-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.threat-intel-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+.threat-intel-bar-fill.critical {
+    background: var(--color-danger);
+}
+
+.threat-intel-bar-fill.high {
+    background: var(--color-orange);
+}
+
+.threat-intel-bar-fill.moderate {
+    background: var(--color-warning-dark);
+}
+
+.threat-intel-bar-fill.low {
+    background: var(--color-success-light);
+}
+
+/* ===================================
+   Behavioral Grid
+   =================================== */
+.behavioral-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.behavioral-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.behavioral-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.behavioral-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ===================================
+   ML Assessment Box
+   =================================== */
+.ml-contribution-box {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.ml-score-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid;
+}
+
+.ml-score-circle.critical {
+    border-color: var(--color-danger);
+    background: rgba(209, 52, 56, 0.1);
+}
+
+.ml-score-circle.high {
+    border-color: var(--color-orange);
+    background: rgba(255, 140, 0, 0.1);
+}
+
+.ml-score-circle.moderate {
+    border-color: var(--color-warning-dark);
+    background: rgba(255, 185, 0, 0.1);
+}
+
+.ml-score-circle.low {
+    border-color: var(--color-success-light);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.ml-score-value {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.ml-score-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.ml-details {
+    flex: 1;
+}
+
+.ml-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.ml-detail-row:last-child {
+    border-bottom: none;
+}
+
+.ml-confidence {
+    font-weight: 600;
+    color: var(--azure-blue);
+}
+
+/* ===================================
+   Justification Box
+   =================================== */
+.justification-box {
+    background: var(--background);
+    border-radius: 6px;
+    padding: 14px;
+}
+
+.justification-reason {
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.justification-meta {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ===================================
+   Success Notification
+   =================================== */
+.block-success-notification {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 16px 24px;
+    background: var(--color-success-dark);
+    color: white;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10001;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* ===================================
+   Responsive Breakpoints
+   =================================== */
+@media (max-width: 768px) {
+    .threat-intel-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .behavioral-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 576px) {
+    /* Bottom sheet modal for mobile */
+    .event-detail-modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .event-detail-modal {
+        max-width: 100%;
+        max-height: 90vh;
+        margin: 0;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+        animation: slideUpModal 0.25s ease;
+    }
+
+    @keyframes slideUpModal {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    .event-detail-modal-header {
+        padding: 20px 16px 16px;
+        position: relative;
+    }
+
+    .event-detail-modal-header::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+    }
+
+    .event-detail-modal-body {
+        padding: 16px;
+        max-height: calc(90vh - 160px);
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .event-detail-modal-footer {
+        padding: 16px;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        flex-direction: column;
+    }
+
+    .event-detail-modal-footer .event-modal-btn {
+        width: 100%;
+        padding: 14px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+
+    .ml-contribution-box {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .threat-intel-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .behavioral-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .detail-section {
+        padding: 12px;
+    }
+
+    .detail-header-section {
+        padding: 12px;
+    }
+
+    .detail-ip-address {
+        font-size: 16px;
+    }
+
+    .detail-meta-row {
+        flex-direction: column;
+        gap: 4px;
+    }
+}
