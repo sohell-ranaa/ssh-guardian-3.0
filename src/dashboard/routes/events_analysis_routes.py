@@ -491,10 +491,10 @@ def get_event_detail(event_id):
                 e.failure_reason,
                 e.raw_log_line,
                 e.created_at,
-                ml.risk_score as ml_risk_score,
-                ml.threat_type as ml_threat_type,
-                ml.confidence as ml_confidence,
-                ml.is_anomaly,
+                COALESCE(e.ml_risk_score, ml.risk_score) as ml_risk_score,
+                COALESCE(e.ml_threat_type, ml.threat_type) as ml_threat_type,
+                COALESCE(e.ml_confidence, ml.confidence) as ml_confidence,
+                COALESCE(e.is_anomaly, ml.is_anomaly) as is_anomaly,
                 ml.was_blocked,
                 g.country_name,
                 g.country_code,
@@ -525,11 +525,15 @@ def get_event_detail(event_id):
             if event.get(field) is not None:
                 event[field] = float(event[field])
 
-        # ML fields need to be converted to 0-100 scale for display
+        # ML fields: confidence is always 0-1, risk_score varies by source
+        # auth_events stores risk_score as 0-100, auth_events_ml stores as 0-1
         if event.get('ml_confidence') is not None:
-            event['ml_confidence'] = round(float(event['ml_confidence']) * 100, 1)
+            val = float(event['ml_confidence'])
+            event['ml_confidence'] = round(val * 100, 1) if val <= 1 else round(val, 1)
         if event.get('ml_risk_score') is not None:
-            event['ml_risk_score'] = round(float(event['ml_risk_score']) * 100, 1)
+            val = float(event['ml_risk_score'])
+            # Only multiply if value is 0-1 scale (from auth_events_ml)
+            event['ml_risk_score'] = round(val * 100, 1) if val <= 1 else round(val, 1)
 
         # Get related events
         cursor.execute("""
