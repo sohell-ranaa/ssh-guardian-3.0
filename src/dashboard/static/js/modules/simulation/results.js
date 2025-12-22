@@ -79,7 +79,10 @@
                 blockingDecision.classList.add('sim-decision-box--blocked');
                 this._setText('sim-block-icon', '🚫');
                 this._setText('sim-block-action', `IP Blocked via ${data.blocked_by || 'SSH Guardian'}`);
-                this._setText('sim-block-reason', `Block ID: #${data.block_id || 'N/A'} | Source: ${data.block_source || 'auto'}`);
+
+                // Fetch detailed block reason
+                const blockReason = await this._fetchBlockReason(data.ip, data.block_id);
+                this._setText('sim-block-reason', blockReason);
             } else if (data.detected) {
                 blockingDecision.classList.add('sim-decision-box--detected');
                 this._setText('sim-block-icon', '⚠️');
@@ -121,6 +124,45 @@
             if (threatIntel.virustotal_positives > 0) factors.push('VirusTotal Flagged');
             if (data.events_detected > 5) factors.push(`${data.events_detected} Events`);
             return factors;
+        },
+
+        async _fetchBlockReason(ip, blockId) {
+            try {
+                // First try to get from events-analysis API (has ml_decision)
+                const eventsUrl = `/api/dashboard/events/by-ip?ip=${encodeURIComponent(ip)}&page=1&page_size=1&time_range=30d`;
+                const eventsRes = await fetch(eventsUrl);
+                const eventsData = await eventsRes.json();
+
+                if (eventsData.success && eventsData.events?.length) {
+                    const eventId = eventsData.events[0].id;
+                    const detailUrl = `/api/dashboard/events-analysis/${eventId}`;
+                    const detailRes = await fetch(detailUrl);
+                    const detailData = await detailRes.json();
+
+                    if (detailData.success && detailData.data) {
+                        const { block_info, ml_decision } = detailData.data;
+
+                        if (block_info?.block_reason) {
+                            // Build detailed explanation
+                            let reason = block_info.block_reason;
+
+                            // Add ML decision factors if available
+                            if (ml_decision?.factors?.length) {
+                                const factorList = ml_decision.factors.map(f => `${f.label}: ${f.value}`).join(', ');
+                                reason += ` | Factors: ${factorList}`;
+                            }
+
+                            return reason;
+                        }
+                    }
+                }
+
+                // Fallback to basic info
+                return `Block ID: #${blockId || 'N/A'} | Triggered by ML threshold`;
+            } catch (e) {
+                console.error('Error fetching block reason:', e);
+                return `Block ID: #${blockId || 'N/A'}`;
+            }
         }
     };
 })();
