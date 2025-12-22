@@ -276,7 +276,93 @@ const EV = {
                     <div class="m-intel-item"><div class="src">ML</div><div class="score" style="color:${risk > 60 ? '#dc2626' : '#16a34a'}">${Math.round(risk)}</div><div class="det">Behavior</div></div>
                 </div>
             </div>
+            <div class="m-sec"><h4>ML Decision</h4><div id="mDecision" class="m-decision">Loading...</div></div>
             <div class="m-sec"><h4>Recommendations</h4><div class="m-recs">${this.genRecs(d)}</div></div>`;
+
+        // Fetch ML decision from API
+        this.fetchMLDecision();
+    },
+
+    async fetchMLDecision() {
+        const decDiv = document.getElementById('mDecision');
+        if (!decDiv) return;
+
+        try {
+            // Find most recent event for this IP
+            const url = `/api/dashboard/events/by-ip?ip=${encodeURIComponent(this.mIP)}&page=1&page_size=1&time_range=30d`;
+            const r = await fetch(url);
+            const d = await r.json();
+
+            if (!d.success || !d.events?.length) {
+                decDiv.innerHTML = '<div class="m-dec-empty">No event data available</div>';
+                return;
+            }
+
+            const eventId = d.events[0].id;
+            const detailUrl = `/api/dashboard/events-analysis/${eventId}`;
+            const detailR = await fetch(detailUrl);
+            const detailD = await detailR.json();
+
+            if (!detailD.success) {
+                decDiv.innerHTML = '<div class="m-dec-empty">Could not load decision data</div>';
+                return;
+            }
+
+            const { ml_decision, block_info } = detailD.data;
+            let html = '';
+
+            // Show block info if blocked
+            if (block_info?.is_blocked) {
+                const blockColor = block_info.is_active ? '#dc2626' : '#6b7280';
+                html += `
+                    <div class="m-dec-block" style="background:${blockColor}15;border:1px solid ${blockColor}40;border-radius:6px;padding:10px;margin-bottom:10px">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                            <span style="font-size:16px">🚫</span>
+                            <strong style="color:${blockColor}">IP BLOCKED</strong>
+                            <span class="c-tag" style="background:${blockColor};color:white;padding:2px 6px;border-radius:3px;font-size:10px">${block_info.block_source}</span>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-secondary)">${this.esc(block_info.block_reason)}</div>
+                    </div>`;
+            }
+
+            // Show ML decision
+            if (ml_decision) {
+                const decColors = {
+                    block_permanent: '#991b1b',
+                    block_temporary: '#dc2626',
+                    monitor: '#d97706',
+                    allow: '#16a34a'
+                };
+                const decColor = decColors[ml_decision.decision] || '#6b7280';
+                const decIcon = ml_decision.decision.includes('block') ? '🛡️' : ml_decision.decision === 'monitor' ? '👁️' : '✅';
+
+                html += `
+                    <div class="m-dec-main" style="background:${decColor}10;border:1px solid ${decColor}30;border-radius:6px;padding:10px">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                            <span style="font-size:16px">${decIcon}</span>
+                            <strong style="color:${decColor}">${ml_decision.decision_text}</strong>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">${ml_decision.reason}</div>
+                        ${ml_decision.factors?.length ? `
+                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px">CONTRIBUTING FACTORS:</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px">
+                                ${ml_decision.factors.map(f => {
+                                    const impactColors = { critical: '#991b1b', high: '#dc2626', medium: '#d97706', low: '#16a34a' };
+                                    const ic = impactColors[f.impact] || '#6b7280';
+                                    return `<span class="m-factor" style="background:${ic}15;border:1px solid ${ic}30;padding:4px 8px;border-radius:4px;font-size:11px">
+                                        <strong style="color:${ic}">${f.label}:</strong> ${f.value}
+                                    </span>`;
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                    </div>`;
+            }
+
+            decDiv.innerHTML = html || '<div class="m-dec-empty">No decision data</div>';
+        } catch (e) {
+            console.error('Error fetching ML decision:', e);
+            decDiv.innerHTML = '<div class="m-dec-empty">Error loading decision</div>';
+        }
     },
 
     // ==================== HISTORY LOADER ====================

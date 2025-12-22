@@ -553,9 +553,99 @@ def get_event_detail(event_id):
             if rel_event.get('ml_risk_score'):
                 rel_event['ml_risk_score'] = round(float(rel_event['ml_risk_score']) * 100, 1)
 
+        # Get block info if IP was blocked
+        block_info = None
+        cursor.execute("""
+            SELECT
+                id, block_source, block_reason, risk_score, threat_level,
+                trigger_event_id, blocked_at, is_active
+            FROM ip_blocks
+            WHERE ip_address_text = %s
+            ORDER BY blocked_at DESC
+            LIMIT 1
+        """, (event['source_ip_text'],))
+        block_record = cursor.fetchone()
+
+        if block_record:
+            block_info = {
+                'is_blocked': True,
+                'block_source': block_record['block_source'],
+                'block_reason': block_record['block_reason'],
+                'risk_score': block_record['risk_score'],
+                'threat_level': block_record['threat_level'],
+                'triggered_by_event': block_record['trigger_event_id'] == event_id,
+                'blocked_at': block_record['blocked_at'].isoformat() if block_record['blocked_at'] else None,
+                'is_active': bool(block_record['is_active'])
+            }
+
+        # Build ML decision explanation
+        ml_decision = None
+        if event.get('ml_risk_score') is not None:
+            risk = event['ml_risk_score']
+            conf = event.get('ml_confidence', 0)
+            threat_type = event.get('ml_threat_type', '')
+            is_anomaly = event.get('is_anomaly', 0)
+
+            # Determine decision based on thresholds
+            if risk >= 80:
+                decision = 'block_permanent'
+                decision_text = 'Block permanently via UFW'
+                reason = f'Critical risk score ({risk}) exceeds blocking threshold (80)'
+            elif risk >= 60:
+                decision = 'block_temporary'
+                decision_text = 'Block temporarily via Fail2ban (48h)'
+                reason = f'High risk score ({risk}) exceeds temporary block threshold (60)'
+            elif risk >= 40:
+                decision = 'monitor'
+                decision_text = 'Monitor closely'
+                reason = f'Medium risk score ({risk}) - requires monitoring'
+            else:
+                decision = 'allow'
+                decision_text = 'Allow - low risk'
+                reason = f'Risk score ({risk}) below monitoring threshold'
+
+            ml_decision = {
+                'decision': decision,
+                'decision_text': decision_text,
+                'reason': reason,
+                'factors': []
+            }
+
+            # Add contributing factors
+            if threat_type:
+                ml_decision['factors'].append({
+                    'type': 'threat_type',
+                    'label': 'Threat Classification',
+                    'value': threat_type.replace('_', ' ').title(),
+                    'impact': 'high' if 'critical' in threat_type or 'suspicious' in threat_type else 'medium'
+                })
+            if is_anomaly:
+                ml_decision['factors'].append({
+                    'type': 'anomaly',
+                    'label': 'Behavioral Anomaly',
+                    'value': 'Detected',
+                    'impact': 'high'
+                })
+            if event.get('abuseipdb_score') and event['abuseipdb_score'] >= 50:
+                ml_decision['factors'].append({
+                    'type': 'abuseipdb',
+                    'label': 'AbuseIPDB Score',
+                    'value': f"{event['abuseipdb_score']}%",
+                    'impact': 'critical' if event['abuseipdb_score'] >= 80 else 'high'
+                })
+            if event.get('country_code') in ['CN', 'RU', 'KP', 'IR']:
+                ml_decision['factors'].append({
+                    'type': 'geo_risk',
+                    'label': 'High-Risk Country',
+                    'value': event.get('country_name', event['country_code']),
+                    'impact': 'medium'
+                })
+
         data = {
             'event': event,
-            'related_events': related_events
+            'related_events': related_events,
+            'block_info': block_info,
+            'ml_decision': ml_decision
         }
 
         cache.set(cache_k, data, EVENTS_DETAIL_TTL)
