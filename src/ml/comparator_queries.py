@@ -1,6 +1,7 @@
 """
 SSH Guardian v3.0 - Optimized Query Functions for ML Comparator
 Contains optimized database queries using window functions and batching
+Updated for v3.1: Uses auth_events_ml instead of auth_events_ml
 """
 
 from typing import Dict, Any, List, Tuple
@@ -15,14 +16,14 @@ def get_ml_stats_optimized(cursor, start_date: datetime) -> Dict[str, Any]:
     # Batch query 1: Get prediction stats, blocks, and high-risk events in one query
     cursor.execute("""
         SELECT
-            (SELECT COUNT(*) FROM ml_predictions WHERE created_at >= %s) as total_predictions,
+            (SELECT COUNT(*) FROM auth_events_ml WHERE created_at >= %s) as total_predictions,
             (SELECT SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END)
-             FROM ml_predictions WHERE created_at >= %s) as anomalies_detected,
-            (SELECT AVG(risk_score) FROM ml_predictions WHERE created_at >= %s) as avg_risk_score,
-            (SELECT AVG(confidence) FROM ml_predictions WHERE created_at >= %s) as avg_confidence,
+             FROM auth_events_ml WHERE created_at >= %s) as anomalies_detected,
+            (SELECT AVG(risk_score) FROM auth_events_ml WHERE created_at >= %s) as avg_risk_score,
+            (SELECT AVG(confidence) FROM auth_events_ml WHERE created_at >= %s) as avg_confidence,
             (SELECT COUNT(*) FROM ip_blocks
              WHERE created_at >= %s AND block_source = 'ml_threshold') as ml_blocks,
-            (SELECT COUNT(*) FROM ml_predictions
+            (SELECT COUNT(*) FROM auth_events_ml
              WHERE created_at >= %s AND risk_score >= 70) as high_risk_events
     """, (start_date, start_date, start_date, start_date, start_date, start_date))
 
@@ -34,7 +35,7 @@ def get_ml_stats_optimized(cursor, start_date: datetime) -> Dict[str, Any]:
             threat_type,
             COUNT(*) as count,
             AVG(risk_score) as avg_risk
-        FROM ml_predictions
+        FROM auth_events_ml
         WHERE created_at >= %s AND threat_type IS NOT NULL
         GROUP BY threat_type
         ORDER BY count DESC
@@ -52,7 +53,7 @@ def get_ml_stats_optimized(cursor, start_date: datetime) -> Dict[str, Any]:
                     PARTITION BY e.source_ip_text
                     ORDER BY e.timestamp
                 ) as attempt_number
-            FROM ml_predictions p
+            FROM auth_events_ml p
             JOIN auth_events e ON p.event_id = e.id
             WHERE p.created_at >= %s
             AND p.is_anomaly = 1
@@ -168,7 +169,7 @@ def get_detection_cases_batched(cursor, start_date: datetime, limit: int = 10) -
             p.id, p.event_id, p.risk_score, p.threat_type, p.confidence,
             e.source_ip_text, e.target_username, e.timestamp,
             NULL as ip_count, NULL as avg_risk
-        FROM ml_predictions p
+        FROM auth_events_ml p
         JOIN auth_events e ON p.event_id = e.id
         WHERE p.created_at >= %s
         AND p.is_anomaly = 1
@@ -186,7 +187,7 @@ def get_detection_cases_batched(cursor, start_date: datetime, limit: int = 10) -
             MIN(e.timestamp) as timestamp,
             COUNT(DISTINCT e.source_ip_text) as ip_count,
             AVG(p.risk_score) as avg_risk
-        FROM ml_predictions p
+        FROM auth_events_ml p
         JOIN auth_events e ON p.event_id = e.id
         WHERE p.created_at >= %s
         AND p.is_anomaly = 1
@@ -234,7 +235,7 @@ def get_daily_stats_batched(cursor, start_date: datetime) -> List[Dict]:
             COUNT(*) as total_predictions,
             SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as ml_detections,
             AVG(risk_score) as avg_risk_score
-        FROM ml_predictions
+        FROM auth_events_ml
         WHERE created_at >= %s
         GROUP BY DATE(created_at)
         ORDER BY stat_date DESC
@@ -266,7 +267,7 @@ def get_daily_stats_batched(cursor, start_date: datetime) -> List[Dict]:
         ev = event_stats.get(date, {})
         daily_stats.append({
             'date': str(date),
-            'ml_predictions': int(ml.get('total_predictions') or 0),
+            'auth_events_ml': int(ml.get('total_predictions') or 0),
             'ml_detections': int(ml.get('ml_detections') or 0),
             'avg_risk_score': float(ml.get('avg_risk_score') or 0),
             'total_events': int(ev.get('total_events') or 0),
@@ -283,7 +284,7 @@ def _get_daily_stats_batched_old(cursor, start_date: datetime) -> List[Dict]:
     cursor.execute("""
         SELECT
             COALESCE(ml_dates.stat_date, event_dates.stat_date) as date,
-            COALESCE(ml_dates.total_predictions, 0) as ml_predictions,
+            COALESCE(ml_dates.total_predictions, 0) as auth_events_ml,
             COALESCE(ml_dates.ml_detections, 0) as ml_detections,
             COALESCE(ml_dates.avg_risk_score, 0) as avg_risk_score,
             COALESCE(event_dates.total_events, 0) as total_events,
@@ -294,7 +295,7 @@ def _get_daily_stats_batched_old(cursor, start_date: datetime) -> List[Dict]:
                 COUNT(*) as total_predictions,
                 SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as ml_detections,
                 AVG(risk_score) as avg_risk_score
-            FROM ml_predictions
+            FROM auth_events_ml
             WHERE created_at >= %s
             GROUP BY DATE(created_at)
         ) as ml_dates
@@ -313,7 +314,7 @@ def _get_daily_stats_batched_old(cursor, start_date: datetime) -> List[Dict]:
 
         SELECT
             COALESCE(ml_dates.stat_date, event_dates.stat_date) as date,
-            COALESCE(ml_dates.total_predictions, 0) as ml_predictions,
+            COALESCE(ml_dates.total_predictions, 0) as auth_events_ml,
             COALESCE(ml_dates.ml_detections, 0) as ml_detections,
             COALESCE(ml_dates.avg_risk_score, 0) as avg_risk_score,
             COALESCE(event_dates.total_events, 0) as total_events,
@@ -333,7 +334,7 @@ def _get_daily_stats_batched_old(cursor, start_date: datetime) -> List[Dict]:
                 COUNT(*) as total_predictions,
                 SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as ml_detections,
                 AVG(risk_score) as avg_risk_score
-            FROM ml_predictions
+            FROM auth_events_ml
             WHERE created_at >= %s
             GROUP BY DATE(created_at)
         ) as ml_dates
@@ -348,7 +349,7 @@ def _get_daily_stats_batched_old(cursor, start_date: datetime) -> List[Dict]:
     for row in cursor.fetchall():
         daily_stats.append({
             'date': str(row['date']),
-            'ml_predictions': int(row['ml_predictions']),
+            'auth_events_ml': int(row['auth_events_ml']),
             'ml_detections': int(row['ml_detections']),
             'avg_risk_score': float(row['avg_risk_score']),
             'total_events': int(row['total_events']),
@@ -366,12 +367,12 @@ def get_benefits_stats_batched(cursor, start_date: datetime) -> Tuple[Dict, Dict
     # Batch 1: Summary stats, blocks, and model info
     cursor.execute("""
         SELECT
-            (SELECT COUNT(*) FROM ml_predictions WHERE created_at >= %s) as total_predictions,
+            (SELECT COUNT(*) FROM auth_events_ml WHERE created_at >= %s) as total_predictions,
             (SELECT SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END)
-             FROM ml_predictions WHERE created_at >= %s) as threats_detected,
+             FROM auth_events_ml WHERE created_at >= %s) as threats_detected,
             (SELECT SUM(CASE WHEN risk_score >= 70 THEN 1 ELSE 0 END)
-             FROM ml_predictions WHERE created_at >= %s) as high_risk_events,
-            (SELECT AVG(confidence) FROM ml_predictions WHERE created_at >= %s) as avg_confidence,
+             FROM auth_events_ml WHERE created_at >= %s) as high_risk_events,
+            (SELECT AVG(confidence) FROM auth_events_ml WHERE created_at >= %s) as avg_confidence,
             (SELECT COUNT(*) FROM ip_blocks
              WHERE created_at >= %s AND block_source = 'ml_threshold') as ml_blocks
     """, (start_date, start_date, start_date, start_date, start_date))
@@ -379,7 +380,7 @@ def get_benefits_stats_batched(cursor, start_date: datetime) -> Tuple[Dict, Dict
 
     # Batch 2: Active model info
     cursor.execute("""
-        SELECT model_name, algorithm, f1_score, accuracy, predictions_made
+        SELECT model_name, algorithm, f1_score, accuracy, predictions_count
         FROM ml_models
         WHERE is_active = TRUE
         LIMIT 1
@@ -391,7 +392,7 @@ def get_benefits_stats_batched(cursor, start_date: datetime) -> Tuple[Dict, Dict
         SELECT
             threat_type,
             COUNT(*) as count
-        FROM ml_predictions
+        FROM auth_events_ml
         WHERE created_at >= %s AND threat_type IS NOT NULL
         GROUP BY threat_type
         ORDER BY count DESC
@@ -404,7 +405,7 @@ def get_benefits_stats_batched(cursor, start_date: datetime) -> Tuple[Dict, Dict
             DATE(created_at) as date,
             COUNT(*) as predictions,
             SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) as detections
-        FROM ml_predictions
+        FROM auth_events_ml
         WHERE created_at >= %s
         GROUP BY DATE(created_at)
         ORDER BY date

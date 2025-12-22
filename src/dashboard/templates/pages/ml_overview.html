@@ -1,4 +1,4 @@
-<!-- SSH Guardian v3.0 - ML Intelligence Overview Page -->
+<!-- SSH Guardian v3.0 - ML Intelligence Overview Page (Complete) -->
 <div id="page-ml-overview" class="page-content" style="display: none;">
     <div class="page-header-with-cache">
         <div>
@@ -6,243 +6,665 @@
                 ML Intelligence Overview
             </h2>
             <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">
-                Machine learning predictions and threat detection summary
+                Model performance, training iterations, and predictions
             </p>
-        </div>
-        <div class="page-header-actions">
-            <button class="refresh-btn" onclick="loadMLOverview()">
-                <span class="refresh-icon">↻</span> Refresh
-            </button>
         </div>
     </div>
 
-    <!-- Today's Stats Cards -->
-    <div class="ml-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px;">
-        <div class="card stat-card" style="padding: 20px; text-align: center;">
-            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Predictions Today</div>
-            <div style="font-size: 28px; font-weight: 600; color: var(--azure-blue);" id="ml-predictions-today">-</div>
+    <!-- Stats Cards Row -->
+    <div class="ml-stats-grid">
+        <div class="ml-stat-card">
+            <div class="ml-stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">📊</div>
+            <div class="ml-stat-content">
+                <div class="ml-stat-value" id="ml-predictions-today">-</div>
+                <div class="ml-stat-label">Today's Predictions</div>
+            </div>
         </div>
-        <div class="card stat-card" style="padding: 20px; text-align: center;">
-            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Anomalies Detected</div>
-            <div style="font-size: 28px; font-weight: 600; color: #E6A502;" id="ml-anomalies-today">-</div>
+        <div class="ml-stat-card">
+            <div class="ml-stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">⚠️</div>
+            <div class="ml-stat-content">
+                <div class="ml-stat-value" id="ml-anomalies-today">-</div>
+                <div class="ml-stat-label">Anomalies Detected</div>
+            </div>
         </div>
-        <div class="card stat-card" style="padding: 20px; text-align: center;">
-            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">High Risk Events</div>
-            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="ml-high-risk-today">-</div>
+        <div class="ml-stat-card">
+            <div class="ml-stat-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">🚨</div>
+            <div class="ml-stat-content">
+                <div class="ml-stat-value" id="ml-high-risk-today">-</div>
+                <div class="ml-stat-label">High Risk Events</div>
+            </div>
         </div>
-        <div class="card stat-card" style="padding: 20px; text-align: center;">
-            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Avg Risk Score</div>
-            <div style="font-size: 28px; font-weight: 600; color: var(--text-primary);" id="ml-avg-risk-today">-</div>
-        </div>
-        <div class="card stat-card" style="padding: 20px; text-align: center;">
-            <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">ML Blocks</div>
-            <div style="font-size: 28px; font-weight: 600; color: #D13438;" id="ml-blocks-today">-</div>
+        <div class="ml-stat-card">
+            <div class="ml-stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">🛡️</div>
+            <div class="ml-stat-content">
+                <div class="ml-stat-value" id="ml-blocks-today">-</div>
+                <div class="ml-stat-label">ML Blocks</div>
+            </div>
         </div>
     </div>
 
     <!-- Active Model Card -->
+    <div class="card ml-active-model-card">
+        <div class="ml-active-model-header">
+            <div>
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Active Production Model</h3>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-secondary);" id="ml-model-name">Loading...</p>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button onclick="viewActiveModelDetails()" class="ml-view-btn" id="view-active-model-btn" style="display: none;">View Details</button>
+                <span class="ml-production-badge">PRODUCTION</span>
+            </div>
+        </div>
+        <div class="ml-active-model-metrics" id="ml-active-model-metrics">
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-accuracy">-</div>
+                <div class="ml-metric-label">Accuracy</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-precision">-</div>
+                <div class="ml-metric-label">Precision</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-recall">-</div>
+                <div class="ml-metric-label">Recall</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-f1">-</div>
+                <div class="ml-metric-label">F1 Score</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-auc">-</div>
+                <div class="ml-metric-label">ROC AUC</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-specificity">-</div>
+                <div class="ml-metric-label">Specificity</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-mcc">-</div>
+                <div class="ml-metric-label">MCC</div>
+            </div>
+            <div class="ml-metric-item">
+                <div class="ml-metric-value" id="ml-model-predictions">-</div>
+                <div class="ml-metric-label">Predictions</div>
+            </div>
+        </div>
+        <!-- Confusion Matrix Preview -->
+        <div id="ml-active-confusion-preview" style="margin-top: 16px; display: none;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Confusion Matrix</div>
+            <div id="ml-active-cm-grid" class="ml-cm-preview"></div>
+        </div>
+    </div>
+
+    <!-- Training Data Summary -->
     <div class="card" style="padding: 20px; margin-bottom: 24px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Active Model</h3>
-        <div id="ml-active-model-info">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Model Name</div>
-                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); word-break: break-all;" id="ml-model-name">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Algorithm</div>
-                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-model-algorithm">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Accuracy</div>
-                    <div style="font-size: 14px; font-weight: 600; color: #2EA44F;" id="ml-model-accuracy">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">F1 Score</div>
-                    <div style="font-size: 14px; font-weight: 600; color: #2EA44F;" id="ml-model-f1">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total Predictions</div>
-                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="ml-model-predictions">-</div>
-                </div>
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">Training Data Summary</h3>
+        <div class="ml-training-summary">
+            <div class="ml-training-stat">
+                <div class="ml-training-stat-value" id="stats-total-events">-</div>
+                <div class="ml-training-stat-label">Total Events</div>
+            </div>
+            <div class="ml-training-stat">
+                <div class="ml-training-stat-value" id="stats-training-samples">-</div>
+                <div class="ml-training-stat-label">Training Samples</div>
+            </div>
+            <div class="ml-training-stat">
+                <div class="ml-training-stat-value" id="stats-testing-samples">-</div>
+                <div class="ml-training-stat-label">Test Samples</div>
+            </div>
+            <div class="ml-training-stat">
+                <div class="ml-training-stat-value" id="stats-benign-count">-</div>
+                <div class="ml-training-stat-label">Benign</div>
+            </div>
+            <div class="ml-training-stat">
+                <div class="ml-training-stat-value" id="stats-malicious-count">-</div>
+                <div class="ml-training-stat-label">Malicious</div>
+            </div>
+            <div class="ml-training-stat">
+                <div class="ml-training-stat-value" id="stats-iterations">-</div>
+                <div class="ml-training-stat-label">Training Runs</div>
             </div>
         </div>
     </div>
 
-    <!-- Week Stats & Model Count -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
-        <div class="card" style="padding: 20px;">
-            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">This Week</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total Predictions</div>
-                    <div style="font-size: 24px; font-weight: 600; color: var(--azure-blue);" id="ml-predictions-week">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Anomalies</div>
-                    <div style="font-size: 24px; font-weight: 600; color: #E6A502;" id="ml-anomalies-week">-</div>
-                </div>
-            </div>
-        </div>
-        <div class="card" style="padding: 20px;">
-            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Models Status</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total</div>
-                    <div style="font-size: 24px; font-weight: 600; color: var(--text-primary);" id="ml-models-total">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Production</div>
-                    <div style="font-size: 24px; font-weight: 600; color: #2EA44F;" id="ml-models-production">-</div>
-                </div>
-                <div>
-                    <div style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Candidate</div>
-                    <div style="font-size: 24px; font-weight: 600; color: var(--azure-blue);" id="ml-models-candidate">-</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Threat Types Breakdown -->
+    <!-- All Trained Models Table -->
     <div class="card" style="padding: 20px; margin-bottom: 24px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Threat Types (Today)</h3>
-        <div id="ml-threat-types-container">
-            <div style="color: var(--text-secondary); font-size: 13px; padding: 12px 0;">Loading...</div>
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">All Trained Models</h3>
+        <div class="table-wrapper">
+            <table class="ml-models-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Model</th>
+                        <th style="text-align: center;">Algorithm</th>
+                        <th style="text-align: center;">Accuracy</th>
+                        <th style="text-align: center;">Precision</th>
+                        <th style="text-align: center;">Recall</th>
+                        <th style="text-align: center;">F1 Score</th>
+                        <th style="text-align: center;">AUC</th>
+                        <th style="text-align: center;">Status</th>
+                        <th style="text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="ml-models-table-body">
+                    <tr><td colspan="9" style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Predictions Timeline Chart -->
-    <div class="card" style="padding: 20px;">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">Predictions Timeline (7 Days)</h3>
-        <div id="ml-timeline-chart" style="min-height: 220px;">
-            <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-secondary); font-size: 13px;">
-                Loading timeline...
+    <!-- Model Details Modal (shown when View clicked) -->
+    <div id="ml-model-details-modal" class="ml-modal" style="display: none;">
+        <div class="ml-modal-content">
+            <div class="ml-modal-header">
+                <h3 id="modal-model-name">Model Details</h3>
+                <button onclick="closeModelModal()" class="ml-modal-close">&times;</button>
+            </div>
+            <div class="ml-modal-body">
+                <!-- Metrics Grid -->
+                <div class="ml-detail-section">
+                    <h4>Performance Metrics</h4>
+                    <div class="ml-metrics-grid">
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-accuracy">-</div>
+                            <div class="ml-metric-box-label">Accuracy</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-precision">-</div>
+                            <div class="ml-metric-box-label">Precision</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-recall">-</div>
+                            <div class="ml-metric-box-label">Recall</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-f1">-</div>
+                            <div class="ml-metric-box-label">F1 Score</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-auc">-</div>
+                            <div class="ml-metric-box-label">ROC AUC</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-specificity">-</div>
+                            <div class="ml-metric-box-label">Specificity</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-balanced-acc">-</div>
+                            <div class="ml-metric-box-label">Balanced Acc</div>
+                        </div>
+                        <div class="ml-metric-box">
+                            <div class="ml-metric-box-value" id="modal-mcc">-</div>
+                            <div class="ml-metric-box-label">MCC</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cross-Validation Scores -->
+                <div class="ml-detail-section">
+                    <h4>Cross-Validation Scores</h4>
+                    <div id="modal-cv-scores" class="ml-cv-container"></div>
+                </div>
+
+                <!-- Confusion Matrix -->
+                <div class="ml-detail-section">
+                    <h4>Confusion Matrix</h4>
+                    <div id="modal-confusion-matrix" class="ml-confusion-container"></div>
+                </div>
+
+                <!-- Feature Importance (Top 10) -->
+                <div class="ml-detail-section">
+                    <h4>Top Feature Importance</h4>
+                    <div id="modal-feature-importance" class="ml-feature-importance"></div>
+                </div>
+
+                <!-- Hyperparameters -->
+                <div class="ml-detail-section">
+                    <h4>Hyperparameters</h4>
+                    <div id="modal-hyperparameters" class="ml-hyperparams"></div>
+                </div>
+
+                <!-- Training Info -->
+                <div class="ml-detail-section">
+                    <h4>Training Information</h4>
+                    <div id="modal-training-info" class="ml-training-info-grid"></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-/* ML Overview Page Styles */
-#page-ml-overview .stat-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* Stats Grid */
+.ml-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
 }
+@media (max-width: 1200px) { .ml-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .ml-stats-grid { grid-template-columns: 1fr; } }
 
-#page-ml-overview .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Timeline Chart Styles */
-.ml-timeline-bar-container {
+.ml-stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
     display: flex;
-    align-items: flex-end;
-    justify-content: space-around;
-    height: 160px;
-    padding: 0 10px;
-    gap: 8px;
-}
-
-.ml-timeline-bar-item {
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    flex: 1;
-    max-width: 70px;
-    min-width: 50px;
+    gap: 16px;
 }
-
-.ml-timeline-bars {
+.ml-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
     display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 140px;
-}
-
-.ml-timeline-bar {
-    width: 24px;
-    border-radius: 4px 4px 0 0;
-    transition: height 0.3s ease;
-    min-height: 4px;
-}
-
-.ml-timeline-bar.predictions {
-    background: linear-gradient(180deg, var(--azure-blue) 0%, #005a9e 100%);
-}
-
-.ml-timeline-bar.anomalies {
-    background: linear-gradient(180deg, #E6A502 0%, #b8860b 100%);
-    width: 18px;
-}
-
-.ml-timeline-label {
-    font-size: 10px;
-    color: var(--text-secondary);
-    margin-top: 6px;
-    white-space: nowrap;
-}
-
-.ml-timeline-value {
-    font-size: 10px;
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.ml-timeline-legend {
-    display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 24px;
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
+    font-size: 24px;
 }
-
-.ml-timeline-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.ml-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.ml-stat-label {
     font-size: 12px;
     color: var(--text-secondary);
+    margin-top: 2px;
 }
 
-.ml-timeline-legend-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
+/* Active Model Card */
+.ml-active-model-card {
+    padding: 20px;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(59, 130, 246, 0.05));
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.ml-active-model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+.ml-production-badge {
+    background: #10b981;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.ml-active-model-metrics {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 12px;
+}
+@media (max-width: 1200px) { .ml-active-model-metrics { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 600px) { .ml-active-model-metrics { grid-template-columns: repeat(2, 1fr); } }
+
+/* Confusion Matrix Preview (compact) */
+.ml-cm-preview {
+    display: inline-grid;
+    grid-template-columns: repeat(4, auto);
+    gap: 4px;
+    font-size: 11px;
+}
+.ml-cm-preview-cell {
+    padding: 8px 12px;
+    border-radius: 4px;
+    text-align: center;
+}
+.ml-cm-preview-cell.header {
+    background: var(--background);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.ml-cm-preview-cell.tn, .ml-cm-preview-cell.tp {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    font-weight: 700;
+}
+.ml-cm-preview-cell.fp, .ml-cm-preview-cell.fn {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    font-weight: 700;
 }
 
-/* Threat type row styles */
-.threat-type-row {
+.ml-metric-item {
+    text-align: center;
+    padding: 12px;
+    background: var(--card-bg);
+    border-radius: 8px;
+}
+.ml-metric-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #10b981;
+}
+.ml-metric-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Training Summary */
+.ml-training-summary {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 16px;
+}
+@media (max-width: 1200px) { .ml-training-summary { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .ml-training-summary { grid-template-columns: repeat(2, 1fr); } }
+
+.ml-training-stat {
+    text-align: center;
+    padding: 16px;
+    background: var(--background);
+    border-radius: 8px;
+}
+.ml-training-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.ml-training-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Models Table */
+.ml-models-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.ml-models-table th {
+    padding: 12px 8px;
+    background: var(--background);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+.ml-models-table td {
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--border);
+}
+.ml-models-table tr:hover {
+    background: var(--background);
+}
+.ml-model-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.ml-model-date {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.ml-algo-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+.ml-algo-badge.rf { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+.ml-algo-badge.xgb { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.ml-algo-badge.lgb { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+
+.ml-metric-cell {
+    font-weight: 600;
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+.ml-metric-cell.good { color: #10b981; }
+.ml-metric-cell.ok { color: #f59e0b; }
+.ml-metric-cell.bad { color: #ef4444; }
+
+.ml-status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+}
+.ml-status-badge.production { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.ml-status-badge.candidate { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.ml-status-badge.deprecated { background: rgba(107, 114, 128, 0.15); color: #6b7280; }
+
+.ml-view-btn {
+    padding: 6px 12px;
+    background: var(--azure-blue);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.ml-view-btn:hover { background: #005a9e; }
+
+/* Modal */
+.ml-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.ml-modal-content {
+    background: var(--card-bg);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.ml-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0;
+    padding: 20px;
     border-bottom: 1px solid var(--border);
 }
+.ml-modal-header h3 { margin: 0; font-size: 18px; }
+.ml-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+.ml-modal-body { padding: 20px; }
 
-.threat-type-row:last-child {
-    border-bottom: none;
+.ml-detail-section {
+    margin-bottom: 24px;
+}
+.ml-detail-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
 }
 
-.threat-type-name {
-    color: var(--text-primary);
-    font-size: 13px;
+.ml-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+@media (max-width: 800px) { .ml-metrics-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 600px) { .ml-metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.ml-metric-box {
+    text-align: center;
+    padding: 16px 8px;
+    background: var(--background);
+    border-radius: 8px;
+}
+.ml-metric-box-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #10b981;
+}
+.ml-metric-box-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Confusion Matrix */
+.ml-confusion-container {
     display: flex;
-    align-items: center;
+    justify-content: center;
+}
+.ml-confusion-matrix {
+    display: grid;
+    grid-template-columns: 80px 100px 100px;
+    gap: 4px;
+    text-align: center;
+}
+.ml-cm-header {
+    padding: 8px;
+    background: var(--background);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.ml-cm-cell {
+    padding: 16px 8px;
+    border-radius: 4px;
+}
+.ml-cm-cell.tn, .ml-cm-cell.tp { background: rgba(16, 185, 129, 0.15); }
+.ml-cm-cell.fp, .ml-cm-cell.fn { background: rgba(239, 68, 68, 0.15); }
+.ml-cm-value {
+    font-size: 20px;
+    font-weight: 700;
+}
+.ml-cm-cell.tn .ml-cm-value, .ml-cm-cell.tp .ml-cm-value { color: #10b981; }
+.ml-cm-cell.fp .ml-cm-value, .ml-cm-cell.fn .ml-cm-value { color: #ef4444; }
+.ml-cm-label {
+    font-size: 9px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+.ml-cm-pct {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* Hyperparameters */
+.ml-hyperparams {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 8px;
 }
+.ml-hyperparam-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--background);
+    border-radius: 4px;
+    font-size: 12px;
+}
+.ml-hyperparam-key { color: var(--text-secondary); }
+.ml-hyperparam-value { font-weight: 600; color: var(--text-primary); font-family: monospace; }
 
-.threat-type-icon {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--azure-blue);
+/* Cross-Validation Scores */
+.ml-cv-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+.ml-cv-scores {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.ml-cv-score {
+    padding: 6px 12px;
+    background: var(--background);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: 600;
+    color: #10b981;
+}
+.ml-cv-summary {
+    padding: 8px 16px;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 6px;
+    font-size: 13px;
+}
+.ml-cv-summary strong { color: #10b981; }
+
+/* Feature Importance */
+.ml-feature-importance {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ml-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.ml-feature-name {
+    width: 180px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.ml-feature-bar-bg {
+    flex: 1;
+    height: 20px;
+    background: var(--background);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.ml-feature-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+.ml-feature-value {
+    width: 60px;
+    text-align: right;
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--text-primary);
 }
 
-.threat-type-count {
-    color: var(--azure-blue);
-    font-weight: 600;
+/* Training Info */
+.ml-training-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+}
+.ml-info-item {
+    padding: 12px;
+    background: var(--background);
+    border-radius: 8px;
+}
+.ml-info-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+.ml-info-value {
     font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
 }
 </style>
 
@@ -250,235 +672,420 @@
 (function() {
     'use strict';
 
-    const CACHE_ENDPOINT = 'ml';
+    // Store active model data for modal reuse
+    let activeModelData = null;
 
-    /**
-     * Load ML Overview data
-     */
     window.loadMLOverview = async function() {
-        console.log('Loading ML Overview...');
-
-        // Set loading state
-        if (typeof CacheManager !== 'undefined') {
-            CacheManager.setLoading(CACHE_ENDPOINT);
-        }
-
-        const startTime = performance.now();
-
         try {
-            // Load overview and timeline in parallel
-            const [overviewResult, timelineResult] = await Promise.all([
-                loadOverviewData(),
-                loadTimelineData()
+            const [overviewRes, statsRes, modelsRes] = await Promise.all([
+                fetch('/api/ml/overview'),
+                fetch('/api/ml/training/stats'),
+                fetch('/api/ml/models')
             ]);
 
-            const loadTime = Math.round(performance.now() - startTime);
-            const fromCache = overviewResult?.fromCache || timelineResult?.fromCache;
+            const overview = await overviewRes.json();
+            const stats = await statsRes.json();
+            const models = await modelsRes.json();
 
-            // Update cache indicator
-            if (typeof CacheManager !== 'undefined') {
-                CacheManager.updateStatus(CACHE_ENDPOINT, fromCache, loadTime);
-                CacheManager.clearLoading(CACHE_ENDPOINT);
+            // Render overview stats
+            if (overview.success && overview.overview) {
+                const o = overview.overview;
+                setText('ml-predictions-today', o.today?.predictions ?? 0);
+                setText('ml-anomalies-today', o.today?.anomalies ?? 0);
+                setText('ml-high-risk-today', o.today?.high_risk_events ?? 0);
+                setText('ml-blocks-today', o.today?.ml_blocks ?? 0);
+
+                // Active model with ALL metrics
+                if (o.active_model) {
+                    activeModelData = o.active_model;
+                    renderActiveModel(o.active_model);
+                }
             }
 
-            console.log(`ML Overview loaded in ${loadTime}ms (from_cache: ${fromCache})`);
-
-        } catch (error) {
-            console.error('Error loading ML Overview:', error);
-
-            if (typeof CacheManager !== 'undefined') {
-                CacheManager.setError(CACHE_ENDPOINT, 'Failed to load ML overview');
+            // Render training stats (use active model data if available)
+            if (stats.success && stats.stats) {
+                const s = stats.stats;
+                // Prefer active model data for training info
+                const am = activeModelData || {};
+                setText('stats-total-events', (am.training_samples && am.testing_samples ? am.training_samples + am.testing_samples : s.total_events || 0).toLocaleString());
+                setText('stats-training-samples', (am.training_samples || s.training_samples || 0).toLocaleString());
+                setText('stats-testing-samples', (am.testing_samples || s.testing_samples || 0).toLocaleString());
+                setText('stats-benign-count', (s.benign_events || 0).toLocaleString());
+                setText('stats-malicious-count', (s.malicious_events || 0).toLocaleString());
+                setText('stats-iterations', s.iterations || s.training_runs || 0);
             }
+
+            // Render models table
+            if (models.success && models.models) {
+                renderModelsTable(models.models);
+            }
+
+        } catch (e) {
+            console.error('Error loading ML Overview:', e);
         }
     };
 
-    /**
-     * Load overview statistics
-     */
-    async function loadOverviewData() {
-        try {
-            const response = await fetch('/api/ml/overview');
-            const data = await response.json();
+    function renderActiveModel(m) {
+        // Name and algorithm
+        setText('ml-model-name', `${m.name} (${formatAlgo(m.algorithm)})`);
 
-            if (data.success && data.overview) {
-                const o = data.overview;
+        // Core metrics
+        setText('ml-model-accuracy', fmtPct(m.accuracy));
+        setText('ml-model-precision', fmtPct(m.precision_score));
+        setText('ml-model-recall', fmtPct(m.recall_score));
+        setText('ml-model-f1', fmtPct(m.f1_score));
+        setText('ml-model-auc', fmtPct(m.auc_roc));
+        setText('ml-model-specificity', fmtPct(m.specificity));
+        setText('ml-model-mcc', m.matthews_correlation ? parseFloat(m.matthews_correlation).toFixed(4) : '-');
+        setText('ml-model-predictions', (m.predictions_count ?? 0).toLocaleString());
 
-                // Today's stats
-                updateElement('ml-predictions-today', o.today?.predictions ?? 0);
-                updateElement('ml-anomalies-today', o.today?.anomalies ?? 0);
-                updateElement('ml-high-risk-today', o.today?.high_risk_events ?? 0);
-                updateElement('ml-avg-risk-today', (o.today?.avg_risk_score ?? 0).toFixed(1));
-                updateElement('ml-blocks-today', o.today?.ml_blocks ?? 0);
+        // Show View Details button
+        const viewBtn = document.getElementById('view-active-model-btn');
+        if (viewBtn) viewBtn.style.display = 'inline-block';
 
-                // Week stats
-                updateElement('ml-predictions-week', o.week?.predictions ?? 0);
-                updateElement('ml-anomalies-week', o.week?.anomalies ?? 0);
-
-                // Active model
-                if (o.active_model) {
-                    updateElement('ml-model-name', o.active_model.name || 'No active model');
-                    updateElement('ml-model-algorithm', formatAlgorithmName(o.active_model.algorithm));
-                    updateElement('ml-model-accuracy', o.active_model.accuracy ? (o.active_model.accuracy * 100).toFixed(1) + '%' : '-');
-                    updateElement('ml-model-f1', o.active_model.f1_score ? (o.active_model.f1_score * 100).toFixed(1) + '%' : '-');
-                    updateElement('ml-model-predictions', (o.active_model.predictions_made ?? 0).toLocaleString());
-                } else {
-                    updateElement('ml-model-name', 'No active model');
-                    updateElement('ml-model-algorithm', '-');
-                    updateElement('ml-model-accuracy', '-');
-                    updateElement('ml-model-f1', '-');
-                    updateElement('ml-model-predictions', '0');
-                }
-
-                // Models count
-                updateElement('ml-models-total', o.models?.total ?? 0);
-                updateElement('ml-models-production', o.models?.production ?? 0);
-                updateElement('ml-models-candidate', o.models?.candidate ?? 0);
-
-                // Threat types
-                renderThreatTypes(o.threat_types);
-
-                return { success: true, fromCache: data.from_cache === true };
-            }
-
-            return { success: false, fromCache: false };
-
-        } catch (error) {
-            console.error('Error loading overview data:', error);
-            return { success: false, fromCache: false };
-        }
+        // Render confusion matrix preview
+        renderConfusionMatrixPreview(m);
     }
 
-    /**
-     * Load timeline data
-     */
-    async function loadTimelineData() {
-        try {
-            const response = await fetch('/api/ml/predictions/timeline?days=7');
-            const data = await response.json();
+    function renderConfusionMatrixPreview(m) {
+        const container = document.getElementById('ml-active-cm-grid');
+        const wrapper = document.getElementById('ml-active-confusion-preview');
+        if (!container || !wrapper) return;
 
-            renderTimeline(data.success ? data.timeline : []);
-
-            return { success: data.success, fromCache: data.from_cache === true };
-
-        } catch (error) {
-            console.error('Error loading timeline:', error);
-            renderTimeline([]);
-            return { success: false, fromCache: false };
-        }
-    }
-
-    /**
-     * Render threat types list
-     */
-    function renderThreatTypes(threatTypes) {
-        const container = document.getElementById('ml-threat-types-container');
-        if (!container) return;
-
-        if (!threatTypes || threatTypes.length === 0) {
-            container.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px; padding: 12px 0;">No threat types detected today</div>';
+        // Try confusion_matrix array first, then individual values
+        let tn, fp, fn, tp;
+        if (m.confusion_matrix && Array.isArray(m.confusion_matrix) && m.confusion_matrix.length === 2) {
+            tn = m.confusion_matrix[0][0];
+            fp = m.confusion_matrix[0][1];
+            fn = m.confusion_matrix[1][0];
+            tp = m.confusion_matrix[1][1];
+        } else if (m.true_negatives !== null && m.true_positives !== null) {
+            tn = m.true_negatives;
+            fp = m.false_positives;
+            fn = m.false_negatives;
+            tp = m.true_positives;
+        } else {
+            wrapper.style.display = 'none';
             return;
         }
 
-        const colors = ['#D13438', '#E6A502', '#0078D4', '#2EA44F', '#8764B8'];
+        wrapper.style.display = 'block';
+        container.innerHTML = `
+            <div class="ml-cm-preview-cell header"></div>
+            <div class="ml-cm-preview-cell header">Pred Benign</div>
+            <div class="ml-cm-preview-cell header">Pred Threat</div>
+            <div class="ml-cm-preview-cell header">Total</div>
+            <div class="ml-cm-preview-cell header">Act Benign</div>
+            <div class="ml-cm-preview-cell tn">${tn.toLocaleString()}</div>
+            <div class="ml-cm-preview-cell fp">${fp.toLocaleString()}</div>
+            <div class="ml-cm-preview-cell header">${(tn + fp).toLocaleString()}</div>
+            <div class="ml-cm-preview-cell header">Act Threat</div>
+            <div class="ml-cm-preview-cell fn">${fn.toLocaleString()}</div>
+            <div class="ml-cm-preview-cell tp">${tp.toLocaleString()}</div>
+            <div class="ml-cm-preview-cell header">${(fn + tp).toLocaleString()}</div>
+        `;
+    }
 
-        container.innerHTML = threatTypes.map((t, i) => `
-            <div class="threat-type-row">
-                <span class="threat-type-name">
-                    <span class="threat-type-icon" style="background: ${colors[i % colors.length]};"></span>
-                    ${formatThreatType(t.threat_type)}
-                </span>
-                <span class="threat-type-count">${t.count}</span>
+    // View active model details using the same modal
+    window.viewActiveModelDetails = function() {
+        if (!activeModelData) return;
+        showModelModal(activeModelData);
+    };
+
+    function setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
+    function fmtPct(val) {
+        if (!val) return '-';
+        return (parseFloat(val) * 100).toFixed(2) + '%';
+    }
+
+    function formatAlgo(name) {
+        if (!name) return '-';
+        const map = { 'random_forest': 'Random Forest', 'xgboost': 'XGBoost', 'lightgbm': 'LightGBM', 'gradient_boosting': 'Gradient Boosting' };
+        return map[name] || name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function getAlgoClass(algo) {
+        if (algo?.includes('random')) return 'rf';
+        if (algo?.includes('xgb')) return 'xgb';
+        if (algo?.includes('light')) return 'lgb';
+        return 'rf';
+    }
+
+    function getMetricClass(val) {
+        const v = parseFloat(val) * 100;
+        if (v >= 95) return 'good';
+        if (v >= 80) return 'ok';
+        return 'bad';
+    }
+
+    function renderModelsTable(models) {
+        const tbody = document.getElementById('ml-models-table-body');
+        if (!tbody) return;
+
+        if (!models || models.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center; color: var(--text-secondary);">No models found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = models.map(m => {
+            const metrics = m.metrics || {};
+            const date = m.created_at ? new Date(m.created_at).toLocaleDateString() : '';
+
+            // Handle both precision_score and precision (API returns precision)
+            const precision = metrics.precision_score || metrics.precision;
+            const recall = metrics.recall_score || metrics.recall;
+            const auc = metrics.auc_roc || metrics.roc_auc;
+
+            return `<tr>
+                <td>
+                    <div class="ml-model-name">${m.name}</div>
+                    <div class="ml-model-date">${date}</div>
+                </td>
+                <td style="text-align: center;">
+                    <span class="ml-algo-badge ${getAlgoClass(m.algorithm)}">${formatAlgo(m.algorithm)}</span>
+                </td>
+                <td style="text-align: center;" class="ml-metric-cell ${getMetricClass(metrics.accuracy)}">${fmtPct(metrics.accuracy)}</td>
+                <td style="text-align: center;" class="ml-metric-cell ${getMetricClass(precision)}">${fmtPct(precision)}</td>
+                <td style="text-align: center;" class="ml-metric-cell ${getMetricClass(recall)}">${fmtPct(recall)}</td>
+                <td style="text-align: center;" class="ml-metric-cell ${getMetricClass(metrics.f1_score)}">${fmtPct(metrics.f1_score)}</td>
+                <td style="text-align: center;" class="ml-metric-cell ${getMetricClass(auc)}">${fmtPct(auc)}</td>
+                <td style="text-align: center;">
+                    <span class="ml-status-badge ${m.status}">${m.status.toUpperCase()}</span>
+                </td>
+                <td style="text-align: center;">
+                    <button onclick="viewModelDetails(${m.id})" class="ml-view-btn">View</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // Shared function to display model in modal
+    function showModelModal(m) {
+        const modal = document.getElementById('ml-model-details-modal');
+        if (!modal) return;
+
+        // Header
+        setText('modal-model-name', `${m.model_name || m.name} (${formatAlgo(m.algorithm)})`);
+
+        // Metrics
+        setText('modal-accuracy', fmtPct(m.accuracy));
+        setText('modal-precision', fmtPct(m.precision_score));
+        setText('modal-recall', fmtPct(m.recall_score));
+        setText('modal-f1', fmtPct(m.f1_score));
+        setText('modal-auc', fmtPct(m.auc_roc || m.comparison_roc_auc));
+        setText('modal-specificity', fmtPct(m.specificity));
+        setText('modal-balanced-acc', fmtPct(m.balanced_accuracy));
+        setText('modal-mcc', m.matthews_correlation ? parseFloat(m.matthews_correlation).toFixed(4) : '-');
+
+        // Cross-Validation Scores
+        renderCVScores(m.cv_scores, m.cv_mean, m.cv_std);
+
+        // Confusion Matrix (handle both array and individual values)
+        let cmArray = m.confusion_matrix;
+        if (!cmArray && m.true_negatives !== null && m.true_positives !== null) {
+            cmArray = [[m.true_negatives, m.false_positives], [m.false_negatives, m.true_positives]];
+        }
+        renderConfusionMatrix(cmArray);
+
+        // Feature Importance
+        renderFeatureImportance(m.feature_importance);
+
+        // Hyperparameters
+        renderHyperparameters(m.hyperparameters);
+
+        // Training Info
+        renderTrainingInfo(m);
+
+        modal.style.display = 'flex';
+    }
+
+    window.viewModelDetails = async function(id) {
+        try {
+            const res = await fetch(`/api/ml/models/${id}`);
+            const data = await res.json();
+
+            if (data.success && data.model) {
+                showModelModal(data.model);
+            }
+        } catch (e) {
+            console.error('Error loading model details:', e);
+        }
+    };
+
+    function renderCVScores(cvScores, cvMean, cvStd) {
+        const container = document.getElementById('modal-cv-scores');
+        if (!container) return;
+
+        if (cvScores && Array.isArray(cvScores) && cvScores.length > 0) {
+            const scoresHtml = cvScores.map((s, i) =>
+                `<span class="ml-cv-score">Fold ${i+1}: ${(parseFloat(s) * 100).toFixed(2)}%</span>`
+            ).join('');
+
+            const mean = cvMean ? (parseFloat(cvMean) * 100).toFixed(2) : '-';
+            const std = cvStd ? (parseFloat(cvStd) * 100).toFixed(2) : '-';
+
+            container.innerHTML = `
+                <div class="ml-cv-scores">${scoresHtml}</div>
+                <div class="ml-cv-summary">
+                    Mean: <strong>${mean}%</strong> ± ${std}%
+                </div>
+            `;
+        } else {
+            container.innerHTML = '<div style="color: var(--text-secondary);">No cross-validation data available</div>';
+        }
+    }
+
+    function renderConfusionMatrix(matrix) {
+        const container = document.getElementById('modal-confusion-matrix');
+        if (!container) return;
+
+        if (matrix && Array.isArray(matrix) && matrix.length === 2) {
+            const tn = matrix[0][0], fp = matrix[0][1], fn = matrix[1][0], tp = matrix[1][1];
+            const total = tn + fp + fn + tp;
+
+            container.innerHTML = `
+                <div class="ml-confusion-matrix">
+                    <div class="ml-cm-header"></div>
+                    <div class="ml-cm-header">Predicted<br>Benign</div>
+                    <div class="ml-cm-header">Predicted<br>Threat</div>
+                    <div class="ml-cm-header">Actual<br>Benign</div>
+                    <div class="ml-cm-cell tn">
+                        <div class="ml-cm-value">${tn.toLocaleString()}</div>
+                        <div class="ml-cm-label">True Negative</div>
+                        <div class="ml-cm-pct">${((tn/total)*100).toFixed(1)}%</div>
+                    </div>
+                    <div class="ml-cm-cell fp">
+                        <div class="ml-cm-value">${fp.toLocaleString()}</div>
+                        <div class="ml-cm-label">False Positive</div>
+                        <div class="ml-cm-pct">${((fp/total)*100).toFixed(1)}%</div>
+                    </div>
+                    <div class="ml-cm-header">Actual<br>Threat</div>
+                    <div class="ml-cm-cell fn">
+                        <div class="ml-cm-value">${fn.toLocaleString()}</div>
+                        <div class="ml-cm-label">False Negative</div>
+                        <div class="ml-cm-pct">${((fn/total)*100).toFixed(1)}%</div>
+                    </div>
+                    <div class="ml-cm-cell tp">
+                        <div class="ml-cm-value">${tp.toLocaleString()}</div>
+                        <div class="ml-cm-label">True Positive</div>
+                        <div class="ml-cm-pct">${((tp/total)*100).toFixed(1)}%</div>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+                    Total Samples: <strong>${total.toLocaleString()}</strong>
+                </div>
+            `;
+        } else {
+            container.innerHTML = '<div style="color: var(--text-secondary); text-align: center;">No confusion matrix data available</div>';
+        }
+    }
+
+    function renderFeatureImportance(features) {
+        const container = document.getElementById('modal-feature-importance');
+        if (!container) return;
+
+        if (features && (Array.isArray(features) || typeof features === 'object')) {
+            let featureArray;
+
+            if (Array.isArray(features)) {
+                // Handle [{feature: name, importance: value}] format
+                featureArray = features.map(f => ({
+                    name: f.feature || f.name || 'unknown',
+                    importance: parseFloat(f.importance) || 0
+                }));
+            } else {
+                // Handle {name: importance} object format
+                featureArray = Object.entries(features).map(([name, importance]) => ({
+                    name,
+                    importance: parseFloat(importance) || 0
+                }));
+            }
+
+            // Sort by importance descending
+            featureArray.sort((a, b) => b.importance - a.importance);
+
+            // Take top 10
+            const top10 = featureArray.slice(0, 10);
+            const maxImportance = Math.max(...top10.map(f => f.importance));
+
+            if (maxImportance > 0) {
+                container.innerHTML = top10.map(f => {
+                    const pct = ((f.importance / maxImportance) * 100).toFixed(0);
+                    return `
+                        <div class="ml-feature-item">
+                            <span class="ml-feature-name" title="${f.name}">${f.name.replace(/_/g, ' ')}</span>
+                            <div class="ml-feature-bar-bg">
+                                <div class="ml-feature-bar" style="width: ${pct}%"></div>
+                            </div>
+                            <span class="ml-feature-value">${(f.importance * 100).toFixed(2)}%</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                container.innerHTML = '<div style="color: var(--text-secondary);">No feature importance data available</div>';
+            }
+        } else {
+            container.innerHTML = '<div style="color: var(--text-secondary);">No feature importance data available</div>';
+        }
+    }
+
+    function renderHyperparameters(params) {
+        const container = document.getElementById('modal-hyperparameters');
+        if (!container) return;
+
+        if (params && typeof params === 'object' && Object.keys(params).length > 0) {
+            container.innerHTML = Object.entries(params).map(([key, value]) => `
+                <div class="ml-hyperparam-item">
+                    <span class="ml-hyperparam-key">${key.replace(/_/g, ' ')}</span>
+                    <span class="ml-hyperparam-value">${value}</span>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div style="color: var(--text-secondary);">Default hyperparameters used</div>';
+        }
+    }
+
+    function renderTrainingInfo(m) {
+        const container = document.getElementById('modal-training-info');
+        if (!container) return;
+
+        const info = [
+            { label: 'Training Samples', value: m.training_samples?.toLocaleString() || '-' },
+            { label: 'Test Samples', value: m.testing_samples?.toLocaleString() || '-' },
+            { label: 'Feature Count', value: m.feature_count?.toLocaleString() || '-' },
+            { label: 'Training Time', value: m.training_time_seconds ? parseFloat(m.training_time_seconds).toFixed(2) + 's' : '-' },
+            { label: 'Prediction Time', value: m.prediction_time_ms ? parseFloat(m.prediction_time_ms).toFixed(2) + 'ms' : '-' },
+            { label: 'Memory Usage', value: m.memory_usage_mb ? parseFloat(m.memory_usage_mb).toFixed(1) + ' MB' : '-' },
+            { label: 'Total Events', value: m.total_events_generated?.toLocaleString() || '-' },
+            { label: 'Benign Events', value: m.benign_count?.toLocaleString() || '-' },
+            { label: 'Malicious Events', value: m.malicious_count?.toLocaleString() || '-' },
+            { label: 'Training Run', value: m.run_name || '-' },
+            { label: 'Created', value: m.created_at ? new Date(m.created_at).toLocaleString() : '-' },
+            { label: 'Predictions Made', value: m.predictions_count?.toLocaleString() || '0' }
+        ];
+
+        container.innerHTML = info.map(i => `
+            <div class="ml-info-item">
+                <div class="ml-info-label">${i.label}</div>
+                <div class="ml-info-value">${i.value}</div>
             </div>
         `).join('');
     }
 
-    /**
-     * Render timeline chart
-     */
-    function renderTimeline(timeline) {
-        const container = document.getElementById('ml-timeline-chart');
-        if (!container) return;
+    window.closeModelModal = function() {
+        document.getElementById('ml-model-details-modal').style.display = 'none';
+    };
 
-        if (!timeline || timeline.length === 0) {
-            container.innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-secondary); font-size: 13px;">
-                    No prediction data available for the last 7 days
-                </div>
-            `;
-            return;
+    // Close modal on outside click
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('ml-model-details-modal');
+        if (e.target === modal) {
+            modal.style.display = 'none';
         }
-
-        const maxPredictions = Math.max(...timeline.map(t => t.predictions || 0), 1);
-        const maxHeight = 140;
-
-        const barsHtml = timeline.map(t => {
-            const predictions = t.predictions || 0;
-            const anomalies = t.anomalies || 0;
-            const predHeight = Math.max((predictions / maxPredictions) * maxHeight, 4);
-            const anomHeight = Math.max((anomalies / maxPredictions) * maxHeight, anomalies > 0 ? 4 : 0);
-
-            // Format date as MM/DD
-            const dateParts = t.date ? t.date.split('-') : ['', '', ''];
-            const dateLabel = dateParts.length >= 3 ? `${dateParts[1]}/${dateParts[2]}` : t.date;
-
-            return `
-                <div class="ml-timeline-bar-item">
-                    <div class="ml-timeline-bars">
-                        <div class="ml-timeline-bar predictions" style="height: ${predHeight}px;" title="Predictions: ${predictions}"></div>
-                        <div class="ml-timeline-bar anomalies" style="height: ${anomHeight}px;" title="Anomalies: ${anomalies}"></div>
-                    </div>
-                    <div class="ml-timeline-label">${dateLabel}</div>
-                    <div class="ml-timeline-value">${predictions}</div>
-                </div>
-            `;
-        }).join('');
-
-        container.innerHTML = `
-            <div class="ml-timeline-bar-container">
-                ${barsHtml}
-            </div>
-            <div class="ml-timeline-legend">
-                <div class="ml-timeline-legend-item">
-                    <span class="ml-timeline-legend-dot" style="background: var(--azure-blue);"></span>
-                    <span>Predictions</span>
-                </div>
-                <div class="ml-timeline-legend-item">
-                    <span class="ml-timeline-legend-dot" style="background: #E6A502;"></span>
-                    <span>Anomalies</span>
-                </div>
-            </div>
-        `;
-    }
-
-    /**
-     * Helper: Update element text safely
-     */
-    function updateElement(id, value) {
-        const el = document.getElementById(id);
-        if (el) {
-            el.textContent = value;
-        }
-    }
-
-    /**
-     * Helper: Format algorithm name
-     */
-    function formatAlgorithmName(name) {
-        if (!name) return '-';
-        return name
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, l => l.toUpperCase());
-    }
-
-    /**
-     * Helper: Format threat type name
-     */
-    function formatThreatType(type) {
-        if (!type) return 'Unknown';
-        return type
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, l => l.toUpperCase());
-    }
-
+    });
 })();
 </script>

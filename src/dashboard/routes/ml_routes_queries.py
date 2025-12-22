@@ -41,32 +41,39 @@ def get_overview_data(cursor) -> Dict[str, Any]:
     """)
     stats = cursor.fetchone() or {}
 
-    # Query 2: Get active model, model counts, and threat types using UNION
+    # Query 2: Get active model with ALL metrics
+    cursor.execute("""
+        SELECT m.*,
+               cr.training_samples, cr.testing_samples, cr.feature_count,
+               cr.confusion_matrix, cr.hyperparameters, cr.feature_importance,
+               cr.specificity, cr.balanced_accuracy, cr.matthews_correlation,
+               cr.training_time_seconds, cr.prediction_time_ms, cr.memory_usage_mb,
+               cr.cv_mean, cr.cv_std, cr.cv_scores,
+               cr.true_positives, cr.true_negatives, cr.false_positives, cr.false_negatives,
+               tr.run_name, tr.total_events_generated, tr.benign_count, tr.malicious_count
+        FROM ml_models m
+        LEFT JOIN ml_comparison_results cr ON cr.model_name COLLATE utf8mb4_unicode_ci = m.model_name COLLATE utf8mb4_unicode_ci
+        LEFT JOIN ml_training_runs tr ON cr.run_id = tr.id
+        WHERE m.is_active = TRUE
+        ORDER BY cr.id DESC
+        LIMIT 1
+    """)
+    active_model_row = cursor.fetchone()
+
+    # Query 3: Get model counts and threat types
     cursor.execute("""
         (
-            SELECT 'active_model' as type,
-                   m.id, m.model_name, m.algorithm, m.f1_score, m.accuracy,
-                   NULL as predictions_made, NULL as last_prediction_at,
-                   NULL as threat_type, NULL as count,
-                   NULL as total_models, NULL as production_models, NULL as candidate_models
-            FROM ml_models m
-            WHERE m.is_active = TRUE
-            LIMIT 1
-        )
-        UNION ALL
-        (
             SELECT 'model_counts' as type,
-                   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                   NULL as threat_type, NULL as count,
                    COUNT(*) as total_models,
                    SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as production_models,
-                   0 as candidate_models
+                   SUM(CASE WHEN status = 'candidate' THEN 1 ELSE 0 END) as candidate_models
             FROM ml_models
             LIMIT 1
         )
         UNION ALL
         (
             SELECT 'threat_type' as type,
-                   NULL, NULL, NULL, NULL, NULL, NULL, NULL,
                    p.threat_type,
                    COUNT(*) as count,
                    NULL, NULL, NULL
@@ -80,14 +87,11 @@ def get_overview_data(cursor) -> Dict[str, Any]:
     combined_results = cursor.fetchall()
 
     # Parse the combined results
-    active_model = None
     model_counts = {'total_models': 0, 'production_models': 0, 'candidate_models': 0}
     threat_types = []
 
     for row in combined_results:
-        if row['type'] == 'active_model':
-            active_model = row
-        elif row['type'] == 'model_counts':
+        if row['type'] == 'model_counts':
             model_counts = {
                 'total_models': int(row['total_models'] or 0),
                 'production_models': int(row['production_models'] or 0),
@@ -98,6 +102,77 @@ def get_overview_data(cursor) -> Dict[str, Any]:
                 'threat_type': row['threat_type'],
                 'count': int(row['count'])
             })
+
+    # Parse JSON fields if present
+    import json
+    confusion_matrix = None
+    hyperparameters = None
+    feature_importance = None
+    cv_scores = None
+    if active_model_row:
+        for field_name in ['confusion_matrix', 'hyperparameters', 'feature_importance', 'cv_scores']:
+            if active_model_row.get(field_name):
+                try:
+                    val = active_model_row[field_name]
+                    parsed = json.loads(val) if isinstance(val, str) else val
+                    if field_name == 'confusion_matrix':
+                        confusion_matrix = parsed
+                    elif field_name == 'hyperparameters':
+                        hyperparameters = parsed
+                    elif field_name == 'feature_importance':
+                        feature_importance = parsed
+                    elif field_name == 'cv_scores':
+                        cv_scores = parsed
+                except:
+                    pass
+
+    # Build the active model data with ALL metrics
+    active_model_data = None
+    if active_model_row:
+        m = active_model_row
+        active_model_data = {
+            'id': m.get('id'),
+            'name': m.get('model_name'),
+            'algorithm': m.get('algorithm'),
+            'version': m.get('version'),
+            'status': m.get('status'),
+            # Core metrics
+            'accuracy': float(m['accuracy']) if m.get('accuracy') else None,
+            'precision_score': float(m['precision_score']) if m.get('precision_score') else None,
+            'recall_score': float(m['recall_score']) if m.get('recall_score') else None,
+            'f1_score': float(m['f1_score']) if m.get('f1_score') else None,
+            'auc_roc': float(m['auc_roc']) if m.get('auc_roc') else None,
+            # Extended metrics from comparison_results
+            'specificity': float(m['specificity']) if m.get('specificity') else None,
+            'balanced_accuracy': float(m['balanced_accuracy']) if m.get('balanced_accuracy') else None,
+            'matthews_correlation': float(m['matthews_correlation']) if m.get('matthews_correlation') else None,
+            # Training info
+            'training_samples': int(m['training_samples']) if m.get('training_samples') else None,
+            'testing_samples': int(m['testing_samples']) if m.get('testing_samples') else None,
+            'feature_count': int(m['feature_count']) if m.get('feature_count') else None,
+            'training_time_seconds': float(m['training_time_seconds']) if m.get('training_time_seconds') else None,
+            'prediction_time_ms': float(m['prediction_time_ms']) if m.get('prediction_time_ms') else None,
+            'memory_usage_mb': float(m['memory_usage_mb']) if m.get('memory_usage_mb') else None,
+            'cv_mean': float(m['cv_mean']) if m.get('cv_mean') else None,
+            'cv_std': float(m['cv_std']) if m.get('cv_std') else None,
+            # Training run info
+            'run_name': m.get('run_name'),
+            'total_events_generated': int(m['total_events_generated']) if m.get('total_events_generated') else None,
+            'benign_count': int(m['benign_count']) if m.get('benign_count') else None,
+            'malicious_count': int(m['malicious_count']) if m.get('malicious_count') else None,
+            # Confusion matrix values
+            'true_positives': int(m['true_positives']) if m.get('true_positives') else None,
+            'true_negatives': int(m['true_negatives']) if m.get('true_negatives') else None,
+            'false_positives': int(m['false_positives']) if m.get('false_positives') else None,
+            'false_negatives': int(m['false_negatives']) if m.get('false_negatives') else None,
+            'confusion_matrix': confusion_matrix,
+            'hyperparameters': hyperparameters,
+            'feature_importance': feature_importance,
+            'cv_scores': cv_scores,
+            # Usage
+            'predictions_count': int(m['predictions_count']) if m.get('predictions_count') else 0,
+            'created_at': m['created_at'].isoformat() if m.get('created_at') else None
+        }
 
     # Build the overview data structure
     # v3.1: risk_score is now decimal(5,4) so 0.70 = 70%
@@ -114,14 +189,7 @@ def get_overview_data(cursor) -> Dict[str, Any]:
             'predictions': int(stats.get('predictions_week') or 0),
             'anomalies': int(stats.get('anomalies_week') or 0)
         },
-        'active_model': {
-            'id': active_model['id'] if active_model else None,
-            'name': active_model['model_name'] if active_model else None,
-            'algorithm': active_model['algorithm'] if active_model else None,
-            'f1_score': float(active_model['f1_score']) if active_model and active_model['f1_score'] else None,
-            'accuracy': float(active_model['accuracy']) if active_model and active_model['accuracy'] else None,
-            'predictions_made': 0
-        } if active_model else None,
+        'active_model': active_model_data,
         'models': model_counts,
         'threat_types': threat_types
     }

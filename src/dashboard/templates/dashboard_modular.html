@@ -55,11 +55,8 @@
             {% include 'pages/fail2ban.html' %}
             {% include 'pages/trusted_ips.html' %}
 
-            <!-- ML Intelligence Pages -->
+            <!-- ML Intelligence Pages (Consolidated v3.2) -->
             {% include 'pages/ml_overview.html' %}
-            {% include 'pages/ml_performance.html' %}
-            {% include 'pages/ml_training.html' %}
-            {% include 'pages/ml_comparison.html' %}
             {% include 'pages/ml_benefits.html' %}
 
             <!-- System Pages -->
@@ -152,8 +149,6 @@
             'reports-trends':'loadTrendsReportsPage',
             'reports-export':'loadReportsExportPage',
             'ml-overview':'loadMLOverview',
-            'ml-performance':'loadMLPerformance',
-            'ml-comparison':'loadComparison',
             'ml-benefits':'loadBenefitsReport',
             'system-status':'loadSystemStatusPage',
             'firewall':'initFirewallPage',
@@ -184,11 +179,8 @@
             'reports-daily':'Daily Reports',
             'reports-trends':'Trends Reports',
             'reports-export':'Export Reports',
-            'ml-overview':'ML Overview',
-            'ml-performance':'ML Performance',
-            'ml-training':'ML Training',
-            'ml-comparison':'ML Comparison',
-            'ml-benefits':'ML Benefits',
+            'ml-overview':'ML Overview & Models',
+            'ml-benefits':'ML Benefits & Comparison',
             'system-status':'System Status',
             'firewall':'Firewall',
             'fail2ban':'Fail2ban',
@@ -225,13 +217,8 @@
             }
 
             // Call page loader
-            if(basePageName==='ml-training'){
-                if(typeof initTrainingPage==='function')initTrainingPage();
-                if(typeof loadTrainingHistory==='function')loadTrainingHistory();
-            }else{
-                const loader=pageLoaders[basePageName];
-                if(loader&&typeof window[loader]==='function')window[loader]();
-            }
+            const loader=pageLoaders[basePageName];
+            if(loader&&typeof window[loader]==='function')window[loader]();
         }
 
         // Collapse all submenus except the one to keep open

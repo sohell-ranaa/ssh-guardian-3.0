@@ -79,19 +79,22 @@ def get_overview():
     Get ML overview statistics for dashboard with caching
 
     Returns summary of predictions, active model, detection rates
+    Use ?refresh=1 to bypass cache
     """
     try:
         cache = get_cache()
         cache_k = cache_key('ml', 'overview')
+        skip_cache = request.args.get('refresh') == '1'
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'overview': cached,
-                'from_cache': True
-            }), 200
+        # Try cache first (unless refresh requested)
+        if not skip_cache:
+            cached = cache.get(cache_k)
+            if cached is not None:
+                return jsonify({
+                    'success': True,
+                    'overview': cached,
+                    'from_cache': True
+                }), 200
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -189,22 +192,24 @@ def get_predictions_timeline():
 
 @ml_routes.route('/models', methods=['GET'])
 def list_models():
-    """Get all ML models with caching"""
+    """Get all ML models with caching. Use ?refresh=1 to bypass cache"""
     try:
         status_filter = request.args.get('status', '')
+        skip_cache = request.args.get('refresh') == '1'
 
         cache = get_cache()
         cache_k = cache_key('ml', 'models', status_filter)
 
-        # Try cache first
-        cached = cache.get(cache_k)
-        if cached is not None:
-            return jsonify({
-                'success': True,
-                'models': cached['models'],
-                'count': cached['count'],
-                'from_cache': True
-            }), 200
+        # Try cache first (unless refresh requested)
+        if not skip_cache:
+            cached = cache.get(cache_k)
+            if cached is not None:
+                return jsonify({
+                    'success': True,
+                    'models': cached['models'],
+                    'count': cached['count'],
+                    'from_cache': True
+                }), 200
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -275,12 +280,13 @@ def list_models():
 
 @ml_routes.route('/models/<int:model_id>', methods=['GET'])
 def get_model(model_id):
-    """Get detailed model information"""
+    """Get detailed model information - fetches from both ml_models and ml_comparison_results"""
     try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # First get base model info
             cursor.execute("""
                 SELECT * FROM ml_models WHERE id = %s
             """, (model_id,))
@@ -289,9 +295,39 @@ def get_model(model_id):
             if not model:
                 return jsonify({'success': False, 'error': 'Model not found'}), 404
 
-            # v3.1: Parse JSON fields (updated field names)
+            # Try to get detailed data from ml_comparison_results using model_name
+            cursor.execute("""
+                SELECT
+                    cr.training_samples, cr.testing_samples, cr.feature_count,
+                    cr.hyperparameters, cr.confusion_matrix,
+                    cr.true_positives, cr.true_negatives, cr.false_positives, cr.false_negatives,
+                    cr.specificity, cr.balanced_accuracy, cr.matthews_correlation,
+                    cr.training_time_seconds, cr.prediction_time_ms, cr.memory_usage_mb,
+                    cr.feature_importance, cr.cv_scores, cr.cv_mean, cr.cv_std,
+                    cr.roc_auc as comparison_roc_auc,
+                    tr.run_name, tr.total_events_generated, tr.benign_count, tr.malicious_count,
+                    tr.started_at as training_started, tr.completed_at as training_completed
+                FROM ml_comparison_results cr
+                LEFT JOIN ml_training_runs tr ON cr.run_id = tr.id
+                WHERE cr.model_name COLLATE utf8mb4_unicode_ci = %s COLLATE utf8mb4_unicode_ci
+                ORDER BY cr.id DESC
+                LIMIT 1
+            """, (model.get('model_name'),))
+
+            details = cursor.fetchone()
+
             import json
-            for field in ['hyperparameters', 'feature_config']:
+
+            # Merge detailed data into model response
+            if details:
+                for key, value in details.items():
+                    if value is not None:
+                        model[key] = value
+
+            # Parse JSON fields
+            json_fields = ['hyperparameters', 'feature_config', 'confusion_matrix',
+                          'feature_importance', 'cv_scores']
+            for field in json_fields:
                 if model.get(field):
                     try:
                         if isinstance(model[field], str):
@@ -362,16 +398,17 @@ def list_training_runs():
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # v3.1 schema: ml_training_runs has different columns
             cursor.execute("""
                 SELECT
-                    tr.id, tr.run_uuid, tr.algorithm, tr.status, tr.progress_percent,
-                    tr.current_stage, tr.total_samples, tr.training_samples, tr.test_samples,
-                    tr.data_start_date, tr.data_end_date, tr.started_at, tr.completed_at,
-                    tr.duration_seconds, tr.error_message,
-                    m.model_name, m.f1_score
+                    tr.id, tr.run_uuid, tr.run_name, tr.status,
+                    tr.total_events_generated, tr.training_events, tr.testing_events,
+                    tr.benign_count, tr.malicious_count,
+                    tr.started_at, tr.completed_at, tr.error_message,
+                    (SELECT MAX(f1_score) FROM ml_comparison_results WHERE run_id = tr.id) as best_f1,
+                    (SELECT COUNT(*) FROM ml_comparison_results WHERE run_id = tr.id) as models_trained
                 FROM ml_training_runs tr
-                LEFT JOIN ml_models m ON tr.model_id = m.id
-                ORDER BY tr.created_at DESC
+                ORDER BY tr.started_at DESC
                 LIMIT %s
             """, (limit,))
 
@@ -379,30 +416,26 @@ def list_training_runs():
 
             formatted = []
             for run in runs:
+                duration = None
+                if run['started_at'] and run['completed_at']:
+                    duration = (run['completed_at'] - run['started_at']).total_seconds()
+
                 formatted.append({
                     'id': run['id'],
                     'uuid': run['run_uuid'],
-                    'algorithm': run['algorithm'],
+                    'name': run['run_name'],
                     'status': run['status'],
-                    'progress': run['progress_percent'],
-                    'current_stage': run['current_stage'],
-                    'samples': {
-                        'total': run['total_samples'],
-                        'training': run['training_samples'],
-                        'test': run['test_samples']
-                    },
-                    'data_range': {
-                        'start': str(run['data_start_date']) if run['data_start_date'] else None,
-                        'end': str(run['data_end_date']) if run['data_end_date'] else None
-                    },
+                    'total_events': run['total_events_generated'],
+                    'train_count': run['training_events'],
+                    'test_count': run['testing_events'],
+                    'benign_count': run['benign_count'],
+                    'malicious_count': run['malicious_count'],
                     'started_at': run['started_at'].isoformat() if run['started_at'] else None,
                     'completed_at': run['completed_at'].isoformat() if run['completed_at'] else None,
-                    'duration_seconds': run['duration_seconds'],
+                    'duration_seconds': duration,
                     'error': run['error_message'],
-                    'result_model': {
-                        'name': run['model_name'],
-                        'f1_score': float(run['f1_score']) if run['f1_score'] else None
-                    } if run['model_name'] else None
+                    'best_f1': float(run['best_f1']) if run['best_f1'] else None,
+                    'models_trained': run['models_trained'] or 0
                 })
 
             return jsonify({
@@ -952,6 +985,388 @@ def get_dashboard_summary():
                 'ml_summary': ml_summary,
                 'from_cache': False
             }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# TRAINING ITERATIONS ENDPOINTS (NEW - for thesis presentation)
+# ============================================================================
+
+@ml_routes.route('/training/iterations', methods=['GET'])
+def get_training_iterations():
+    """
+    Get all training iterations with hyperparameters for timeline visualization
+    Returns data formatted for Chart.js timeline
+    """
+    try:
+        cache = get_cache()
+        cache_k = cache_key('ml', 'training_iterations')
+
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'iterations': cached,
+                'from_cache': True
+            }), 200
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    i.id,
+                    i.run_id,
+                    i.iteration_number,
+                    i.algorithm,
+                    i.model_name,
+                    i.hyperparameters,
+                    ROUND(i.accuracy * 100, 2) as accuracy_pct,
+                    ROUND(i.precision_score * 100, 2) as precision_pct,
+                    ROUND(i.recall_score * 100, 2) as recall_pct,
+                    ROUND(i.f1_score * 100, 4) as f1_pct,
+                    ROUND(i.roc_auc * 100, 2) as auc_pct,
+                    ROUND(i.specificity * 100, 2) as specificity_pct,
+                    ROUND(i.balanced_accuracy * 100, 2) as balanced_acc_pct,
+                    ROUND(i.matthews_correlation, 4) as matthews,
+                    i.true_positives,
+                    i.true_negatives,
+                    i.false_positives,
+                    i.false_negatives,
+                    i.training_samples,
+                    i.testing_samples,
+                    ROUND(i.training_time_seconds, 1) as training_time,
+                    ROUND(i.prediction_time_ms, 2) as prediction_time,
+                    ROUND(i.memory_usage_mb, 1) as memory_mb,
+                    i.is_best_iteration,
+                    i.created_at,
+                    r.run_name,
+                    r.started_at as run_date
+                FROM ml_training_iterations i
+                LEFT JOIN ml_training_runs r ON i.run_id = r.id
+                ORDER BY i.created_at DESC, i.f1_score DESC
+                LIMIT 50
+            """)
+            iterations = cursor.fetchall()
+
+            # Process for JSON serialization
+            import json as json_module
+            for it in iterations:
+                if it['created_at']:
+                    it['created_at'] = it['created_at'].isoformat()
+                if it['run_date']:
+                    it['run_date'] = it['run_date'].isoformat()
+                if it['hyperparameters']:
+                    if isinstance(it['hyperparameters'], str):
+                        it['hyperparameters'] = json_module.loads(it['hyperparameters'])
+
+            cache.set(cache_k, iterations, ML_TRAINING_RUNS_TTL)
+
+            return jsonify({
+                'success': True,
+                'iterations': iterations,
+                'from_cache': False
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ml_routes.route('/training/algorithm-comparison', methods=['GET'])
+def get_algorithm_comparison():
+    """
+    Get aggregated comparison of Random Forest vs XGBoost vs LightGBM
+    Returns best metrics for each algorithm
+    """
+    try:
+        cache = get_cache()
+        cache_k = cache_key('ml', 'algorithm_comparison')
+
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'comparison': cached,
+                'from_cache': True
+            }), 200
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    algorithm,
+                    COUNT(*) as total_runs,
+                    ROUND(MAX(accuracy) * 100, 2) as best_accuracy,
+                    ROUND(MAX(f1_score) * 100, 4) as best_f1,
+                    ROUND(MAX(roc_auc) * 100, 2) as best_auc,
+                    ROUND(AVG(accuracy) * 100, 2) as avg_accuracy,
+                    ROUND(AVG(f1_score) * 100, 4) as avg_f1,
+                    ROUND(AVG(roc_auc) * 100, 2) as avg_auc,
+                    ROUND(MIN(training_time_seconds), 1) as min_training_time,
+                    ROUND(AVG(training_time_seconds), 1) as avg_training_time,
+                    ROUND(AVG(memory_usage_mb), 1) as avg_memory
+                FROM ml_training_iterations
+                GROUP BY algorithm
+                ORDER BY MAX(f1_score) DESC
+            """)
+            algorithms = cursor.fetchall()
+
+            best_algo = algorithms[0]['algorithm'] if algorithms else None
+
+            import json as json_module
+            details = {}
+            for algo in algorithms:
+                cursor.execute("""
+                    SELECT
+                        model_name,
+                        hyperparameters,
+                        ROUND(accuracy * 100, 4) as accuracy,
+                        ROUND(precision_score * 100, 4) as precision_score,
+                        ROUND(recall_score * 100, 4) as recall_score,
+                        ROUND(f1_score * 100, 4) as f1_score,
+                        ROUND(roc_auc * 100, 4) as roc_auc,
+                        true_positives,
+                        true_negatives,
+                        false_positives,
+                        false_negatives,
+                        training_samples,
+                        testing_samples,
+                        ROUND(training_time_seconds, 1) as training_time
+                    FROM ml_training_iterations
+                    WHERE algorithm = %s
+                    ORDER BY f1_score DESC
+                    LIMIT 1
+                """, (algo['algorithm'],))
+                best = cursor.fetchone()
+                if best:
+                    if best['hyperparameters']:
+                        if isinstance(best['hyperparameters'], str):
+                            best['hyperparameters'] = json_module.loads(best['hyperparameters'])
+                    details[algo['algorithm']] = best
+
+            result = {
+                'algorithms': algorithms,
+                'best_algorithm': best_algo,
+                'details': details
+            }
+
+            cache.set(cache_k, result, ML_COMPARISON_TTL)
+
+            return jsonify({
+                'success': True,
+                'comparison': result,
+                'from_cache': False
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ml_routes.route('/training/stats', methods=['GET'])
+def get_training_stats():
+    """Get training data statistics for the training page header"""
+    try:
+        cache = get_cache()
+        cache_k = cache_key('ml', 'training_stats')
+
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'stats': cached,
+                'from_cache': True
+            }), 200
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    (SELECT COUNT(*) FROM ml_training_data) as total_events,
+                    (SELECT COUNT(*) FROM ml_training_data WHERE is_malicious = 1) as malicious_events,
+                    (SELECT COUNT(*) FROM ml_training_data WHERE is_malicious = 0) as benign_events,
+                    (SELECT training_events FROM ml_training_runs ORDER BY id DESC LIMIT 1) as training_samples,
+                    (SELECT testing_events FROM ml_training_runs ORDER BY id DESC LIMIT 1) as testing_samples,
+                    (SELECT COUNT(*) FROM ml_training_runs) as training_runs,
+                    (SELECT COUNT(*) FROM ml_training_iterations) as iterations,
+                    (SELECT ROUND(MAX(f1_score) * 100, 4) FROM ml_training_iterations) as best_f1
+            """)
+            stats = cursor.fetchone()
+
+            cache.set(cache_k, stats, ML_TRAINING_DATA_TTL)
+
+            return jsonify({
+                'success': True,
+                'stats': stats,
+                'from_cache': False
+            }), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# BENEFITS TREND ENDPOINTS (NEW - for thesis presentation)
+# ============================================================================
+
+@ml_routes.route('/benefits/trend', methods=['GET'])
+def get_benefits_trend():
+    """Get ML benefits improvement trend over time"""
+    try:
+        days = request.args.get('days', 30, type=int)
+
+        cache = get_cache()
+        cache_k = cache_key('ml', f'benefits_trend_{days}')
+
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({
+                'success': True,
+                'trend': cached,
+                'from_cache': True
+            }), 200
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    date,
+                    total_events_analyzed,
+                    threats_detected_ml,
+                    high_risk_events,
+                    first_attempt_detections,
+                    threats_would_miss_fail2ban,
+                    false_positives_prevented,
+                    auto_escalations_to_ufw,
+                    time_saved_minutes,
+                    detection_improvement_pct
+                FROM ml_benefits_metrics
+                WHERE date >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
+                ORDER BY date ASC
+            """, (days,))
+            trend_data = cursor.fetchall()
+
+            for row in trend_data:
+                if row['date']:
+                    row['date'] = row['date'].isoformat()
+
+            if trend_data:
+                summary = {
+                    'total_events': sum(r['total_events_analyzed'] or 0 for r in trend_data),
+                    'total_threats': sum(r['threats_detected_ml'] or 0 for r in trend_data),
+                    'total_first_attempt': sum(r['first_attempt_detections'] or 0 for r in trend_data),
+                    'total_would_miss': sum(r['threats_would_miss_fail2ban'] or 0 for r in trend_data),
+                    'total_time_saved_hours': round(sum(r['time_saved_minutes'] or 0 for r in trend_data) / 60, 1),
+                    'avg_improvement': round(sum(r['detection_improvement_pct'] or 0 for r in trend_data) / len(trend_data), 2)
+                }
+            else:
+                summary = {'total_events': 0, 'total_threats': 0, 'total_first_attempt': 0, 'total_would_miss': 0, 'total_time_saved_hours': 0, 'avg_improvement': 0}
+
+            result = {'data': trend_data, 'summary': summary, 'days': days}
+            cache.set(cache_k, result, ML_BENEFITS_TTL)
+
+            return jsonify({'success': True, 'trend': result, 'from_cache': False}), 200
+
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ml_routes.route('/benefits/cases', methods=['GET'])
+def get_benefits_detection_cases():
+    """Get notable ML detection case studies"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        days = request.args.get('days', 30, type=int)
+
+        cache = get_cache()
+        cache_k = cache_key('ml', f'detection_cases_{days}_{limit}')
+
+        cached = cache.get(cache_k)
+        if cached is not None:
+            return jsonify({'success': True, 'cases': cached, 'from_cache': True}), 200
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.execute("""
+                SELECT
+                    scenario_type,
+                    COUNT(*) as event_count,
+                    COUNT(DISTINCT source_ip) as unique_ips,
+                    AVG(CASE WHEN threat_level = 'critical' THEN 100
+                             WHEN threat_level = 'high' THEN 75
+                             WHEN threat_level = 'medium' THEN 50
+                             ELSE 25 END) as avg_risk_score,
+                    SUM(CASE WHEN is_tor = 1 THEN 1 ELSE 0 END) as tor_events,
+                    SUM(CASE WHEN is_vpn = 1 THEN 1 ELSE 0 END) as vpn_events,
+                    SUM(CASE WHEN is_datacenter = 1 THEN 1 ELSE 0 END) as datacenter_events,
+                    COUNT(DISTINCT country_code) as countries_involved
+                FROM ml_training_data
+                WHERE is_malicious = 1
+                  AND timestamp >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                GROUP BY scenario_type
+                ORDER BY event_count DESC
+                LIMIT %s
+            """, (days, limit))
+            scenarios = cursor.fetchall()
+
+            case_templates = {
+                'brute_force': {'title': 'Brute Force Attack Detection', 'why_fail2ban_missed': 'Fail2ban requires 5 failures before blocking. ML detected malicious intent on first attempt.', 'how_ml_detected': 'Analyzed IP reputation, geographic risk, timing patterns, and username targeting behavior.'},
+                'distributed_brute_force': {'title': 'Distributed Attack Coordination', 'why_fail2ban_missed': 'Attack spread across multiple IPs, each below Fail2ban threshold.', 'how_ml_detected': 'Correlated patterns across IPs: similar timing, target usernames, and infrastructure sources.'},
+                'credential_stuffing': {'title': 'Credential Stuffing Campaign', 'why_fail2ban_missed': 'Valid credentials used, no failed logins to trigger rules.', 'how_ml_detected': 'Detected abnormal login patterns, unusual geolocations, and automated behavior signatures.'},
+                'password_spray': {'title': 'Password Spray Attack', 'why_fail2ban_missed': 'Single attempt per user stays below threshold.', 'how_ml_detected': 'Identified systematic targeting of multiple users with common passwords.'},
+                'tor_exit_nodes': {'title': 'Tor Network Anonymized Attack', 'why_fail2ban_missed': 'IP changes with each attempt, evading IP-based blocking.', 'how_ml_detected': 'Tor exit node detection and behavioral pattern analysis regardless of IP.'},
+                'datacenter_attacks': {'title': 'Cloud/Datacenter-Sourced Attack', 'why_fail2ban_missed': 'Legitimate-looking IPs from known cloud providers.', 'how_ml_detected': 'Datacenter IP identification combined with threat intelligence scoring.'}
+            }
+
+            cases = []
+            for scenario in scenarios:
+                template = case_templates.get(scenario['scenario_type'], {'title': f"{scenario['scenario_type'].replace('_', ' ').title()} Detection", 'why_fail2ban_missed': 'Attack pattern not matching static rules.', 'how_ml_detected': 'Multi-feature analysis including reputation, behavior, and context.'})
+                cases.append({
+                    'scenario_type': scenario['scenario_type'],
+                    'title': template['title'],
+                    'event_count': scenario['event_count'],
+                    'unique_ips': scenario['unique_ips'],
+                    'avg_risk_score': round(scenario['avg_risk_score'] or 0, 1),
+                    'tor_events': scenario['tor_events'] or 0,
+                    'vpn_events': scenario['vpn_events'] or 0,
+                    'datacenter_events': scenario['datacenter_events'] or 0,
+                    'countries_involved': scenario['countries_involved'] or 0,
+                    'why_fail2ban_missed': template['why_fail2ban_missed'],
+                    'how_ml_detected': template['how_ml_detected']
+                })
+
+            cache.set(cache_k, cases, ML_BENEFITS_TTL)
+            return jsonify({'success': True, 'cases': cases, 'from_cache': False}), 200
 
         finally:
             cursor.close()
