@@ -5,6 +5,7 @@ Handles blocking and unblocking of IP addresses
 
 import sys
 import uuid
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -21,7 +22,7 @@ from .ufw_sync import create_ufw_block_commands, create_ufw_unblock_commands
 def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_id=None,
              trigger_event_id=None, failed_attempts=0, threat_level=None,
              block_duration_minutes=1440, auto_unblock=True, created_by_user_id=None,
-             agent_id=None):
+             agent_id=None, metadata=None):
     """
     Block an IP address
 
@@ -37,6 +38,7 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
         auto_unblock (bool): Automatically unblock after duration
         created_by_user_id (int): User ID if manually blocked
         agent_id (int): Agent ID for agent-based blocking (optional)
+        metadata (dict): Additional metadata including ML explanation and evidence
 
     Returns:
         dict: {
@@ -74,7 +76,8 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     'message': f'IP {ip_address} is already blocked'
                 }
 
-            # Insert block
+            # Insert block with optional metadata (ML explanation and evidence)
+            metadata_json = json.dumps(metadata) if metadata else None
             cursor.execute("""
                 INSERT INTO ip_blocks (
                     ip_address,
@@ -90,9 +93,10 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     blocked_at,
                     unblock_at,
                     auto_unblock,
-                    created_by_user_id
+                    created_by_user_id,
+                    metadata
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW(), %s, %s, %s, %s
                 )
             """, (
                 ip_binary,
@@ -106,12 +110,13 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 threat_level,
                 unblock_at,
                 auto_unblock,
-                created_by_user_id
+                created_by_user_id,
+                metadata_json
             ))
 
             block_id = cursor.lastrowid
 
-            # Log blocking action
+            # Log blocking action with metadata
             action_uuid = str(uuid.uuid4())
             cursor.execute("""
                 INSERT INTO blocking_actions (
@@ -124,9 +129,10 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                     performed_by_user_id,
                     triggered_by_rule_id,
                     triggered_by_event_id,
-                    agent_id
+                    agent_id,
+                    metadata
                 ) VALUES (
-                    %s, %s, %s, 'blocked', %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, 'blocked', %s, %s, %s, %s, %s, %s, %s
                 )
             """, (
                 action_uuid,
@@ -137,7 +143,8 @@ def block_ip(ip_address, block_reason, block_source='rule_based', blocking_rule_
                 created_by_user_id,
                 blocking_rule_id,
                 trigger_event_id,
-                agent_id
+                agent_id,
+                metadata_json
             ))
 
             # Update rule statistics if rule-based

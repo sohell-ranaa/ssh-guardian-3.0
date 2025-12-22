@@ -320,6 +320,18 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
             auto_unblock = False  # Permanent block for critical threats
             adjusted_duration = 0  # 0 = permanent
 
+    # Build metadata with ML explanation and evidence
+    block_metadata = {
+        'rule_name': rule['rule_name'],
+        'rule_type': rule['rule_type'],
+        'ml_risk_score': ml_result.get('risk_score') if ml_result else None,
+        'ml_threat_type': ml_result.get('threat_type') if ml_result else None,
+        'ml_confidence': ml_result.get('confidence') if ml_result else None,
+        'is_anomaly': ml_result.get('is_anomaly') if ml_result else None,
+        'evidence': rule_to_apply.get('reason'),
+        'risk_factors': ml_risk_factors if ml_risk_factors else []
+    }
+
     # Block the IP
     block_result = block_ip(
         ip_address=ip_address,
@@ -330,7 +342,8 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
         failed_attempts=rule_to_apply.get('failed_attempts', 0),
         threat_level=rule_to_apply.get('threat_level'),
         block_duration_minutes=adjusted_duration,
-        auto_unblock=auto_unblock
+        auto_unblock=auto_unblock,
+        metadata=block_metadata
     )
 
     return {

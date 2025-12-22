@@ -10,7 +10,8 @@ __version__ = '1.0.0'
 
 # Module root directory
 ML_ROOT = Path(__file__).parent
-MODELS_DIR = ML_ROOT / 'models' / 'production'
+PROJECT_ROOT = ML_ROOT.parent.parent
+MODELS_DIR = PROJECT_ROOT / 'ml_models'
 
 # Lazy imports for performance
 _model_manager = None

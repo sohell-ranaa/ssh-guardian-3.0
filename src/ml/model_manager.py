@@ -56,68 +56,116 @@ class MLModelManager:
         self._load_models()
 
     def _load_models(self):
-        """Load all trained models from disk"""
-        logger.info("Loading ML models...")
+        """Load the active production model from database"""
+        logger.info("Loading ML model...")
 
+        # Try to load joblib/pickle modules
+        try:
+            import joblib
+            import pickle
+        except ImportError:
+            logger.error("joblib not installed. ML models unavailable.")
+            return
+
+        # Step 1: Get active model info from database
+        try:
+            conn = get_connection()
+            active_model = get_active_model_info(conn)
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not get active model from database: {e}")
+            active_model = None
+
+        if not active_model:
+            logger.warning("No active production model in database. Falling back to directory scan.")
+            self._load_models_from_directory()
+            return
+
+        # Step 2: Load from model_path (preferred) or by model_name
+        model_path_str = active_model.get('model_path')
+        model_name = active_model.get('model_name')
+        self.active_model_id = active_model.get('id')
+
+        # Try loading from explicit model_path first
+        if model_path_str:
+            model_path = Path(model_path_str)
+            if model_path.exists():
+                if self._load_single_model(model_path, model_name):
+                    logger.info(f"Loaded active model from database path: {model_name}")
+                    return
+
+        # Fallback: search in MODELS_DIR by name
+        if self.models_dir.exists():
+            for ext in ['.pkl', '.joblib']:
+                path = self.models_dir / f"{model_name}{ext}"
+                if path.exists():
+                    if self._load_single_model(path, model_name):
+                        logger.info(f"Loaded active model from MODELS_DIR: {model_name}")
+                        return
+
+        logger.warning(f"Could not find model file for: {model_name}")
+        # Last resort: scan directory for any models
+        self._load_models_from_directory()
+
+    def _load_single_model(self, model_path: Path, model_name: str) -> bool:
+        """Load a single model file"""
+        try:
+            import joblib
+            logger.info(f"  Loading {model_name} from {model_path}...")
+
+            model_data = joblib.load(model_path)
+
+            # Handle different model formats
+            if isinstance(model_data, dict):
+                self.models[model_name] = model_data.get('model')
+                self.scalers[model_name] = model_data.get('scaler')
+                self.model_info[model_name] = {
+                    'path': str(model_path),
+                    'feature_names': model_data.get('feature_names', []),
+                    'metrics': model_data.get('metrics', {}),
+                    'loaded_at': datetime.now()
+                }
+            else:
+                # Just the model object
+                self.models[model_name] = model_data
+                self.model_info[model_name] = {
+                    'path': str(model_path),
+                    'loaded_at': datetime.now()
+                }
+
+            logger.info(f"  ✓ {model_name} loaded successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"  ✗ Failed to load {model_path}: {e}")
+            return False
+
+    def _load_models_from_directory(self):
+        """Fallback: Load all models from directory (legacy behavior)"""
         if not self.models_dir.exists():
             logger.warning(f"Models directory not found: {self.models_dir}")
             self.models_dir.mkdir(parents=True, exist_ok=True)
             return
 
-        # Try to load joblib models
         try:
             import joblib
         except ImportError:
-            logger.error("joblib not installed. ML models unavailable.")
             return
 
         # Look for model files
-        model_patterns = ['*.pkl', '*.joblib']
-        model_files = []
-        for pattern in model_patterns:
-            model_files.extend(list(self.models_dir.glob(pattern)))
+        model_files = list(self.models_dir.glob('*.pkl')) + list(self.models_dir.glob('*.joblib'))
 
         if not model_files:
-            logger.warning("No model files found in production directory")
+            logger.warning("No model files found in models directory")
             return
 
         # Load each model
         for model_path in model_files:
-            try:
-                model_name = model_path.stem
-                logger.info(f"  Loading {model_name}...")
-
-                model_data = joblib.load(model_path)
-
-                # Handle different model formats
-                if isinstance(model_data, dict):
-                    self.models[model_name] = model_data.get('model')
-                    self.scalers[model_name] = model_data.get('scaler')
-                    self.model_info[model_name] = {
-                        'path': str(model_path),
-                        'feature_names': model_data.get('feature_names', []),
-                        'metrics': model_data.get('metrics', {}),
-                        'loaded_at': datetime.now()
-                    }
-                else:
-                    # Just the model object
-                    self.models[model_name] = model_data
-                    self.model_info[model_name] = {
-                        'path': str(model_path),
-                        'loaded_at': datetime.now()
-                    }
-
-                logger.info(f"  ✓ {model_name} loaded successfully")
-
-            except Exception as e:
-                logger.error(f"  ✗ Failed to load {model_path}: {e}")
+            self._load_single_model(model_path, model_path.stem)
 
         if self.models:
-            logger.info(f"Loaded {len(self.models)} ML model(s)")
-            # Get active model from database
+            logger.info(f"Loaded {len(self.models)} ML model(s) from directory")
             self._load_active_model_from_db()
-        else:
-            logger.warning("No ML models loaded. ML predictions unavailable.")
 
     def _load_active_model_from_db(self):
         """Load active model info from database"""
@@ -382,6 +430,118 @@ class MLModelManager:
 
         return None
 
+    def generate_explanation(self, event: Dict, prediction: Dict) -> Dict[str, Any]:
+        """
+        Generate human-readable explanation for ML prediction.
+
+        Args:
+            event: Original event data
+            prediction: ML prediction result from predict()
+
+        Returns:
+            Dict with 'explanation' (str) and 'evidence' (list of evidence points)
+        """
+        evidence = []
+        explanation_parts = []
+
+        risk_score = prediction.get('risk_score', 0)
+        threat_type = prediction.get('threat_type')
+        confidence = prediction.get('confidence', 0)
+        is_anomaly = prediction.get('is_anomaly', False)
+
+        # Get data from event
+        geo_data = event.get('geo', {}) or {}
+        threat_data = event.get('threat', {}) or {}
+        event_type = str(event.get('event_type', '')).lower()
+        username = event.get('target_username', '')
+        source_ip = event.get('source_ip_text', event.get('source_ip', ''))
+
+        # AbuseIPDB score contribution
+        abuse_score = float(threat_data.get('abuseipdb_score') or 0)
+        if abuse_score >= 90:
+            evidence.append(f"Critical AbuseIPDB score: {abuse_score}% (threshold: 90%)")
+            explanation_parts.append(f"IP has critical abuse reputation ({abuse_score}%)")
+        elif abuse_score >= 70:
+            evidence.append(f"High AbuseIPDB score: {abuse_score}% (threshold: 70%)")
+            explanation_parts.append(f"IP has high abuse reputation ({abuse_score}%)")
+        elif abuse_score >= 50:
+            evidence.append(f"Medium AbuseIPDB score: {abuse_score}%")
+        elif abuse_score >= 25:
+            evidence.append(f"Low AbuseIPDB score: {abuse_score}%")
+
+        # VPN/Proxy/Tor detection
+        if geo_data.get('is_tor'):
+            evidence.append("Tor exit node detected")
+            explanation_parts.append("Connection via Tor anonymity network")
+        elif geo_data.get('is_vpn'):
+            evidence.append("VPN detected")
+        elif geo_data.get('is_proxy'):
+            evidence.append("Proxy detected")
+        elif geo_data.get('is_datacenter'):
+            evidence.append("Datacenter IP detected")
+
+        # High-risk country
+        country_code = geo_data.get('country_code', '')
+        if country_code in {'CN', 'RU', 'KP', 'IR', 'BY'}:
+            evidence.append(f"High-risk country: {country_code}")
+            explanation_parts.append(f"Login attempt from high-risk country ({country_code})")
+
+        # Threat type explanation
+        if threat_type == 'brute_force':
+            evidence.append("Brute force pattern detected: Multiple rapid failed attempts")
+            explanation_parts.append("Rapid repeated login failures indicate brute force attack")
+        elif threat_type == 'credential_stuffing':
+            evidence.append("Credential stuffing pattern: Multiple usernames tried")
+            explanation_parts.append("Multiple different usernames tried from same IP")
+        elif threat_type == 'reconnaissance':
+            evidence.append("Reconnaissance pattern: Probing for valid usernames")
+        elif threat_type == 'distributed_attack':
+            evidence.append("Distributed attack pattern detected")
+        elif threat_type == 'suspicious_access':
+            evidence.append("Suspicious access: Off-hours from high-risk location")
+
+        # Event type
+        if 'failed' in event_type:
+            evidence.append(f"Failed login attempt for user: {username}")
+
+        # Admin/root attempt
+        if username and username.lower() in ('root', 'admin', 'administrator'):
+            evidence.append(f"Privileged account attempt: {username}")
+            explanation_parts.append(f"Attempt to access privileged account '{username}'")
+
+        # VirusTotal
+        vt_positives = int(threat_data.get('virustotal_positives') or 0)
+        if vt_positives >= 5:
+            evidence.append(f"VirusTotal: {vt_positives} security engines flagged this IP")
+
+        # Build summary explanation
+        if risk_score >= 80:
+            risk_level = "CRITICAL"
+        elif risk_score >= 60:
+            risk_level = "HIGH"
+        elif risk_score >= 40:
+            risk_level = "MEDIUM"
+        elif risk_score >= 20:
+            risk_level = "LOW"
+        else:
+            risk_level = "MINIMAL"
+
+        if explanation_parts:
+            explanation = f"Risk Level: {risk_level} ({risk_score}%). " + ". ".join(explanation_parts) + "."
+        else:
+            explanation = f"Risk Level: {risk_level} ({risk_score}%). Confidence: {confidence:.0%}."
+
+        if is_anomaly:
+            explanation += " Classified as anomaly."
+
+        return {
+            'explanation': explanation,
+            'evidence': evidence,
+            'risk_level': risk_level,
+            'threat_type': threat_type,
+            'confidence': confidence
+        }
+
     def _fallback_prediction(self, event: Dict) -> Dict[str, Any]:
         """
         Heuristic-based prediction when ML models unavailable.
@@ -496,11 +656,18 @@ class MLModelManager:
         }
 
     def reload_models(self):
-        """Reload all models from disk"""
+        """Reload the active model from database (alias for reload_active_model)"""
+        self.reload_active_model()
+
+    def reload_active_model(self):
+        """Reload the active production model from database (for hot-swapping)"""
+        logger.info("Reloading active model...")
         self.models.clear()
         self.scalers.clear()
         self.model_info.clear()
+        self.active_model_id = None
         self._load_models()
+        logger.info(f"Reloaded active model: {list(self.models.keys())}")
 
     def set_active_model(self, model_id: int):
         """Set the active model by database ID"""

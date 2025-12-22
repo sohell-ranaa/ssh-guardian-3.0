@@ -350,12 +350,16 @@ def get_model(model_id):
 
 @ml_routes.route('/models/<int:model_id>/promote', methods=['POST'])
 def promote_model(model_id):
-    """Promote model to production"""
+    """Promote model to production and reload the active model"""
     try:
-        _, trainer = _get_ml_module()
+        manager, trainer = _get_ml_module()
         if trainer:
             success = trainer.promote_model(model_id)
             if success:
+                # Reload the ML manager to use the newly promoted model
+                if manager:
+                    manager.reload_active_model()
+                    logger.info(f"Model {model_id} promoted and reloaded into ML manager")
                 return jsonify({'success': True, 'message': 'Model promoted to production'}), 200
             else:
                 return jsonify({'success': False, 'error': 'Failed to promote model'}), 500

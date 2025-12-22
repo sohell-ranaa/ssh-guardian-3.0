@@ -100,7 +100,7 @@ def create_ufw_block_commands(ip_address: str, block_id: int,
                 ufw_command = f"ufw deny from {ip_address}"
                 cursor.execute("""
                     INSERT INTO agent_ufw_commands
-                    (agent_id, command_uuid, command_type, params_json, ufw_command, status, created_at)
+                    (agent_id, command_uuid, command_type, params, ufw_command, status, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s, NOW())
                 """, (agent['id'], str(uuid.uuid4()), 'deny_from', json.dumps(params), ufw_command, 'pending'))
                 commands_created += 1

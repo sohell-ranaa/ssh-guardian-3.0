@@ -81,7 +81,7 @@ def get_active_model_info(conn) -> Optional[Dict[str, Any]]:
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT id, model_name, algorithm, accuracy, f1_score
+            SELECT id, model_name, algorithm, accuracy, f1_score, model_path
             FROM ml_models
             WHERE is_active = TRUE AND status = 'production'
             LIMIT 1
