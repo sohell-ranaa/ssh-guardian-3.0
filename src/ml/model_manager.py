@@ -292,12 +292,18 @@ class MLModelManager:
         ensemble_prediction = int(np.round(np.average(predictions, weights=weights)))
         is_anomaly = ensemble_prediction == 1
 
-        # Calculate confidence (based on agreement)
+        # Calculate confidence (based on agreement or model certainty)
         if len(predictions) > 1:
             agreement = np.mean([1 if p == ensemble_prediction else 0 for p in predictions])
             confidence = agreement
         else:
-            confidence = probabilities[0] if probabilities else 0.7
+            # Single model: confidence = how certain the model is (distance from 0.5)
+            # prob=0.9 → 90% sure anomaly → confidence=0.9
+            # prob=0.1 → 90% sure normal → confidence=0.9
+            if probabilities:
+                confidence = max(probabilities[0], 1 - probabilities[0])
+            else:
+                confidence = 0.7
 
         # Determine threat type
         threat_type = self._classify_threat_type(event, features, risk_score, is_anomaly)
@@ -320,23 +326,29 @@ class MLModelManager:
         if is_vpn or is_proxy or is_datacenter:
             risk_score = min(100, risk_score + 15)
 
-        # Critical AbuseIPDB score (>=90) = ALWAYS BLOCK, minimum risk 90
+        # Critical AbuseIPDB score (>=90) = ALWAYS BLOCK, minimum risk 90 + boost
         if abuseipdb_score >= 90:
-            risk_score = max(risk_score, 90 + int((abuseipdb_score - 90) * 0.5))
+            floor = 90 + int((abuseipdb_score - 90) * 0.5)
+            boost = int(abuseipdb_score * 0.08)  # ~7-8 point boost
+            risk_score = min(100, max(risk_score, floor) + boost)
             is_anomaly = True
             threat_type = threat_type or 'critical_abuse_score'
             confidence = max(confidence, 0.95)
 
-        # High AbuseIPDB score (>=70) = minimum risk 70, force anomaly (lowered from 80)
+        # High AbuseIPDB score (>=70) = minimum risk 70 + boost
         elif abuseipdb_score >= 70:
-            risk_score = max(risk_score, 70 + int((abuseipdb_score - 70) * 0.5))
+            floor = 70 + int((abuseipdb_score - 70) * 0.5)
+            boost = int(abuseipdb_score * 0.08)  # ~6-7 point boost
+            risk_score = min(100, max(risk_score, floor) + boost)
             is_anomaly = True
             threat_type = threat_type or 'known_malicious'
             confidence = max(confidence, 0.85)
 
-        # Medium AbuseIPDB (50-70) = minimum risk 50
+        # Medium AbuseIPDB (50-70) = minimum risk 50 + boost
         elif abuseipdb_score >= 50:
-            risk_score = max(risk_score, 50 + int((abuseipdb_score - 50) * 0.5))
+            floor = 50 + int((abuseipdb_score - 50) * 0.5)
+            boost = int(abuseipdb_score * 0.08)  # ~4-5 point boost
+            risk_score = min(100, max(risk_score, floor) + boost)
 
         # Low-medium AbuseIPDB (25-50) = add partial risk
         elif abuseipdb_score >= 25:

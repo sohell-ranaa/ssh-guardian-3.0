@@ -521,9 +521,15 @@ def get_event_detail(event_id):
             if event.get(field):
                 event[field] = event[field].isoformat()
 
-        for field in ['latitude', 'longitude', 'ml_confidence', 'ml_risk_score']:
+        for field in ['latitude', 'longitude']:
             if event.get(field) is not None:
                 event[field] = float(event[field])
+
+        # ML fields need to be converted to 0-100 scale for display
+        if event.get('ml_confidence') is not None:
+            event['ml_confidence'] = round(float(event['ml_confidence']) * 100, 1)
+        if event.get('ml_risk_score') is not None:
+            event['ml_risk_score'] = round(float(event['ml_risk_score']) * 100, 1)
 
         # Get related events
         cursor.execute("""
@@ -664,7 +670,7 @@ def get_top_ips():
         for ip in ips:
             ip['count'] = int(ip['count'])
             ip['failed_count'] = int(ip['failed_count'] or 0)
-            ip['max_risk_score'] = float(ip['max_risk_score']) if ip['max_risk_score'] else 0
+            ip['max_risk_score'] = round(float(ip['max_risk_score']) * 100, 1) if ip['max_risk_score'] else 0
             ip['is_blocked'] = bool(ip['is_blocked'])
             ip['country_flag'] = get_country_flag(ip.get('country_code'))
 

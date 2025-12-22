@@ -15,7 +15,7 @@
         <div class="ev-filters">
             <select id="sshType"><option value="">All Types</option><option value="failed">Failed</option><option value="successful">Successful</option></select>
             <select id="sshAgent"><option value="">All Agents</option></select>
-            <select id="sshTime"><option value="1h">Last Hour</option><option value="6h">6 Hours</option><option value="24h" selected>24 Hours</option><option value="7d">7 Days</option><option value="30d">30 Days</option></select>
+            <select id="sshTime"><option value="1h">Last Hour</option><option value="6h">6 Hours</option><option value="24h">24 Hours</option><option value="7d">7 Days</option><option value="30d" selected>30 Days</option></select>
             <button class="ev-apply" onclick="EV.loadSSH(1)">Apply</button>
         </div>
         <div class="ev-card">
@@ -407,11 +407,11 @@ const EV = {
 
     getFlag(cc) { return cc ? String.fromCodePoint(...cc.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))) : ''; },
 
-    getRiskClass(r) { return r >= 80 ? 'crit' : r >= 60 ? 'high' : r >= 40 ? 'med' : 'low'; },
+    getRiskClass(r) { return r >= 80 ? 'crit' : r >= 60 ? 'high' : r >= 40 ? 'med' : r >= 20 ? 'low' : 'clean'; },
 
-    getRiskColor(r) { return r >= 80 ? '#991b1b' : r >= 60 ? '#dc2626' : r >= 40 ? '#d97706' : '#16a34a'; },
+    getRiskColor(r) { return r >= 80 ? '#991b1b' : r >= 60 ? '#dc2626' : r >= 40 ? '#d97706' : r >= 20 ? '#ca8a04' : '#16a34a'; },
 
-    getRiskLevel(r) { return r >= 80 ? 'CRITICAL' : r >= 60 ? 'HIGH' : r >= 40 ? 'MEDIUM' : 'LOW'; },
+    getRiskLevel(r) { return r >= 80 ? 'CRITICAL' : r >= 60 ? 'HIGH' : r >= 40 ? 'MEDIUM' : r >= 20 ? 'LOW' : 'CLEAN'; },
 
     renderRisk(r, cls) { return `<div class="c-risk"><span>${Math.round(r)}</span><div class="c-risk-bar"><div class="c-risk-fill ${cls}" style="width:${r}%"></div></div></div>`; },
 

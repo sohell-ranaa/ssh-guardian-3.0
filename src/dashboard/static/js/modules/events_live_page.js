@@ -209,12 +209,13 @@
         const location = event.location || {};
         const riskScore = event.ml_risk_score || 0;
 
-        // Helper function for score class
+        // Helper function for score class (5-tier system)
         function getScoreClass(score) {
             if (score >= 80) return 'critical';
             if (score >= 60) return 'high';
-            if (score >= 40) return 'moderate';
-            return 'low';
+            if (score >= 40) return 'medium';
+            if (score >= 20) return 'low';
+            return 'clean';
         }
 
         // Status badges
@@ -349,7 +350,7 @@
                         </div>
                         <div class="ml-detail-row">
                             <span>Confidence:</span>
-                            <span class="ml-confidence">${threat.confidence ? (parseFloat(threat.confidence) * 100).toFixed(0) + '%' : 'N/A'}</span>
+                            <span class="ml-confidence">${threat.confidence ? parseFloat(threat.confidence).toFixed(0) + '%' : 'N/A'}</span>
                         </div>
                         <div class="ml-detail-row">
                             <span>ML Threat Type:</span>
@@ -458,8 +459,9 @@
                 function getScoreClass(score) {
                     if (score >= 80) return 'critical';
                     if (score >= 60) return 'high';
-                    if (score >= 40) return 'moderate';
-                    return 'low';
+                    if (score >= 40) return 'medium';
+                    if (score >= 20) return 'low';
+                    return 'clean';
                 }
 
                 const threatLevel = threat.threat_level || threat.overall_threat_level || 'unknown';
