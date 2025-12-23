@@ -1,57 +1,93 @@
-<!-- SSH Guardian v3.0 - Blocked IPs Page (Standalone) -->
+<!-- SSH Guardian v3.0 - Blocked IPs Page (Active + History Tabs) -->
 <div id="page-blocked-ips" class="page-content" style="display: none;">
     <div class="ev-header">
         <div>
             <h1>Blocked IPs</h1>
-            <p>View and manage blocked IP addresses</p>
+            <p>View active blocks and block history</p>
         </div>
         <button class="refresh-btn" onclick="BLK.refresh()">
-            <span class="refresh-icon">↻</span> Refresh
+            <span class="refresh-icon">&#8635;</span> Refresh
         </button>
     </div>
 
-    <div class="blk-stats-row">
+    <!-- Tab Navigation -->
+    <div class="blk-tabs">
+        <button class="blk-tab active" data-tab="active" onclick="BLK.switchTab('active')">Active Blocks</button>
+        <button class="blk-tab" data-tab="history" onclick="BLK.switchTab('history')">History</button>
+    </div>
+
+    <!-- Stats Row (only for Active tab) -->
+    <div id="blkStatsRow" class="blk-stats-row">
         <div class="blk-stat-card blk-stat-red">
-            <span class="blk-stat-value" id="blk-stat-blocked">-</span>
+            <span class="blk-stat-value" id="blk-stat-total">-</span>
             <span class="blk-stat-label">Active Blocks</span>
         </div>
-        <div class="blk-stat-card blk-stat-green">
-            <span class="blk-stat-value" id="blk-stat-unblocked">-</span>
-            <span class="blk-stat-label">Unblocked</span>
+        <div class="blk-stat-card blk-stat-blue">
+            <span class="blk-stat-value" id="blk-stat-ufw">-</span>
+            <span class="blk-stat-label">UFW DENY</span>
         </div>
         <div class="blk-stat-card blk-stat-orange">
             <span class="blk-stat-value" id="blk-stat-fail2ban">-</span>
             <span class="blk-stat-label">Fail2ban</span>
         </div>
-        <div class="blk-stat-card blk-stat-blue">
-            <span class="blk-stat-value" id="blk-stat-rule">-</span>
-            <span class="blk-stat-label">Rule Based</span>
-        </div>
     </div>
 
+    <!-- Filters -->
     <div class="ev-filters">
         <input type="text" id="blkIp" placeholder="Filter IP..." onkeyup="BLK.debounceFilter()">
-        <select id="blkStatus" onchange="BLK.load()"><option value="">All Status</option><option value="blocked">Blocked</option><option value="escalate">Escalated</option><option value="unblocked">Unblocked</option></select>
-        <select id="blkSource" onchange="BLK.load()"><option value="">All Sources</option><option value="rule">Rule Based</option><option value="manual">Manual</option><option value="ml">ML</option><option value="fail2ban">Fail2ban</option><option value="ufw">UFW</option></select>
+        <select id="blkSource" onchange="BLK.load()">
+            <option value="">All Sources</option>
+            <option value="ufw">UFW</option>
+            <option value="fail2ban">Fail2ban</option>
+        </select>
         <select id="blkAgent" onchange="BLK.load()"><option value="">All Agents</option></select>
-        <select id="blkTime" onchange="BLK.load()"><option value="24h">24 Hours</option><option value="7d" selected>7 Days</option><option value="30d">30 Days</option><option value="90d">90 Days</option></select>
+        <!-- History-only filters (hidden on active tab) -->
+        <select id="blkStatus" onchange="BLK.load()" style="display:none"><option value="">All Status</option><option value="blocked">Blocked</option><option value="escalate">Escalated</option><option value="unblocked">Unblocked</option></select>
+        <select id="blkTime" onchange="BLK.load()" style="display:none"><option value="24h">24 Hours</option><option value="7d" selected>7 Days</option><option value="30d">30 Days</option><option value="90d">90 Days</option></select>
     </div>
 
     <div id="blkBox" class="ev-card"><div class="ev-msg">Loading...</div></div>
 
     <div id="blkPg" class="ev-pg" style="display:none">
         <span id="blkInfo"></span>
-        <div><button onclick="BLK.load(BLK.pg-1)">← Prev</button><button onclick="BLK.load(BLK.pg+1)">Next →</button></div>
+        <div><button onclick="BLK.load(BLK.pg-1)">&#8592; Prev</button><button onclick="BLK.load(BLK.pg+1)">Next &#8594;</button></div>
     </div>
 </div>
 
 <style>
 /* Blocked IPs Page - Uses shared CSS components */
 
+/* Tab Navigation */
+.blk-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+.blk-tab {
+    padding: 10px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.blk-tab.active {
+    color: var(--azure-blue, #3b82f6);
+    border-bottom-color: var(--azure-blue, #3b82f6);
+}
+.blk-tab:hover:not(.active) {
+    color: var(--text-primary);
+    background: var(--surface-hover, rgba(0,0,0,0.05));
+}
+
 /* Stats Row */
 .blk-stats-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     margin-bottom: 20px;
 }
@@ -74,19 +110,18 @@
     margin-top: 4px;
 }
 .blk-stat-red .blk-stat-value { color: var(--color-danger, #ef4444); }
-.blk-stat-green .blk-stat-value { color: var(--color-success, #10b981); }
-.blk-stat-orange .blk-stat-value { color: var(--color-warning, #f59e0b); }
 .blk-stat-blue .blk-stat-value { color: var(--azure-blue, #3b82f6); }
+.blk-stat-orange .blk-stat-value { color: var(--color-warning, #f59e0b); }
 
 @media (max-width: 768px) {
-    .blk-stats-row { grid-template-columns: repeat(2, 1fr); }
+    .blk-stats-row { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 480px) {
     .blk-stats-row { grid-template-columns: 1fr; }
 }
 
 /* Table minimum width override */
-#page-blocked-ips .ev-tbl{min-width:700px}
+#page-blocked-ips .ev-tbl{min-width:600px}
 
 /* IP cell font-weight override */
 #page-blocked-ips .c-ip{font-weight:600}
@@ -97,6 +132,7 @@ const BLK = {
     pg: 1,
     total: 0,
     filterTimer: null,
+    currentTab: 'active',
 
     async init() {
         await this.loadAgents();
@@ -109,11 +145,33 @@ const BLK = {
             const d = await r.json();
             if (d.success && d.agents) {
                 const s = document.getElementById('blkAgent');
-                // Clear existing options except first (All Agents)
                 while (s.options.length > 1) s.remove(1);
                 d.agents.forEach(a => s.add(new Option(a.hostname || a.agent_id, a.id)));
             }
         } catch (e) {}
+    },
+
+    switchTab(tab) {
+        this.currentTab = tab;
+        this.pg = 1;
+        document.querySelectorAll('.blk-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+
+        // Show/hide elements based on tab
+        const statsRow = document.getElementById('blkStatsRow');
+        const statusFilter = document.getElementById('blkStatus');
+        const timeFilter = document.getElementById('blkTime');
+
+        if (tab === 'history') {
+            statsRow.style.display = 'none';
+            statusFilter.style.display = '';
+            timeFilter.style.display = '';
+        } else {
+            statsRow.style.display = '';
+            statusFilter.style.display = 'none';
+            timeFilter.style.display = 'none';
+        }
+
+        this.load(1);
     },
 
     refresh() { this.load(1); },
@@ -124,6 +182,71 @@ const BLK = {
     },
 
     async load(page = 1) {
+        if (this.currentTab === 'history') {
+            await this.loadHistory(page);
+        } else {
+            await this.loadActive();
+        }
+    },
+
+    async loadActive() {
+        const box = document.getElementById('blkBox');
+        const pgEl = document.getElementById('blkPg');
+        box.innerHTML = '<div class="ev-msg">Loading...</div>';
+        if (pgEl) pgEl.style.display = 'none';
+
+        const ip = document.getElementById('blkIp')?.value?.trim() || '';
+        const source = document.getElementById('blkSource')?.value || '';
+        const agent = document.getElementById('blkAgent')?.value || '';
+
+        const params = new URLSearchParams({ _t: Date.now() });
+        if (ip) params.append('search', ip);
+        if (agent) params.append('agent_id', agent);
+
+        try {
+            const r = await fetch(`/api/dashboard/blocking/real-blocks?${params.toString()}`);
+            const d = await r.json();
+
+            if (d.success && d.blocks?.length) {
+                let blocks = d.blocks;
+
+                // Client-side filter by source
+                if (source) {
+                    blocks = blocks.filter(b => b.source === source);
+                }
+
+                // Update stats
+                document.getElementById('blk-stat-total').textContent = blocks.length;
+                document.getElementById('blk-stat-ufw').textContent = d.ufw_count || blocks.filter(b => b.source === 'ufw').length;
+                document.getElementById('blk-stat-fail2ban').textContent = d.fail2ban_count || blocks.filter(b => b.source === 'fail2ban').length;
+
+                box.innerHTML = `<div class="ev-tbl-wrap"><table class="ev-tbl"><thead><tr>
+                    <th>Blocked At</th><th>IP Address</th><th>Source</th><th>Agent</th><th>Reason</th>
+                </tr></thead><tbody>${blocks.map(b => {
+                    const srcClass = b.source === 'ufw' ? 'ufw' : 'fail2ban';
+                    const srcLabel = b.block_type || (b.source === 'ufw' ? 'UFW DENY' : 'Fail2ban');
+                    return `<tr>
+                    <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${this.fmtTime(b.blocked_at)}</td>
+                    <td class="c-ip">${this.esc(b.ip_address)}</td>
+                    <td><span class="c-source ${srcClass}">${this.esc(srcLabel)}</span></td>
+                    <td><span class="c-agent">${this.esc(b.agent_name || 'System')}</span></td>
+                    <td><div class="c-reason" title="${this.esc(b.reason || '')}">${this.esc(b.reason || '-')}</div></td>
+                </tr>`;
+                }).join('')}</tbody></table></div>`;
+
+            } else {
+                document.getElementById('blk-stat-total').textContent = '0';
+                document.getElementById('blk-stat-ufw').textContent = '0';
+                document.getElementById('blk-stat-fail2ban').textContent = '0';
+                box.innerHTML = '<div class="ev-msg">No active blocks found</div>';
+            }
+        } catch (e) {
+            console.error('Error loading active blocks:', e);
+            box.innerHTML = '<div class="ev-msg err">Failed to load active blocks</div>';
+        }
+    },
+
+    async loadHistory(page = 1) {
         this.pg = page;
         const box = document.getElementById('blkBox');
         const pgEl = document.getElementById('blkPg');
@@ -155,14 +278,11 @@ const BLK = {
                 this.total = d.total || d.events.length;
                 const totalPages = Math.ceil(this.total / 50);
 
-                // Update stats
-                this.updateStats(d.events);
-
                 box.innerHTML = `<div class="ev-tbl-wrap"><table class="ev-tbl"><thead><tr>
-                    <th>Last Activity</th><th>IP Address</th><th>Status</th><th>Source</th><th>Agent</th><th>Reason</th>
+                    <th>Time</th><th>IP Address</th><th>Event</th><th>Source</th><th>Agent</th><th>Reason</th>
                 </tr></thead><tbody>${d.events.map(e => {
                     const src = (e.block_source || '').toLowerCase();
-                    const srcClass = src.includes('rule') ? 'rule_based' : src.includes('ml') ? 'ml' : src;
+                    const srcClass = src.includes('rule') ? 'rule_based' : src.includes('ml') ? 'ml' : src.includes('fail2ban') ? 'fail2ban' : src.includes('ufw') ? 'ufw' : 'manual';
                     const srcLabel = e.block_source ? e.block_source.replace(/_/g, ' ').replace('based', '').trim() : '-';
                     const evType = (e.event_type || '').toLowerCase();
                     const isBlocked = evType === 'blocked' || evType === 'block' || evType === 'escalate';
@@ -186,101 +306,12 @@ const BLK = {
                     pgEl.querySelectorAll('button')[1].disabled = page >= totalPages;
                 }
             } else {
-                box.innerHTML = '<div class="ev-msg">No block events found</div>';
-                this.updateStats([]);
+                box.innerHTML = '<div class="ev-msg">No block history found</div>';
             }
         } catch (e) {
-            console.error('Error loading blocked:', e);
-            box.innerHTML = '<div class="ev-msg err">Failed to load block events</div>';
+            console.error('Error loading history:', e);
+            box.innerHTML = '<div class="ev-msg err">Failed to load block history</div>';
         }
-    },
-
-    showDetail(ip) {
-        // Try BlockedIPs.Modal first (from blocked_ips_page.js)
-        if (window.BlockedIPs?.Modal?.showDetails) {
-            window.BlockedIPs.Modal.showDetails(ip);
-        }
-        // Fallback to firewall detail modal
-        else if (typeof showRealBlockDetail === 'function') {
-            showRealBlockDetail(ip, 'unknown', null, null);
-        }
-        // Final fallback - show basic alert
-        else {
-            alert(`IP: ${ip}\n\nDetails modal not available.`);
-        }
-    },
-
-    async unblock(ip) {
-        if (!confirm(`Unblock IP: ${ip}?`)) return;
-        try {
-            const r = await fetch('/api/dashboard/blocking/blocks/unblock', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip, reason: 'Manual unblock from Blocked IPs page' })
-            });
-            const d = await r.json();
-            if (d.success) {
-                if (window.showToast) window.showToast(`IP ${ip} unblocked successfully`, 'success');
-                else alert(`IP ${ip} unblocked successfully`);
-                this.load(this.pg);
-            } else {
-                if (window.showToast) window.showToast(`Failed to unblock: ${d.error || d.message}`, 'error');
-                else alert(`Failed to unblock: ${d.error || d.message}`);
-            }
-        } catch (e) {
-            console.error('Unblock error:', e);
-            if (window.showToast) window.showToast(`Error: ${e.message}`, 'error');
-            else alert(`Error: ${e.message}`);
-        }
-    },
-
-    async reblock(ip) {
-        if (!confirm(`Re-block IP: ${ip}?`)) return;
-        try {
-            // Get selected agent from dropdown
-            const agentId = document.getElementById('blkAgent')?.value || null;
-            const payload = {
-                ip_address: ip,
-                reason: 'Re-blocked from Blocked IPs page',
-                duration_hours: 24
-            };
-            if (agentId) payload.agent_id = parseInt(agentId);
-
-            const r = await fetch('/api/dashboard/blocking/blocks/manual', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const d = await r.json();
-            if (d.success) {
-                if (window.showToast) window.showToast(`IP ${ip} blocked for 24 hours`, 'success');
-                else alert(`IP ${ip} blocked for 24 hours`);
-                this.load(this.pg);
-            } else {
-                if (window.showToast) window.showToast(`Failed to block: ${d.error || d.message}`, 'error');
-                else alert(`Failed to block: ${d.error || d.message}`);
-            }
-        } catch (e) {
-            console.error('Block error:', e);
-            if (window.showToast) window.showToast(`Error: ${e.message}`, 'error');
-            else alert(`Error: ${e.message}`);
-        }
-    },
-
-    updateStats(events) {
-        let blocked = 0, unblocked = 0, fail2ban = 0, rule = 0;
-        events.forEach(e => {
-            const evType = (e.event_type || '').toLowerCase();
-            const isBlocked = evType === 'blocked' || evType === 'block' || evType === 'escalate';
-            if (isBlocked) blocked++; else unblocked++;
-            const src = (e.block_source || '').toLowerCase();
-            if (src.includes('fail2ban')) fail2ban++;
-            if (src.includes('rule')) rule++;
-        });
-        document.getElementById('blk-stat-blocked').textContent = blocked;
-        document.getElementById('blk-stat-unblocked').textContent = unblocked;
-        document.getElementById('blk-stat-fail2ban').textContent = fail2ban;
-        document.getElementById('blk-stat-rule').textContent = rule;
     },
 
     esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; },

@@ -857,6 +857,24 @@ def create_ufw_command(agent_id):
                     user_id=get_current_user_id()
                 )
 
+            # If escalating from fail2ban, also unban from fail2ban
+            if is_escalation and from_ip:
+                try:
+                    unban_conn = get_connection()
+                    unban_cursor = unban_conn.cursor()
+                    unban_uuid = str(uuid.uuid4())
+                    unban_cursor.execute("""
+                        INSERT INTO fail2ban_commands
+                            (agent_id, command_uuid, command_type, ip_address, jail_name, status, created_at)
+                        VALUES (%s, %s, 'unban', %s, 'sshd', 'pending', NOW())
+                    """, (agent_id, unban_uuid, from_ip))
+                    unban_conn.commit()
+                    unban_cursor.close()
+                    unban_conn.close()
+                    print(f"Queued fail2ban unban for {from_ip} after UFW escalation")
+                except Exception as unban_err:
+                    print(f"Warning: Failed to queue fail2ban unban after UFW escalation: {unban_err}")
+
         # Log delete command as unblock
         if command_type in ('delete', 'delete_by_rule') and from_ip and log_block_event:
             log_block_event(
@@ -1463,6 +1481,25 @@ def ufw_quick_action(agent_id):
                     user_id=get_current_user_id()
                 )
 
+            # If escalating from fail2ban, also unban from fail2ban
+            if is_escalation and ip:
+                try:
+                    # Queue fail2ban unban command for the agent
+                    unban_conn = get_connection()
+                    unban_cursor = unban_conn.cursor()
+                    unban_uuid = str(uuid.uuid4())
+                    unban_cursor.execute("""
+                        INSERT INTO fail2ban_commands
+                            (agent_id, command_uuid, command_type, ip_address, jail_name, status, created_at)
+                        VALUES (%s, %s, 'unban', %s, 'sshd', 'pending', NOW())
+                    """, (agent_id, unban_uuid, ip))
+                    unban_conn.commit()
+                    unban_cursor.close()
+                    unban_conn.close()
+                    print(f"Queued fail2ban unban for {ip} after UFW escalation")
+                except Exception as unban_err:
+                    print(f"Warning: Failed to queue fail2ban unban after UFW escalation: {unban_err}")
+
         cursor.close()
         conn.close()
 
@@ -1470,6 +1507,8 @@ def ufw_quick_action(agent_id):
         cache = get_cache()
         cache.delete_pattern(f'ufw:{agent_id}')
         cache.delete_pattern('blocking')
+        if is_escalation:
+            cache.delete_pattern(f'fail2ban:{agent_id}')
 
         # Audit log
         AuditLogger.log_action(
