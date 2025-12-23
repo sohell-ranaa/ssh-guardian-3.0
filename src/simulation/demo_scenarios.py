@@ -343,6 +343,10 @@ def get_demo_scenarios(use_fresh_ips: bool = True) -> List[Dict]:
             "rule_name": scenario.get("rule_name", ""),
             "action_type": scenario.get("action_type", "block"),
             "is_private_ip": scenario.get("is_private_ip", False),
+            "event_count": scenario.get("event_count", 1),
+            "usernames": scenario.get("usernames", ["root"]),
+            "baseline_user": scenario.get("baseline_user", ""),
+            "log_template": scenario.get("log_template", ""),
             "expected_results": {
                 "rule_triggered": scenario.get("rule_name", ""),
                 "block_action": scenario.get("block_duration", "NO BLOCK"),

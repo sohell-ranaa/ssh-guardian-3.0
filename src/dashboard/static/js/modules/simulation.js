@@ -58,9 +58,19 @@
             const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenarioId}"]`);
             const scenarioIp = card?.querySelector('.scenario-ip')?.textContent.trim() || scenario.ip;
 
-            // Populate modal
+            // Populate modal header
             document.getElementById('scenario-modal-title').textContent = scenario.name;
-            document.getElementById('scenario-modal-subtitle').textContent = `IP: ${scenarioIp} | User: ${scenario.username || 'root'}`;
+
+            // Show category badge in subtitle
+            const categoryLabels = {
+                'ufw_block': '🛡️ UFW Auto-Block',
+                'fail2ban': '🔒 Fail2ban Detection',
+                'ml_behavioral': '🧠 ML Behavioral',
+                'alert_only': '⚠️ Alert Only',
+                'private_ip': '🏠 Private IP Analysis',
+                'baseline': '✅ Control Test'
+            };
+            document.getElementById('scenario-modal-subtitle').textContent = categoryLabels[scenario.category] || scenario.category;
             document.getElementById('scenario-modal-desc').textContent = scenario.description || '';
 
             // Check target selection
@@ -76,14 +86,17 @@
                 varsContainer.style.opacity = '1';
             }
 
-            // Populate input fields
-            document.getElementById('scenario-var-ip').value = scenarioIp || '8.8.8.8';
-            document.getElementById('scenario-var-user').value = scenario.username || 'testuser';
+            // Populate input fields with scenario-specific defaults
+            document.getElementById('scenario-var-ip').value = scenarioIp || scenario.ip;
+
+            // Get first username from scenario's usernames array or use default
+            const defaultUsername = scenario.usernames?.[0] || scenario.baseline_user || scenario.username || 'root';
+            document.getElementById('scenario-var-user').value = defaultUsername;
             document.getElementById('scenario-var-count').value = scenario.event_count || 1;
 
-            // Set auth type
+            // Set auth type based on scenario
             const authTypeSelect = document.getElementById('scenario-var-auth');
-            if (scenario.log_template?.includes('publickey')) {
+            if (scenario.log_template?.includes('publickey') || scenario.category === 'baseline') {
                 authTypeSelect.value = 'publickey';
             } else if (scenario.log_template?.includes('keyboard-interactive')) {
                 authTypeSelect.value = 'keyboard-interactive';
@@ -91,24 +104,30 @@
                 authTypeSelect.value = 'password';
             }
 
-            // Set result
+            // Set result based on scenario type
             const resultSelect = document.getElementById('scenario-var-result');
-            resultSelect.value = scenario.log_template?.includes('Accepted') ? 'Accepted' : 'Failed';
+            if (scenario.category === 'baseline' || scenario.category === 'alert_only' ||
+                scenario.log_template?.includes('Accepted') || scenario.category === 'ml_behavioral') {
+                resultSelect.value = 'Accepted';
+            } else {
+                resultSelect.value = 'Failed';
+            }
 
-            // Expected result
+            // Expected result with detailed explanation
             const expectedEl = document.getElementById('scenario-modal-expected');
             expectedEl.className = 'scenario-modal-expected';
 
-            if (scenario.category === 'baseline') {
-                expectedEl.textContent = '✅ Expected: No Block, No Alert';
-                expectedEl.classList.add('no-block');
-            } else if (scenario.category === 'alert_only') {
-                expectedEl.textContent = '⚠️ Expected: Alert Only (No Block)';
-                expectedEl.classList.add('alert');
-            } else {
-                expectedEl.textContent = '🛡️ Expected: IP Will Be Blocked';
-                expectedEl.classList.add('block');
-            }
+            const expectedMessages = {
+                'baseline': { text: '✅ Expected: No Block, No Alert - Clean IP verification', class: 'no-block' },
+                'alert_only': { text: '⚠️ Expected: Telegram Alert Only (No Block) - Anomaly below threshold', class: 'alert' },
+                'private_ip': { text: '🏠 Expected: Behavioral Analysis Only - Skip GeoIP/ThreatIntel', class: 'alert' },
+                'ml_behavioral': { text: '🧠 Expected: ML Anomaly Detected → IP Block', class: 'block' },
+                'ufw_block': { text: '🛡️ Expected: IP Will Be Blocked via UFW', class: 'block' },
+                'fail2ban': { text: '🔒 Expected: Fail2ban Jail → IP Banned', class: 'block' }
+            };
+            const expected = expectedMessages[scenario.category] || { text: '🛡️ Expected: IP Will Be Blocked', class: 'block' };
+            expectedEl.textContent = expected.text;
+            expectedEl.classList.add(expected.class);
 
             // Render action buttons
             this._renderActionButtons(scenario);
@@ -138,42 +157,80 @@
 
         _renderActionButtons(scenario) {
             const buttonsEl = document.getElementById('scenario-action-buttons');
+            const username = scenario.usernames?.[0] || scenario.baseline_user || scenario.username || 'user';
+            const eventCount = scenario.event_count || 1;
 
-            if (scenario.category === 'baseline') {
-                buttonsEl.innerHTML = `
+            const buttonConfigs = {
+                'baseline': `
                     <button class="scenario-action-btn normal" onclick="Sim.Runner.run('attack')" style="border-color: ${TC.successLight};">
-                        <span class="scenario-action-icon">▶️</span>
+                        <span class="scenario-action-icon">✅</span>
                         <div class="scenario-action-text">
-                            <span class="scenario-action-title">Run Test</span>
-                            <span class="scenario-action-desc">Inject ${scenario.event_count || 1} successful login - verify NO block/alert</span>
+                            <span class="scenario-action-title">Run Control Test</span>
+                            <span class="scenario-action-desc">Inject clean login → Verify NO block/alert (false positive check)</span>
                         </div>
-                    </button>`;
-            } else if (scenario.category === 'alert_only') {
-                buttonsEl.innerHTML = `
+                    </button>`,
+
+                'alert_only': `
                     <button class="scenario-action-btn baseline" onclick="Sim.Runner.run('baseline')">
                         <span class="scenario-action-icon">📊</span>
                         <div class="scenario-action-text">
-                            <span class="scenario-action-title">Make Baseline</span>
-                            <span class="scenario-action-desc">Create normal login pattern for ${scenario.username || 'user'}</span>
+                            <span class="scenario-action-title">Step 1: Create Baseline</span>
+                            <span class="scenario-action-desc">Establish normal pattern for ${username} (daytime logins)</span>
                         </div>
                     </button>
                     <button class="scenario-action-btn attack" onclick="Sim.Runner.run('attack')">
-                        <span class="scenario-action-icon">🚨</span>
+                        <span class="scenario-action-icon">⚠️</span>
                         <div class="scenario-action-text">
-                            <span class="scenario-action-title">Run Anomaly</span>
-                            <span class="scenario-action-desc">Inject anomalous login - should trigger alert</span>
+                            <span class="scenario-action-title">Step 2: Run Anomaly</span>
+                            <span class="scenario-action-desc">Inject anomalous login → Telegram alert (no block)</span>
                         </div>
-                    </button>`;
-            } else {
-                buttonsEl.innerHTML = `
+                    </button>`,
+
+                'ml_behavioral': `
+                    <button class="scenario-action-btn baseline" onclick="Sim.Runner.run('baseline')">
+                        <span class="scenario-action-icon">📊</span>
+                        <div class="scenario-action-text">
+                            <span class="scenario-action-title">Step 1: Create Baseline (Optional)</span>
+                            <span class="scenario-action-desc">Establish normal login pattern for ${username}</span>
+                        </div>
+                    </button>
                     <button class="scenario-action-btn attack" onclick="Sim.Runner.run('attack')">
-                        <span class="scenario-action-icon">🚨</span>
+                        <span class="scenario-action-icon">🧠</span>
+                        <div class="scenario-action-text">
+                            <span class="scenario-action-title">Step 2: Run ML Attack</span>
+                            <span class="scenario-action-desc">Inject ${eventCount} events → ML detects anomaly → IP blocked</span>
+                        </div>
+                    </button>`,
+
+                'private_ip': `
+                    <button class="scenario-action-btn attack" onclick="Sim.Runner.run('attack')">
+                        <span class="scenario-action-icon">🏠</span>
+                        <div class="scenario-action-text">
+                            <span class="scenario-action-title">Run Insider Threat</span>
+                            <span class="scenario-action-desc">Inject ${eventCount} events from private IP → Behavioral analysis only</span>
+                        </div>
+                    </button>`,
+
+                'ufw_block': `
+                    <button class="scenario-action-btn attack" onclick="Sim.Runner.run('attack')">
+                        <span class="scenario-action-icon">🛡️</span>
                         <div class="scenario-action-text">
                             <span class="scenario-action-title">Run Attack</span>
-                            <span class="scenario-action-desc">Inject ${scenario.event_count || 5} events - should trigger block</span>
+                            <span class="scenario-action-desc">Inject ${eventCount} failed login(s) → UFW blocks IP</span>
                         </div>
-                    </button>`;
-            }
+                    </button>`,
+
+                'fail2ban': `
+                    <button class="scenario-action-btn attack" onclick="Sim.Runner.run('attack')">
+                        <span class="scenario-action-icon">🔒</span>
+                        <div class="scenario-action-text">
+                            <span class="scenario-action-title">Run Brute Force</span>
+                            <span class="scenario-action-desc">Inject ${eventCount} failed logins → Fail2ban bans IP</span>
+                        </div>
+                    </button>`
+            };
+
+            buttonsEl.innerHTML = buttonConfigs[scenario.category] || buttonConfigs['ufw_block'];
         }
     };
 })();

@@ -11,31 +11,43 @@ const categoryConfig = {
         icon: '🛡️',
         title: 'UFW Blocking Scenarios',
         description: 'Trigger SSH Guardian rules → Agent blocks IP via UFW',
-        badge: null
+        badge: null,
+        steps: ['1. Select target server', '2. Click scenario card', '3. Run Attack → IP blocked via UFW']
     },
     fail2ban: {
         icon: '🔒',
         title: 'Fail2ban Scenarios',
         description: 'Generate auth.log entries → Fail2ban detects & bans automatically',
-        badge: { text: 'REQUIRES TARGET', color: 'purple' }
+        badge: { text: 'REQUIRES TARGET', color: 'purple' },
+        steps: ['1. Select target server (required)', '2. Click scenario card', '3. Run Attack → Fail2ban bans IP']
     },
     ml_behavioral: {
         icon: '🧠',
         title: 'ML Behavioral Analysis',
-        description: 'Advanced pattern detection: impossible travel, time anomalies, credential stuffing',
-        badge: { text: 'PRIORITY', color: 'gradient' }
+        description: 'Advanced pattern detection: impossible travel, time anomalies, lateral movement',
+        badge: { text: 'ML', color: 'gradient' },
+        steps: ['1. Select target server', '2. Click scenario card', '3. (Optional) Create Baseline first', '4. Run Attack → ML detects anomaly']
     },
     alert_only: {
         icon: '⚠️',
         title: 'Alert Only Scenarios',
-        description: 'Successful logins with anomalies - generates alerts but NO IP block',
-        badge: { text: 'NO BLOCK', color: 'warning' }
+        description: 'Successful logins with anomalies - generates Telegram alert but NO IP block',
+        badge: { text: 'NO BLOCK', color: 'warning' },
+        steps: ['1. Select target server', '2. Click scenario card', '3. Run Attack → Alert sent (no block)']
+    },
+    private_ip: {
+        icon: '🏠',
+        title: 'Private IP Scenarios',
+        description: 'Internal network threats - behavioral analysis only (skip GeoIP/ThreatIntel)',
+        badge: { text: 'INTERNAL', color: 'purple' },
+        steps: ['1. Select target server', '2. Click scenario card', '3. Run Attack → Behavioral analysis only']
     },
     baseline: {
         icon: '✅',
         title: 'Baseline (Clean IPs)',
-        description: 'For comparison - should NOT be blocked',
-        badge: null
+        description: 'Control scenario - should NOT be blocked. Use to verify no false positives.',
+        badge: { text: 'CONTROL', color: 'success' },
+        steps: ['1. Select target server', '2. Click scenario card', '3. Run Test → Verify NO block/alert']
     }
 };
 
@@ -83,13 +95,23 @@ function switchScenarioCategory(category) {
             const colorMap = {
                 'purple': TC.purple,
                 'gradient': `linear-gradient(135deg, ${TC.purple} 0%, ${TC.purple} 100%)`,
-                'warning': TC.warning
+                'warning': TC.warning,
+                'success': TC.success
             };
             badge.style.background = colorMap[config.badge.color] || config.badge.color;
             badge.style.color = 'white';
             badge.style.display = 'inline-block';
         } else {
             badge.style.display = 'none';
+        }
+
+        // Show steps guide if available
+        const stepsEl = document.getElementById('cat-desc-steps');
+        if (stepsEl && config.steps) {
+            stepsEl.innerHTML = config.steps.map(s => `<span class="cat-step">${s}</span>`).join('');
+            stepsEl.style.display = 'flex';
+        } else if (stepsEl) {
+            stepsEl.style.display = 'none';
         }
     }
 
@@ -142,11 +164,17 @@ function renderScenarioCard(s, colors, icons) {
     // Badge based on scenario type
     let actionBadge = '';
     if (s.action_type === 'alert') {
-        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: linear-gradient(135deg, ${TC.purple} 0%, ${TC.warning} 100%); color: white; border-radius: 4px; font-weight: 600;">ML ALERT</span>`;
+        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: linear-gradient(135deg, ${TC.purple} 0%, ${TC.warning} 100%); color: white; border-radius: 4px; font-weight: 600;">ALERT ONLY</span>`;
     } else if (s.category === 'ml_behavioral') {
         actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: linear-gradient(135deg, ${TC.purple} 0%, ${TC.purple} 100%); color: white; border-radius: 4px; font-weight: 600;">ML</span>`;
+    } else if (s.category === 'private_ip' || s.is_private_ip) {
+        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.purple}; color: white; border-radius: 4px; font-weight: 600;">🏠 PRIVATE IP</span>`;
     } else if (s.category === 'baseline') {
-        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.success}; color: white; border-radius: 4px; font-weight: 600;">CLEAN</span>`;
+        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.success}; color: white; border-radius: 4px; font-weight: 600;">CONTROL</span>`;
+    } else if (s.category === 'ufw_block') {
+        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.danger}; color: white; border-radius: 4px; font-weight: 600;">UFW BLOCK</span>`;
+    } else if (s.category === 'fail2ban') {
+        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.warning}; color: black; border-radius: 4px; font-weight: 600;">FAIL2BAN</span>`;
     }
 
     const mlFactorsHtml = renderMLFactorsCompact(s.ml_factors);
@@ -223,6 +251,7 @@ function renderDemoScenarios(scenarios) {
         fail2ban: scenarios.filter(s => s.category === 'fail2ban').length,
         ml_behavioral: scenarios.filter(s => s.category === 'ml_behavioral').length,
         alert_only: scenarios.filter(s => s.category === 'alert_only').length,
+        private_ip: scenarios.filter(s => s.category === 'private_ip').length,
         baseline: scenarios.filter(s => s.category === 'baseline').length
     };
 
@@ -231,12 +260,14 @@ function renderDemoScenarios(scenarios) {
     const countF2b = document.getElementById('count-fail2ban');
     const countMl = document.getElementById('count-ml');
     const countAlert = document.getElementById('count-alert');
+    const countPrivate = document.getElementById('count-private');
     const countBaseline = document.getElementById('count-baseline');
 
     if (countUfw) countUfw.textContent = counts.ufw_block;
     if (countF2b) countF2b.textContent = counts.fail2ban;
     if (countMl) countMl.textContent = counts.ml_behavioral;
     if (countAlert) countAlert.textContent = counts.alert_only;
+    if (countPrivate) countPrivate.textContent = counts.private_ip;
     if (countBaseline) countBaseline.textContent = counts.baseline;
 
     // Render current category

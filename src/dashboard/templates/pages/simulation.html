@@ -64,6 +64,11 @@
                 <span class="sim-cat-tab-label">Alert Only</span>
                 <span class="sim-cat-tab-count" id="count-alert">0</span>
             </button>
+            <button class="sim-cat-tab" data-category="private_ip" onclick="switchScenarioCategory('private_ip')">
+                <span class="sim-cat-tab-icon">🏠</span>
+                <span class="sim-cat-tab-label">Private IP</span>
+                <span class="sim-cat-tab-count" id="count-private">0</span>
+            </button>
             <button class="sim-cat-tab" data-category="baseline" onclick="switchScenarioCategory('baseline')">
                 <span class="sim-cat-tab-icon">✅</span>
                 <span class="sim-cat-tab-label">Baseline</span>
@@ -72,13 +77,16 @@
         </div>
 
         <!-- Category Description -->
-        <div id="category-description" class="card" style="padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
-            <span id="cat-desc-icon" style="font-size: 24px;">🛡️</span>
-            <div style="flex: 1;">
-                <h4 id="cat-desc-title" style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">UFW Blocking Scenarios</h4>
-                <p id="cat-desc-text" style="margin: 0; font-size: 12px; color: var(--text-secondary);">Trigger SSH Guardian rules → Agent blocks IP via UFW</p>
+        <div id="category-description" class="card" style="padding: 12px 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span id="cat-desc-icon" style="font-size: 24px;">🛡️</span>
+                <div style="flex: 1;">
+                    <h4 id="cat-desc-title" style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">UFW Blocking Scenarios</h4>
+                    <p id="cat-desc-text" style="margin: 0; font-size: 12px; color: var(--text-secondary);">Trigger SSH Guardian rules → Agent blocks IP via UFW</p>
+                </div>
+                <span id="cat-desc-badge" style="display: none; padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 4px;"></span>
             </div>
-            <span id="cat-desc-badge" style="display: none; padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 4px;"></span>
+            <div id="cat-desc-steps" class="cat-steps-guide" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);"></div>
         </div>
 
         <!-- Live Attack Status Panel -->
@@ -571,6 +579,31 @@
 }
 .sim-cat-tab[data-category="fail2ban"].active {
     background: #6366f1;
+}
+.sim-cat-tab[data-category="private_ip"].active {
+    background: #8b5cf6;
+}
+
+/* Category Steps Guide */
+.cat-steps-guide {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.cat-step {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.cat-step:first-child {
+    color: var(--azure-blue);
+    border-color: var(--azure-blue);
 }
 </style>
 
