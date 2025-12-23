@@ -3,7 +3,7 @@ SSH Guardian v3.0 - Agent Heartbeat
 Handles heartbeat monitoring from agents
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from flask import request, jsonify
 import sys
 from pathlib import Path
@@ -61,7 +61,7 @@ def agent_heartbeat():
             return jsonify({
                 'success': True,
                 'message': 'Heartbeat received',
-                'server_time': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+                'server_time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S+08:00')
             })
 
         finally:

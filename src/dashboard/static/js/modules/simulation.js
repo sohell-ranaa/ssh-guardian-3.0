@@ -379,6 +379,7 @@
             const authType = document.getElementById('scenario-var-auth')?.value || 'password';
             const authResult = document.getElementById('scenario-var-result')?.value || 'Failed';
             const eventCount = parseInt(document.getElementById('scenario-var-count')?.value) || scenario.event_count || 1;
+            const eventTime = document.getElementById('scenario-var-time')?.value || null;
 
             Sim.Modal.close();
             const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenario.id}"]`);
@@ -418,6 +419,7 @@
                         auth_type: authType,
                         auth_result: authResult,
                         event_count: eventCount,
+                        event_time: eventTime,
                         action_type: actionType
                     })
                 });

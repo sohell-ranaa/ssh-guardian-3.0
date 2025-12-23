@@ -9,6 +9,7 @@ Detects anomalies in user login patterns:
 """
 
 import sys
+import ipaddress
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -52,6 +53,14 @@ class BehavioralAnalyzer:
         self.risk_factors = []
         self.risk_score = 0
 
+    def _is_private_ip(self, ip: str) -> bool:
+        """Check if IP is RFC1918 private address or localhost"""
+        try:
+            addr = ipaddress.ip_address(ip)
+            return addr.is_private or addr.is_loopback
+        except (ValueError, TypeError):
+            return False
+
     def analyze(self, ip_address: str, username: str, event_type: str,
                 current_geo: Dict = None, timestamp: datetime = None) -> Dict:
         """
@@ -63,6 +72,17 @@ class BehavioralAnalyzer:
         - recommendations: suggested actions
         - confidence: how confident we are in the analysis
         """
+        # Private/internal IPs are trusted - skip behavioral analysis
+        if self._is_private_ip(ip_address):
+            return {
+                'risk_score': 0,
+                'risk_factors': [],
+                'recommendations': [],
+                'confidence': 1.0,
+                'is_private_ip': True,
+                'user_baseline': {}
+            }
+
         self.risk_factors = []
         self.risk_score = 0
         timestamp = timestamp or datetime.now()

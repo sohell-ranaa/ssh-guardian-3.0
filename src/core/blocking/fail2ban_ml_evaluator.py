@@ -326,17 +326,8 @@ class Fail2banMLEvaluator:
 
     def _should_auto_escalate(self, ip_address: str, score: int, repeat_count: int) -> bool:
         """Determine if IP should be auto-escalated to UFW."""
-        # Auto-escalate if:
-        # 1. Score is very high (>= 85)
-        # 2. Repeat offender with high score
-        # 3. Known bad actor indicators
-
-        if score >= 85:
-            return True
-
-        if repeat_count >= self.REPEAT_OFFENDER_THRESHOLD and score >= 60:
-            return True
-
+        # Auto-escalation disabled - manual blocking only
+        # Fail2ban bans are logged for history but not auto-added to UFW
         return False
 
     def _escalate_to_ufw(self, ip_address: str, score: int, factors: list) -> bool:

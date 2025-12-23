@@ -223,17 +223,6 @@
                     </div>
                 </div>
             </div>
-            <div class="sim-card__section">
-                <div class="sim-section-title"><span>⚡</span> Blocking Decision</div>
-                <div id="sim-blocking-decision" class="sim-decision-box">
-                    <div id="sim-block-icon" class="sim-decision-box__icon">🛡️</div>
-                    <div class="sim-decision-box__content">
-                        <div id="sim-block-action" class="sim-decision-box__action">IP Blocked via UFW</div>
-                        <div id="sim-block-reason" class="sim-decision-box__reason">Rule triggered: abuseipdb_critical_90 | Duration: 7 days</div>
-                        <div id="sim-block-factors" class="sim-factors"></div>
-                    </div>
-                </div>
-            </div>
             <div class="sim-card__section sim-card__section--surface">
                 <div class="sim-action-links">
                     <a href="/dashboard#firewall" class="sim-action-link sim-action-link--primary">🛡️ View in Firewall</a>
@@ -314,6 +303,11 @@
                 <div class="var-row">
                     <label class="var-label">Event Count:</label>
                     <input type="number" id="scenario-var-count" class="var-input" value="1" min="1" max="50">
+                </div>
+                <div class="var-row">
+                    <label class="var-label">Event Time:</label>
+                    <input type="time" id="scenario-var-time" class="var-input" value="">
+                    <span style="font-size: 11px; color: var(--text-secondary); margin-left: 8px;">Leave empty for current time</span>
                 </div>
             </div>
 

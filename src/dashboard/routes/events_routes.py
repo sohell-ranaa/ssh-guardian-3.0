@@ -744,7 +744,7 @@ def list_events_grouped():
                         'last_activity': group['last_activity'].isoformat() if group['last_activity'] else None,
                         'unique_users': group['unique_users'],
                         'usernames': group['usernames'],
-                        'max_risk_score': round(float(group['max_risk_score']) * 100, 1) if group['max_risk_score'] else None,
+                        'max_risk_score': round(float(group['max_risk_score']) * 100, 1) if group['max_risk_score'] is not None else None,
                         'location': {
                             'country_code': geo.get('country_code'),
                             'country_name': geo.get('country_name'),

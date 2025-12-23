@@ -585,12 +585,55 @@ def get_event_detail(event_id):
             conf = event.get('ml_confidence', 0)
             threat_type = event.get('ml_threat_type', '')
             is_anomaly = event.get('is_anomaly', 0)
+            event_type = event.get('event_type', '')
+            abuseipdb_score = event.get('abuseipdb_score') or 0
 
-            # Determine decision based on thresholds
-            if risk >= 80:
+            # Count failed attempts from related events
+            failed_count = sum(1 for e in related_events if e.get('event_type') == 'failed')
+            if event_type == 'failed':
+                failed_count += 1
+
+            # Detect actual malicious behavior patterns
+            has_brute_force = failed_count >= 5
+            has_bad_reputation = abuseipdb_score >= 50
+            is_successful_login = event_type == 'successful'
+            has_good_reputation = abuseipdb_score <= 10
+
+            # Decision logic: Block on BEHAVIOR, not just risk score
+            if has_good_reputation and is_successful_login and not has_brute_force:
+                # Good reputation + successful login + no attack pattern = Allow
+                decision = 'allow'
+                decision_text = 'Allow - Good reputation, legitimate login'
+                reason = f'Successful login from IP with good reputation (AbuseIPDB: {abuseipdb_score})'
+            elif has_brute_force and risk >= 60:
+                # Actual brute force attack pattern
+                if risk >= 80:
+                    decision = 'block_permanent'
+                    decision_text = 'Block permanently via UFW'
+                    reason = f'Brute force detected ({failed_count} failed attempts) with critical risk ({risk})'
+                else:
+                    decision = 'block_temporary'
+                    decision_text = 'Block temporarily via Fail2ban (48h)'
+                    reason = f'Brute force detected ({failed_count} failed attempts) with high risk ({risk})'
+            elif has_bad_reputation and failed_count >= 2:
+                # Known bad IP with failed attempts
+                decision = 'block_temporary'
+                decision_text = 'Block temporarily via Fail2ban (48h)'
+                reason = f'Bad reputation (AbuseIPDB: {abuseipdb_score}) with {failed_count} failed attempts'
+            elif is_successful_login and not has_bad_reputation:
+                # Successful login without bad reputation = Allow or Monitor
+                if risk >= 60:
+                    decision = 'monitor'
+                    decision_text = 'Monitor - First time IP with successful login'
+                    reason = f'New IP with successful login, monitoring recommended'
+                else:
+                    decision = 'allow'
+                    decision_text = 'Allow - Successful authentication'
+                    reason = f'Successful login with acceptable risk ({risk})'
+            elif risk >= 80:
                 decision = 'block_permanent'
                 decision_text = 'Block permanently via UFW'
-                reason = f'Critical risk score ({risk}) exceeds blocking threshold (80)'
+                reason = f'Critical risk score ({risk}) with suspicious behavior'
             elif risk >= 60:
                 decision = 'block_temporary'
                 decision_text = 'Block temporarily via Fail2ban (48h)'
@@ -611,20 +654,30 @@ def get_event_detail(event_id):
                 'factors': []
             }
 
-            # Add contributing factors
-            if threat_type:
+            # Add contributing factors - only show real threats, not generic classifications
+            threat_types_to_skip = ['low_threat', 'medium_threat', 'anomaly', 'normal', 'benign']
+            if threat_type and threat_type.lower() not in threat_types_to_skip:
                 ml_decision['factors'].append({
                     'type': 'threat_type',
                     'label': 'Threat Classification',
                     'value': threat_type.replace('_', ' ').title(),
                     'impact': 'high' if 'critical' in threat_type or 'suspicious' in threat_type else 'medium'
                 })
-            if is_anomaly:
+            # Only show anomaly for actual malicious behavior, not just "new IP"
+            if is_anomaly and (has_brute_force or has_bad_reputation or failed_count >= 3):
                 ml_decision['factors'].append({
                     'type': 'anomaly',
                     'label': 'Behavioral Anomaly',
                     'value': 'Detected',
                     'impact': 'high'
+                })
+            # Show brute force pattern if detected
+            if has_brute_force:
+                ml_decision['factors'].append({
+                    'type': 'brute_force',
+                    'label': 'Brute Force Pattern',
+                    'value': f'{failed_count} failed attempts',
+                    'impact': 'critical'
                 })
             if event.get('abuseipdb_score') and event['abuseipdb_score'] >= 50:
                 ml_decision['factors'].append({

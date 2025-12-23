@@ -5,7 +5,7 @@ Updated for v3.1 database schema
 """
 
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from flask import request, jsonify
 from pathlib import Path
 
@@ -171,7 +171,7 @@ def report_fail2ban_ban():
                         'source_ip': ip_address,
                         'event_type': 'failed',
                         'username': 'unknown',
-                        'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+                        'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%S+08:00')
                     }
                     # Run enrichment async (non-blocking)
                     enricher.enrich_ip_background(ip_address)
@@ -467,7 +467,7 @@ def sync_fail2ban_status():
                     INSERT INTO fail2ban_state
                     (agent_id, ip_address, jail_name, banned_at, bantime_seconds, failures, last_sync)
                     VALUES (%s, %s, %s, %s, %s, %s, NOW())
-                """, (agent_db_id, ip, jail, banned_at or datetime.now(timezone.utc), bantime, failures))
+                """, (agent_db_id, ip, jail, banned_at or datetime.now(), bantime, failures))
 
             # STEP 2: Update ip_blocks for history (Blocked IPs table)
             current_ips = set(b.get('ip') for b in bans if b.get('ip'))
@@ -494,12 +494,12 @@ def sync_fail2ban_status():
                 if existing and existing['is_active']:
                     pass  # Already active, nothing to do
                 elif existing:
-                    # Reactivate
+                    # Reactivate - clear unblocked_at as well
                     cursor.execute(
                         "UPDATE ip_blocks SET is_active = TRUE, blocked_at = %s, "
-                        "unblock_reason = NULL, agent_id = %s "
+                        "unblocked_at = NULL, unblock_reason = NULL, agent_id = %s "
                         "WHERE id = %s",
-                        (banned_at or datetime.now(timezone.utc), agent_db_id, existing['id'])
+                        (banned_at or datetime.now(), agent_db_id, existing['id'])
                     )
                     # Log block event (reactivation)
                     if log_block_event:
@@ -521,7 +521,7 @@ def sync_fail2ban_status():
                         "(ip_address, ip_address_text, block_source, block_reason, is_active, blocked_at, agent_id) "
                         "VALUES (%s, %s, 'fail2ban', %s, TRUE, %s, %s)",
                         (ip_binary, ip, f'fail2ban jail: {jail} (agent: {hostname})',
-                         banned_at or datetime.now(timezone.utc), agent_db_id)
+                         banned_at or datetime.now(), agent_db_id)
                     )
                     # Log block event (new)
                     if log_block_event:
@@ -550,7 +550,7 @@ def sync_fail2ban_status():
                 if row['ip_address_text'] not in current_ips:
                     cursor.execute(
                         "UPDATE ip_blocks SET is_active = FALSE, "
-                        "unblock_reason = 'Auto-expired in fail2ban' WHERE id = %s",
+                        "unblocked_at = NOW(), unblock_reason = 'Auto-expired in fail2ban' WHERE id = %s",
                         (row['id'],)
                     )
                     # Log unban event for history
@@ -687,15 +687,15 @@ def get_live_fail2ban_bans(agent_id):
                     result.append({
                         'ip_address': ip,
                         'jail_name': row['jail'],
-                        'banned_at': datetime.fromtimestamp(row['timeofban'], tz=timezone.utc).isoformat(),
+                        'banned_at': datetime.fromtimestamp(row['timeofban']).isoformat() + '+08:00',
                         'bantime_seconds': row['bantime'],
-                        'expires_at': datetime.fromtimestamp(row['expires_ts'], tz=timezone.utc).isoformat(),
+                        'expires_at': datetime.fromtimestamp(row['expires_ts']).isoformat() + '+08:00',
                         'remaining_seconds': max(0, remaining_sec),
                         'remaining_minutes': max(0, remaining_sec // 60),
                         'is_expired': is_expired,
                         'ban_count': row['bancount'],
                         'failures': 0,
-                        'last_sync': datetime.now(timezone.utc).isoformat(),
+                        'last_sync': datetime.now().isoformat() + '+08:00',
                         'agent_hostname': agent['hostname'],
                         'agent_id': agent_id,
                         'agent_uuid': agent['agent_uuid'],
@@ -709,7 +709,7 @@ def get_live_fail2ban_bans(agent_id):
                         result.append({
                             'ip_address': ip,
                             'jail_name': 'sshd',
-                            'banned_at': datetime.now(timezone.utc).isoformat(),
+                            'banned_at': datetime.now().isoformat() + '+08:00',
                             'bantime_seconds': 3600,
                             'remaining_seconds': 0,
                             'remaining_minutes': 0,
@@ -741,7 +741,7 @@ def get_live_fail2ban_bans(agent_id):
                                     result.append({
                                         'ip_address': ip,
                                         'jail_name': 'sshd',
-                                        'banned_at': datetime.now(timezone.utc).isoformat(),
+                                        'banned_at': datetime.now().isoformat() + '+08:00',
                                         'bantime_seconds': 3600,
                                         'remaining_seconds': 0,
                                         'remaining_minutes': 0,

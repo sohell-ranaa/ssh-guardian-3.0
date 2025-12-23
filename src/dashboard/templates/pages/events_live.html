@@ -68,6 +68,9 @@
 /* Refresh button style */
 .ev-refresh{padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer}
 .ev-refresh:hover{background:var(--background)}
+
+/* Pulse animation for analyzing state */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 </style>
 
 <script>
@@ -225,8 +228,12 @@ const EV = {
         if (!d) return;
         const loc = d.location || {};
         const threat = d.threat || {};
-        const risk = d.max_risk_score || 0;
-        const rc = this.getRiskColor(risk);
+        // Check if analysis is still running (null means not yet analyzed)
+        const isMLAnalyzing = d.max_risk_score === null || d.max_risk_score === undefined;
+        const isThreatPending = threat.abuseipdb_score === null || threat.abuseipdb_score === undefined;
+        const isRiskPending = isThreatPending || !threat.level;
+        const risk = isMLAnalyzing ? null : (d.max_risk_score || 0);
+        const rc = isMLAnalyzing ? '#3b82f6' : this.getRiskColor(risk);
         const flag = this.getFlag(loc.country_code);
         const days = this.daysSince(d.first_timestamp);
         const tagsHtml = this.getTagsHtml(loc);
@@ -237,7 +244,7 @@ const EV = {
             <div class="m-stat"><div class="m-stat-val green">${d.success_count || 0}</div><div class="m-stat-lbl">Success</div></div>
             <div class="m-stat"><div class="m-stat-val">${d.event_count || 0}</div><div class="m-stat-lbl">Total</div></div>
             <div class="m-stat"><div class="m-stat-val blue">${d.unique_users || 0}</div><div class="m-stat-lbl">Users</div></div>
-            <div class="m-stat"><div class="m-stat-val" style="color:${rc}">${Math.round(risk)}</div><div class="m-stat-lbl">Risk</div></div>
+            <div class="m-stat"><div class="m-stat-val" style="color:${rc}">${isMLAnalyzing ? '⏳' : Math.round(risk)}</div><div class="m-stat-lbl">Risk</div></div>
             <div class="m-stat"><div class="m-stat-val">${days}</div><div class="m-stat-lbl">Days</div></div>
         `;
 
@@ -261,6 +268,15 @@ const EV = {
                 </div>
             </div>
             <div class="m-sec"><h4>Risk Analysis</h4>
+                ${isMLAnalyzing ? `
+                <div class="m-meter"><div class="m-meter-bar"><div class="m-meter-fill" style="width:30%;background:#3b82f6;animation:pulse 1.5s infinite"></div></div><div class="m-meter-val" style="color:#3b82f6">⏳</div></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div class="m-row"><span class="l">Level</span><span class="v" style="color:#3b82f6">Analyzing...</span></div>
+                    <div class="m-row"><span class="l">Threat</span><span class="v">Evaluating...</span></div>
+                    <div class="m-row"><span class="l">Pattern</span><span class="v">Detecting...</span></div>
+                    <div class="m-row"><span class="l">Confidence</span><span class="v">Pending</span></div>
+                </div>
+                ` : `
                 <div class="m-meter"><div class="m-meter-bar"><div class="m-meter-fill" style="width:${risk}%;background:${rc}"></div></div><div class="m-meter-val" style="color:${rc}">${Math.round(risk)}</div></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                     <div class="m-row"><span class="l">Level</span><span class="v" style="color:${rc}">${this.getRiskLevel(risk)}</span></div>
@@ -268,12 +284,13 @@ const EV = {
                     <div class="m-row"><span class="l">Pattern</span><span class="v">${this.detectPattern(d)}</span></div>
                     <div class="m-row"><span class="l">Confidence</span><span class="v">${risk > 0 ? Math.min(95, 50 + risk * 0.45).toFixed(0) + '%' : 'N/A'}</span></div>
                 </div>
+                `}
             </div>
             <div class="m-sec"><h4>Threat Intel</h4>
                 <div class="m-intel">
-                    <div class="m-intel-item"><div class="src">AbuseIPDB</div><div class="score" style="color:${(threat.abuseipdb_score || 0) > 50 ? '#dc2626' : '#16a34a'}">${threat.abuseipdb_score || 0}%</div><div class="det">${threat.abuseipdb_reports || 0} reports</div></div>
-                    <div class="m-intel-item"><div class="src">Risk</div><div class="score" style="color:${this.threatColor(threat.level)}">${threat.level || 'Unknown'}</div><div class="det">Overall</div></div>
-                    <div class="m-intel-item"><div class="src">ML</div><div class="score" style="color:${risk > 60 ? '#dc2626' : '#16a34a'}">${Math.round(risk)}</div><div class="det">Behavior</div></div>
+                    <div class="m-intel-item"><div class="src">AbuseIPDB</div><div class="score" style="color:${isThreatPending ? '#3b82f6' : (threat.abuseipdb_score || 0) > 50 ? '#dc2626' : '#16a34a'}">${isThreatPending ? '⏳' : (threat.abuseipdb_score || 0) + '%'}</div><div class="det">${isThreatPending ? 'Checking...' : (threat.abuseipdb_reports || 0) + ' reports'}</div></div>
+                    <div class="m-intel-item"><div class="src">Risk</div><div class="score" style="color:${isRiskPending ? '#3b82f6' : this.threatColor(threat.level)}">${isRiskPending ? 'Pending' : (threat.level || 'Unknown')}</div><div class="det">Overall</div></div>
+                    <div class="m-intel-item"><div class="src">ML</div><div class="score" style="color:${isMLAnalyzing ? '#3b82f6' : risk > 60 ? '#dc2626' : '#16a34a'}">${isMLAnalyzing ? '⏳' : Math.round(risk)}</div><div class="det">${isMLAnalyzing ? 'Analyzing...' : 'Behavior'}</div></div>
                 </div>
             </div>
             <div class="m-sec"><h4>ML Decision</h4><div id="mDecision" class="m-decision">Loading...</div></div>
@@ -514,12 +531,12 @@ const EV = {
     fmtTime(t) {
         if (!t) return '-';
         if (window.TimeSettings?.isLoaded()) return window.TimeSettings.formatFull(t);
-        // Fallback: browser's native timezone
+        // DB stores KL time, tell JS it's +08:00
         let ts = String(t).replace(' ', 'T');
         if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
         const d = new Date(ts);
         if (isNaN(d.getTime())) return t;
-        return d.toLocaleString();
+        return d.toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' });
     },
 
     fmtDateTime(t) { return this.fmtTime(t); },
@@ -527,23 +544,24 @@ const EV = {
     fmtTimeOnly(t) {
         if (!t) return '-';
         if (window.TimeSettings?.isLoaded()) return window.TimeSettings.format(t, 'time');
-        // Fallback: browser's native timezone
+        // DB stores KL time, tell JS it's +08:00
         let ts = String(t).replace(' ', 'T');
         if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
         const d = new Date(ts);
         if (isNaN(d.getTime())) return t;
-        return d.toLocaleTimeString();
+        return d.toLocaleTimeString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' });
     },
 
     fmtFullDateTime(t) {
         if (!t) return '-';
         if (window.TimeSettings?.isLoaded()) return window.TimeSettings.format(t, 'full');
-        // Fallback: browser's native timezone
+        // DB stores KL time, tell JS it's +08:00
         let ts = String(t).replace(' ', 'T');
         if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
         const d = new Date(ts);
         if (isNaN(d.getTime())) return t;
-        return d.toLocaleString('en-US', {
+        return d.toLocaleString('en-MY', {
+            timeZone: 'Asia/Kuala_Lumpur',
             month: 'short', day: 'numeric', year: 'numeric',
             hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
         });
@@ -552,16 +570,16 @@ const EV = {
     isUnusualTime(t) {
         if (!t) return false;
         let ts = String(t).replace(' ', 'T');
-        if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
+        if (!ts.endsWith('Z') && !ts.includes('+')) ts += 'Z';
         const d = new Date(ts);
         if (isNaN(d.getTime())) return false;
-        // Get hour in user's timezone (browser timezone)
-        const hour = d.getHours();
+        // Get hour in KL timezone
+        const hour = parseInt(d.toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur', hour: 'numeric', hour12: false }));
         // Unusual = before 7am or after 10pm
         return hour < 7 || hour >= 22;
     },
 
-    fmtDateFull(d) { if (!d) return ''; const dt = new Date(d + 'T12:00:00'); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getDay()] + ', ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()] + ' ' + dt.getDate(); },
+    fmtDateFull(d) { if (!d) return ''; const dt = new Date(d + 'T12:00:00+08:00'); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getDay()] + ', ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()] + ' ' + dt.getDate(); },
 
     getDateInTz(t) {
         if (!t) return null;
@@ -569,7 +587,7 @@ const EV = {
         if (!ts.endsWith('Z') && !ts.includes('+')) ts += '+08:00';
         const d = new Date(ts);
         if (isNaN(d.getTime())) return null;
-        return d.toLocaleDateString('en-CA');
+        return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' });
     },
 
     daysSince(t) { if (!t) return 1; return Math.max(1, Math.ceil((new Date() - new Date(t)) / 86400000)); },

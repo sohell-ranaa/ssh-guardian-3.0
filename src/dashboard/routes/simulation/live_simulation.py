@@ -45,7 +45,7 @@ def is_local_target(ip_address: str) -> bool:
     return ip_address in local_ips
 
 
-def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log_file: str = '/var/log/auth.log', override_ip: str = None, action_type: str = 'attack', override_username: str = None, auth_type: str = 'password', auth_result: str = 'Failed') -> dict:
+def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log_file: str = '/var/log/auth.log', override_ip: str = None, action_type: str = 'attack', override_username: str = None, auth_type: str = 'password', auth_result: str = 'Failed', event_time: str = None) -> dict:
     """
     Inject attack simulation directly to local auth.log file.
     Used when dashboard and agent are on the same machine.
@@ -56,6 +56,7 @@ def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log
         auth_type: password, publickey, keyboard-interactive
         auth_result: Accepted or Failed
         action_type: 'baseline' (create normal profile), 'normal' (test normal login), 'attack' (run attack)
+        event_time: Time string in HH:MM format (e.g., '02:00' for 2am). If provided, uses this time instead of current.
     """
     scenario = DEMO_SCENARIOS.get(scenario_id)
     if not scenario:
@@ -121,10 +122,19 @@ def inject_local(scenario_id: str, event_count: int, use_alternate_ip: bool, log
         log_template = f"sshd[{{pid}}]: {auth_result} {auth_type} for {{username}} from {{ip}} port {{port}} ssh2"
 
         for i in range(event_count):
-            # Generate timestamp with small offsets
-            time_offset = i * random.randint(1, 3)
-            event_time = datetime.fromtimestamp(now.timestamp() + time_offset)
-            time_str = event_time.strftime('%H:%M:%S')
+            # Generate timestamp - use custom event_time if provided
+            if event_time:
+                # Parse HH:MM format and use today's date with that time
+                try:
+                    hour, minute = map(int, event_time.split(':'))
+                    time_offset = i * random.randint(1, 3)  # Small offset for multiple events
+                    time_str = f"{hour:02d}:{minute:02d}:{time_offset:02d}"
+                except:
+                    time_str = now.strftime('%H:%M:%S')
+            else:
+                time_offset = i * random.randint(1, 3)
+                event_ts = datetime.fromtimestamp(now.timestamp() + time_offset)
+                time_str = event_ts.strftime('%H:%M:%S')
 
             # For credential stuffing, rotate usernames
             attack_username = USERNAMES[i % len(USERNAMES)] if scenario.get('rotate_usernames') else username
@@ -208,6 +218,7 @@ def run_live_simulation():
         auth_result = data.get('auth_result', 'Failed')  # Accepted or Failed
         use_alternate_ip = data.get('use_alternate_ip', False)
         action_type = data.get('action_type', 'attack')  # 'baseline', 'normal', or 'attack'
+        event_time = data.get('event_time')  # HH:MM format for custom time (e.g., '02:00' for 2am)
 
         if not target_id:
             return jsonify({'success': False, 'error': 'target_id is required'}), 400
@@ -266,8 +277,8 @@ def run_live_simulation():
 
         if is_local:
             # LOCAL: Write directly to auth.log with the exact IP and username from frontend
-            print(f"[LiveSim] Local target detected ({target['ip_address']}), action={action_type}, injecting IP {source_ip}, user {username_override or 'default'}, auth={auth_type}/{auth_result} to auth.log")
-            result = inject_local(scenario_id, event_count, use_alternate_ip, override_ip=source_ip, action_type=action_type, override_username=username_override, auth_type=auth_type, auth_result=auth_result)
+            print(f"[LiveSim] Local target detected ({target['ip_address']}), action={action_type}, injecting IP {source_ip}, user {username_override or 'default'}, auth={auth_type}/{auth_result}, time={event_time or 'now'} to auth.log")
+            result = inject_local(scenario_id, event_count, use_alternate_ip, override_ip=source_ip, action_type=action_type, override_username=username_override, auth_type=auth_type, auth_result=auth_result, event_time=event_time)
 
             if result.get('success'):
                 cursor.execute("""
@@ -521,6 +532,25 @@ def get_simulation_status(run_id):
             cursor.execute("SELECT * FROM live_simulation_runs WHERE id = %s", (run_id,))
             run = cursor.fetchone()
 
+        # Auto-complete detected simulations after wait period if no block occurred
+        # This handles baseline/normal scenarios that shouldn't trigger blocks
+        elif run['status'] == 'detected' and events_detected >= run.get('event_count', 1):
+            # If detected and all events processed, wait 5 seconds then mark complete
+            from datetime import datetime, timedelta
+            detected_at = run.get('detected_at')
+            if detected_at:
+                # If more than 5 seconds since detection and no block, mark as completed
+                if datetime.now() - detected_at > timedelta(seconds=5):
+                    cursor.execute("""
+                        UPDATE live_simulation_runs
+                        SET status = 'completed', completed_at = NOW()
+                        WHERE id = %s AND status = 'detected'
+                    """, (run_id,))
+                    conn.commit()
+                    # Refresh run data
+                    cursor.execute("SELECT * FROM live_simulation_runs WHERE id = %s", (run_id,))
+                    run = cursor.fetchone()
+
         cursor.close()
         conn.close()
 
@@ -579,6 +609,13 @@ def get_simulation_status(run_id):
                 'status': 'completed',
                 'time': run.get('blocked_at', run.get('completed_at')),
                 'message': 'Simulation complete - attack detected and blocked!'
+            })
+        elif run['status'] == 'completed':
+            timeline.append({
+                'step': 'completed',
+                'status': 'completed',
+                'time': run.get('completed_at'),
+                'message': 'Simulation complete - events processed (no block triggered)'
             })
         elif run['status'] == 'failed':
             timeline.append({

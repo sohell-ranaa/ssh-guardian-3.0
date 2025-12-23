@@ -8,6 +8,7 @@ import sys
 import json
 import logging
 import math
+import ipaddress
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
@@ -58,6 +59,14 @@ class ThreatEvaluator:
         except Exception as e:
             logger.warning(f"[ThreatEvaluator] Threat Intel module not available: {e}")
 
+    def _is_private_ip(self, ip: str) -> bool:
+        """Check if IP is RFC1918 private address or localhost"""
+        try:
+            addr = ipaddress.ip_address(ip)
+            return addr.is_private or addr.is_loopback
+        except (ValueError, TypeError):
+            return False
+
     def evaluate_ip(self, ip_address: str, event_data: Dict = None) -> Dict[str, Any]:
         """
         Perform comprehensive threat evaluation for an IP address.
@@ -69,6 +78,26 @@ class ThreatEvaluator:
         Returns:
             Comprehensive evaluation with scores and factors
         """
+        # Private/internal IPs are trusted - skip threat evaluation
+        if self._is_private_ip(ip_address):
+            return {
+                'ip_address': ip_address,
+                'evaluated_at': datetime.now().isoformat(),
+                'composite_score': 0,
+                'risk_level': 'minimal',
+                'recommended_action': 'allow',
+                'confidence': 1.0,
+                'factors': ['Private/Internal IP - Trusted'],
+                'components': {
+                    'ml_score': 0,
+                    'threat_intel_score': 0,
+                    'network_score': 0,
+                    'geo_score': 0,
+                    'behavioral_score': 0
+                },
+                'details': {'private_ip': True}
+            }
+
         result = {
             'ip_address': ip_address,
             'evaluated_at': datetime.now().isoformat(),
@@ -190,6 +219,9 @@ class ThreatEvaluator:
 
             # Score based on AbuseIPDB (max 55 points)
             abuse_score_raw = details.get('abuseipdb_score') or 0
+            # Handle case where value might be a list or string
+            if isinstance(abuse_score_raw, (list, str)) and not str(abuse_score_raw).isdigit():
+                abuse_score_raw = 0
             abuse_score = int(abuse_score_raw) if abuse_score_raw else 0
             if abuse_score >= 95:
                 score += 55
@@ -209,6 +241,8 @@ class ThreatEvaluator:
 
             # Score based on VirusTotal (max 30 points)
             vt_raw = details.get('virustotal_positives') or 0
+            if isinstance(vt_raw, (list, str)) and not str(vt_raw).isdigit():
+                vt_raw = 0
             vt_positives = int(vt_raw) if vt_raw else 0
             if vt_positives >= 10:
                 score += 30
@@ -222,6 +256,8 @@ class ThreatEvaluator:
 
             # Score based on Shodan vulnerabilities (max 15 points)
             vulns_raw = details.get('shodan_vulns') or 0
+            if isinstance(vulns_raw, (list, str)) and not str(vulns_raw).isdigit():
+                vulns_raw = 0
             vulns = int(vulns_raw) if vulns_raw else 0
             if vulns >= 5:
                 score += 15
@@ -232,6 +268,8 @@ class ThreatEvaluator:
 
             # Report count adds significant weight for confirmed bad actors
             reports_raw = details.get('abuseipdb_reports') or 0
+            if isinstance(reports_raw, (list, str)) and not str(reports_raw).isdigit():
+                reports_raw = 0
             reports = int(reports_raw) if reports_raw else 0
             if reports >= 500:
                 score += 20

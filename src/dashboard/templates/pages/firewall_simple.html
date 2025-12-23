@@ -957,23 +957,28 @@
                                 <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #1976d2; padding: 10px 12px; margin-bottom: 12px; border-radius: 0 4px 4px 0; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
                                     <div style="font-size: 11px; font-weight: 600; color: #0d47a1; margin-bottom: 6px;">How it works (ML-Powered)</div>
                                     <div style="font-size: 10px; color: #1565c0; line-height: 1.5;">
-                                        Uses <strong>Machine Learning</strong> to analyze behavior patterns and assign a risk score (0-100). Blocks when ML predicts the IP is malicious with high confidence.
-                                    </div>
-                                    <div style="font-size: 10px; color: #1565c0; margin-top: 6px;">
-                                        <strong>ML analyzes:</strong> Login timing, username patterns, geographic anomalies, historical behavior
+                                        Uses <strong>Machine Learning</strong> to analyze behavior patterns and assign a risk score (0-100). Blocks when ML predicts the IP is malicious with high confidence AND minimum failed attempts reached.
                                     </div>
                                     <div style="font-size: 10px; color: #0d47a1; margin-top: 8px; padding-top: 6px; border-top: 1px dashed #90caf9;">
-                                        <strong>Example:</strong> IP shows bot-like behavior (perfect timing, sequential usernames) → Risk: 92, Confidence: 0.95 → Blocked
+                                        <strong>Example:</strong> IP has 5+ failed logins with bot-like behavior → Risk: 92 → Blocked
                                     </div>
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                                     <div>
-                                        <label style="display: block; font-size: 11px; margin-bottom: 4px;">Min Risk Score</label>
-                                        <input type="number" id="fwMinRiskScore" value="85" min="0" max="100" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; box-sizing: border-box;">
+                                        <label style="display: block; font-size: 11px; margin-bottom: 4px;">Min Risk Score (0-100)</label>
+                                        <input type="number" id="fwMinRiskScore" value="85" min="50" max="100" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; box-sizing: border-box;">
                                     </div>
                                     <div>
-                                        <label style="display: block; font-size: 11px; margin-bottom: 4px;">Min Confidence</label>
-                                        <input type="number" id="fwMlMinConfidence" value="0.8" step="0.1" min="0" max="1" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; box-sizing: border-box;">
+                                        <label style="display: block; font-size: 11px; margin-bottom: 4px;">Min Confidence (0-1)</label>
+                                        <input type="number" id="fwMlMinConfidence" value="0.6" step="0.1" min="0.5" max="1" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; box-sizing: border-box;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 11px; margin-bottom: 4px;">Min Failed Attempts</label>
+                                        <input type="number" id="fwMlMinFailedAttempts" value="5" min="1" max="50" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; box-sizing: border-box;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 11px; margin-bottom: 4px;">Time Window (hours)</label>
+                                        <input type="number" id="fwMlTimeWindowHours" value="24" min="1" max="168" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; box-sizing: border-box;">
                                     </div>
                                 </div>
                             </div>

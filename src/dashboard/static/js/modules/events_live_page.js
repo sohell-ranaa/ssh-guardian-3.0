@@ -207,10 +207,16 @@
     function buildEventDetailContent(event, agentName, agentId, ipAddress) {
         const threat = event.threat || {};
         const location = event.location || {};
-        const riskScore = event.ml_risk_score || 0;
+
+        // Check if analysis is still running (null means not yet analyzed)
+        const isMLAnalyzing = event.ml_risk_score === null || event.ml_risk_score === undefined;
+        const isThreatPending = threat.abuseipdb_score === null || threat.abuseipdb_score === undefined;
+
+        const riskScore = isMLAnalyzing ? null : (event.ml_risk_score || 0);
 
         // Helper function for score class (5-tier system)
         function getScoreClass(score) {
+            if (score === null) return 'pending';
             if (score >= 80) return 'critical';
             if (score >= 60) return 'high';
             if (score >= 40) return 'medium';
@@ -251,7 +257,7 @@
         ` : '';
 
         // Threat Intelligence section
-        const abuseScore = threat.abuseipdb_score || 0;
+        const abuseScore = isThreatPending ? null : (threat.abuseipdb_score || 0);
         const vtPositives = threat.virustotal_positives || 0;
         const vtTotal = threat.virustotal_total || 0;
         const shodanPorts = threat.shodan_ports || [];
@@ -279,10 +285,17 @@
                 <div class="threat-intel-grid" id="threat-intel-grid-${escapeHtml(ipAddress).replace(/\./g, '-')}">
                     <div class="threat-intel-item">
                         <div class="threat-intel-label">AbuseIPDB Score</div>
-                        <div class="threat-intel-value ${getScoreClass(abuseScore)}">${abuseScore}%</div>
-                        <div class="threat-intel-bar">
-                            <div class="threat-intel-bar-fill ${getScoreClass(abuseScore)}" style="width: ${abuseScore}%"></div>
-                        </div>
+                        ${abuseScore === null ? `
+                            <div class="threat-intel-value pending" style="color: var(--azure-blue);">⏳ Checking...</div>
+                            <div class="threat-intel-bar">
+                                <div class="threat-intel-bar-fill pending" style="width: 30%; animation: pulse 1.5s infinite;"></div>
+                            </div>
+                        ` : `
+                            <div class="threat-intel-value ${getScoreClass(abuseScore)}">${abuseScore}%</div>
+                            <div class="threat-intel-bar">
+                                <div class="threat-intel-bar-fill ${getScoreClass(abuseScore)}" style="width: ${abuseScore}%"></div>
+                            </div>
+                        `}
                     </div>
                     <div class="threat-intel-item">
                         <div class="threat-intel-label">VirusTotal</div>
@@ -339,24 +352,41 @@
             <div class="detail-section">
                 <div class="detail-section-title">🤖 ML Risk Assessment</div>
                 <div class="ml-contribution-box">
-                    <div class="ml-score-circle ${getScoreClass(riskScore)}">
-                        <span class="ml-score-value">${riskScore}</span>
-                        <span class="ml-score-label">Risk Score</span>
-                    </div>
-                    <div class="ml-details">
-                        <div class="ml-detail-row">
-                            <span>Risk Level:</span>
-                            <span class="detail-badge ${getScoreClass(riskScore)}">${getScoreClass(riskScore).charAt(0).toUpperCase() + getScoreClass(riskScore).slice(1)}</span>
+                    ${isMLAnalyzing ? `
+                        <div class="ml-score-circle pending" style="border-color: var(--azure-blue);">
+                            <span class="ml-score-value" style="font-size: 14px; color: var(--azure-blue);">⏳</span>
+                            <span class="ml-score-label">Analyzing...</span>
                         </div>
-                        <div class="ml-detail-row">
-                            <span>Confidence:</span>
-                            <span class="ml-confidence">${threat.confidence ? parseFloat(threat.confidence).toFixed(0) + '%' : 'N/A'}</span>
+                        <div class="ml-details">
+                            <div class="ml-detail-row">
+                                <span>Risk Level:</span>
+                                <span class="detail-badge pending" style="background: var(--azure-blue);">Pending</span>
+                            </div>
+                            <div class="ml-detail-row">
+                                <span>Status:</span>
+                                <span style="color: var(--azure-blue);">Analysis in progress...</span>
+                            </div>
                         </div>
-                        <div class="ml-detail-row">
-                            <span>ML Threat Type:</span>
-                            <span>${event.ml_threat_type || 'None detected'}</span>
+                    ` : `
+                        <div class="ml-score-circle ${getScoreClass(riskScore)}">
+                            <span class="ml-score-value">${riskScore}</span>
+                            <span class="ml-score-label">Risk Score</span>
                         </div>
-                    </div>
+                        <div class="ml-details">
+                            <div class="ml-detail-row">
+                                <span>Risk Level:</span>
+                                <span class="detail-badge ${getScoreClass(riskScore)}">${getScoreClass(riskScore).charAt(0).toUpperCase() + getScoreClass(riskScore).slice(1)}</span>
+                            </div>
+                            <div class="ml-detail-row">
+                                <span>Confidence:</span>
+                                <span class="ml-confidence">${event.ml_confidence ? parseFloat(event.ml_confidence).toFixed(0) + '%' : 'N/A'}</span>
+                            </div>
+                            <div class="ml-detail-row">
+                                <span>ML Threat Type:</span>
+                                <span>${event.ml_threat_type || 'None detected'}</span>
+                            </div>
+                        </div>
+                    `}
                 </div>
             </div>
         `;

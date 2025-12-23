@@ -16,7 +16,7 @@ from connection import get_connection
 def evaluate_ml_threshold_rule(rule, ip_address, ml_result):
     """Evaluate ML threshold rule against ML prediction result.
 
-    Rule conditions: min_risk_score, min_confidence, threat_types, requires_approval
+    Rule conditions: min_risk_score, min_confidence, threat_types, requires_approval, min_failed_attempts
     ML result: risk_score, confidence, threat_type, is_anomaly
     Returns: triggered, reason, requires_approval, risk_score, confidence
     """
@@ -26,10 +26,34 @@ def evaluate_ml_threshold_rule(rule, ip_address, ml_result):
         min_confidence = conditions.get('min_confidence', 0.5)
         threat_types = conditions.get('threat_types', [])
         requires_approval = conditions.get('requires_approval', False)
+        min_failed_attempts = conditions.get('min_failed_attempts', 1)  # Default 1 for backwards compat
 
         risk_score = ml_result.get('risk_score', 0)
         confidence = ml_result.get('confidence', 0.0)
         threat_type = ml_result.get('threat_type', '')
+
+        # Check minimum failed attempts requirement
+        if min_failed_attempts > 1:
+            conn = get_connection()
+            cursor = conn.cursor(dictionary=True)
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) as fail_count
+                    FROM auth_events
+                    WHERE source_ip_text = %s
+                    AND event_type = 'failed'
+                    AND timestamp >= NOW() - INTERVAL 24 HOUR
+                """, (ip_address,))
+                result = cursor.fetchone()
+                fail_count = result['fail_count'] or 0
+
+                if fail_count < min_failed_attempts:
+                    return {'triggered': False,
+                            'reason': f"Only {fail_count}/{min_failed_attempts} failed attempts (minimum not met)",
+                            'requires_approval': False, 'risk_score': risk_score, 'confidence': confidence}
+            finally:
+                cursor.close()
+                conn.close()
 
         if risk_score < min_risk_score:
             return {'triggered': False, 'reason': f"Risk score {risk_score} below threshold {min_risk_score}",
@@ -570,7 +594,6 @@ def evaluate_off_hours_anomaly_rule(rule, ip_address, username=None, event_times
         - work_start_hour: Business start hour (default 8)
         - work_end_hour: Business end hour (default 18)
         - work_days: List of work days 0=Mon, 6=Sun (default [0,1,2,3,4])
-        - timezone: Timezone for evaluation (default 'Asia/Kuala_Lumpur')
         - min_off_hours_attempts: Minimum attempts outside hours to trigger (default 3)
         - check_user_baseline: Compare against user's normal login times (default true)
         - requires_approval: Whether to require manual approval
@@ -578,25 +601,18 @@ def evaluate_off_hours_anomaly_rule(rule, ip_address, username=None, event_times
     Returns: triggered, reason, off_hours_attempts, is_weekend, hour_of_day
     """
     from datetime import datetime
-    import pytz
 
     try:
         conditions = rule['conditions']
         work_start = conditions.get('work_start_hour', 8)
         work_end = conditions.get('work_end_hour', 18)
         work_days = conditions.get('work_days', [0, 1, 2, 3, 4])  # Mon-Fri
-        timezone_str = conditions.get('timezone', 'Asia/Kuala_Lumpur')
         min_attempts = conditions.get('min_off_hours_attempts', 3)
         check_baseline = conditions.get('check_user_baseline', True)
         requires_approval = conditions.get('requires_approval', False)
 
-        # Get current time in specified timezone
-        try:
-            tz = pytz.timezone(timezone_str)
-        except:
-            tz = pytz.timezone('Asia/Kuala_Lumpur')
-
-        now = datetime.now(tz)
+        # Server is already in KL timezone - use local time directly
+        now = datetime.now()
         current_hour = now.hour
         current_weekday = now.weekday()
 

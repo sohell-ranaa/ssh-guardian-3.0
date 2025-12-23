@@ -108,15 +108,27 @@ def parse_log_line(log_line: str) -> Optional[Dict]:
             log_timestamp = None
 
             # Try ISO format first: "2025-12-20T07:10:05.913746+01:00"
-            iso_match = re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})', log_line)
+            iso_match = re.match(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)', log_line)
             if iso_match:
                 try:
                     iso_str = iso_match.group(1)
-                    log_timestamp = datetime.fromisoformat(iso_str)
+                    # Handle 'Z' suffix (UTC) - convert to +08:00 for KL
+                    if iso_str.endswith('Z'):
+                        iso_str = iso_str[:-1] + '+00:00'
+                    dt = datetime.fromisoformat(iso_str)
+                    # If timezone-aware, convert to local time (server is KL +08:00)
+                    if dt.tzinfo is not None:
+                        # Convert to local time and strip timezone info for MySQL
+                        local_dt = dt.astimezone()
+                        log_timestamp = local_dt.replace(tzinfo=None)
+                    else:
+                        # No timezone info - assume already local time
+                        log_timestamp = dt
                 except (ValueError, TypeError):
                     log_timestamp = None
 
             # Fallback to syslog format: "Dec 20 03:30:00"
+            # Syslog timestamps are already in local time (server is KL timezone)
             if not log_timestamp:
                 timestamp_match = re.match(r'^([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})', log_line)
                 if timestamp_match:
@@ -127,7 +139,10 @@ def parse_log_line(log_line: str) -> Optional[Dict]:
                         month = month_map.get(month_str, datetime.now().month)
                         day = int(day_str)
                         hour, minute, second = map(int, time_str.split(':'))
-                        log_timestamp = datetime.now().replace(month=month, day=day, hour=hour, minute=minute, second=second, microsecond=0)
+                        # Syslog timestamps are local time - use as-is (no conversion needed)
+                        log_timestamp = datetime.now().replace(
+                            month=month, day=day, hour=hour, minute=minute, second=second, microsecond=0
+                        )
                     except (ValueError, KeyError):
                         log_timestamp = None
 

@@ -128,7 +128,7 @@ function formatFwRuleConditions(ruleType, conditions) {
         case 'brute_force':
             return `<div style="font-size:11px;"><div>${conditions.failed_attempts || 'N/A'} fails</div><div>${conditions.time_window_minutes || 'N/A'} min window</div></div>`;
         case 'ml_threshold':
-            return `<div style="font-size:11px;"><div>Risk ≥ ${conditions.min_risk_score || 'N/A'}</div><div>Conf ≥ ${conditions.min_confidence || 'N/A'}</div></div>`;
+            return `<div style="font-size:11px;"><div>Risk ≥ ${conditions.min_risk_score || 'N/A'}</div><div>Conf ≥ ${conditions.min_confidence || 'N/A'}</div><div>${conditions.min_failed_attempts || 1} fails in ${conditions.time_window_hours || 24}h</div></div>`;
         case 'api_reputation':
             return `<div style="font-size:11px;"><div>AbuseIPDB ≥ ${conditions.min_abuseipdb_score || 'N/A'}</div></div>`;
         case 'velocity':
@@ -341,7 +341,9 @@ async function fwCreateRule() {
     } else if (ruleType === 'ml_threshold') {
         conditions = {
             min_risk_score: parseInt(document.getElementById('fwMinRiskScore').value),
-            min_confidence: parseFloat(document.getElementById('fwMlMinConfidence').value)
+            min_confidence: parseFloat(document.getElementById('fwMlMinConfidence').value),
+            min_failed_attempts: parseInt(document.getElementById('fwMlMinFailedAttempts')?.value || 5),
+            time_window_hours: parseInt(document.getElementById('fwMlTimeWindowHours')?.value || 24)
         };
     } else if (ruleType === 'api_reputation') {
         conditions = {
@@ -440,6 +442,10 @@ async function fwEditRule(ruleId) {
             document.getElementById('fwMlConditions').style.display = 'block';
             document.getElementById('fwMinRiskScore').value = rule.conditions?.min_risk_score || 85;
             document.getElementById('fwMlMinConfidence').value = rule.conditions?.min_confidence || 0.8;
+            const mlMinFailedAttempts = document.getElementById('fwMlMinFailedAttempts');
+            const mlTimeWindowHours = document.getElementById('fwMlTimeWindowHours');
+            if (mlMinFailedAttempts) mlMinFailedAttempts.value = rule.conditions?.min_failed_attempts || 5;
+            if (mlTimeWindowHours) mlTimeWindowHours.value = rule.conditions?.time_window_hours || 24;
         } else if (rule.rule_type === 'api_reputation') {
             document.getElementById('fwApiConditions').style.display = 'block';
             document.getElementById('fwMinAbuseScore').value = rule.conditions?.min_abuseipdb_score || 90;
@@ -502,7 +508,9 @@ async function fwUpdateRule(ruleId) {
     } else if (ruleType === 'ml_threshold') {
         conditions = {
             min_risk_score: parseInt(document.getElementById('fwMinRiskScore').value),
-            min_confidence: parseFloat(document.getElementById('fwMlMinConfidence').value)
+            min_confidence: parseFloat(document.getElementById('fwMlMinConfidence').value),
+            min_failed_attempts: parseInt(document.getElementById('fwMlMinFailedAttempts')?.value || 5),
+            time_window_hours: parseInt(document.getElementById('fwMlTimeWindowHours')?.value || 24)
         };
     } else if (ruleType === 'api_reputation') {
         conditions = {
@@ -614,6 +622,10 @@ function fwResetRuleForm() {
     // ML threshold
     document.getElementById('fwMinRiskScore').value = '85';
     document.getElementById('fwMlMinConfidence').value = '0.8';
+    const mlMinFailedAttempts = document.getElementById('fwMlMinFailedAttempts');
+    const mlTimeWindowHours = document.getElementById('fwMlTimeWindowHours');
+    if (mlMinFailedAttempts) mlMinFailedAttempts.value = '5';
+    if (mlTimeWindowHours) mlTimeWindowHours.value = '24';
     // API reputation
     document.getElementById('fwMinAbuseScore').value = '90';
     document.getElementById('fwBlockOnSuccess').value = 'true';

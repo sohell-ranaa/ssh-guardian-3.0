@@ -10,6 +10,25 @@
         </button>
     </div>
 
+    <div class="blk-stats-row">
+        <div class="blk-stat-card blk-stat-red">
+            <span class="blk-stat-value" id="blk-stat-blocked">-</span>
+            <span class="blk-stat-label">Active Blocks</span>
+        </div>
+        <div class="blk-stat-card blk-stat-green">
+            <span class="blk-stat-value" id="blk-stat-unblocked">-</span>
+            <span class="blk-stat-label">Unblocked</span>
+        </div>
+        <div class="blk-stat-card blk-stat-orange">
+            <span class="blk-stat-value" id="blk-stat-fail2ban">-</span>
+            <span class="blk-stat-label">Fail2ban</span>
+        </div>
+        <div class="blk-stat-card blk-stat-blue">
+            <span class="blk-stat-value" id="blk-stat-rule">-</span>
+            <span class="blk-stat-label">Rule Based</span>
+        </div>
+    </div>
+
     <div class="ev-filters">
         <input type="text" id="blkIp" placeholder="Filter IP..." onkeyup="BLK.debounceFilter()">
         <select id="blkStatus" onchange="BLK.load()"><option value="">All Status</option><option value="blocked">Blocked</option><option value="escalate">Escalated</option><option value="unblocked">Unblocked</option></select>
@@ -27,41 +46,50 @@
 </div>
 
 <style>
-/* Blocked IPs Page - Uses shared CSS components:
-   - events-table.css (.ev-* classes)
-   - cell-badges.css (.c-* classes)
-   Page-specific overrides only below */
+/* Blocked IPs Page - Uses shared CSS components */
+
+/* Stats Row */
+.blk-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.blk-stat-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+}
+.blk-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.blk-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+.blk-stat-red .blk-stat-value { color: var(--color-danger, #ef4444); }
+.blk-stat-green .blk-stat-value { color: var(--color-success, #10b981); }
+.blk-stat-orange .blk-stat-value { color: var(--color-warning, #f59e0b); }
+.blk-stat-blue .blk-stat-value { color: var(--azure-blue, #3b82f6); }
+
+@media (max-width: 768px) {
+    .blk-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+    .blk-stats-row { grid-template-columns: 1fr; }
+}
 
 /* Table minimum width override */
-#page-blocked-ips .ev-tbl{min-width:800px}
+#page-blocked-ips .ev-tbl{min-width:700px}
 
 /* IP cell font-weight override */
 #page-blocked-ips .c-ip{font-weight:600}
-
-/* Action buttons */
-.blk-action-btn {
-    padding: 4px 10px;
-    font-size: 11px;
-    font-weight: 500;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.blk-action-btn.unblock {
-    background: var(--color-success, #10b981);
-    color: white;
-}
-.blk-action-btn.unblock:hover {
-    background: var(--color-success-dark, #059669);
-}
-.blk-action-btn.reblock {
-    background: var(--color-warning, #f59e0b);
-    color: #1a1a1a;
-}
-.blk-action-btn.reblock:hover {
-    background: var(--color-warning-dark, #d97706);
-}
 </style>
 
 <script>
@@ -81,6 +109,8 @@ const BLK = {
             const d = await r.json();
             if (d.success && d.agents) {
                 const s = document.getElementById('blkAgent');
+                // Clear existing options except first (All Agents)
+                while (s.options.length > 1) s.remove(1);
                 d.agents.forEach(a => s.add(new Option(a.hostname || a.agent_id, a.id)));
             }
         } catch (e) {}
@@ -125,8 +155,11 @@ const BLK = {
                 this.total = d.total || d.events.length;
                 const totalPages = Math.ceil(this.total / 50);
 
+                // Update stats
+                this.updateStats(d.events);
+
                 box.innerHTML = `<div class="ev-tbl-wrap"><table class="ev-tbl"><thead><tr>
-                    <th>Last Activity</th><th>IP Address</th><th>Status</th><th>Source</th><th>Agent</th><th>Reason</th><th style="width:80px">Actions</th>
+                    <th>Last Activity</th><th>IP Address</th><th>Status</th><th>Source</th><th>Agent</th><th>Reason</th>
                 </tr></thead><tbody>${d.events.map(e => {
                     const src = (e.block_source || '').toLowerCase();
                     const srcClass = src.includes('rule') ? 'rule_based' : src.includes('ml') ? 'ml' : src;
@@ -136,17 +169,13 @@ const BLK = {
                     const isEscalated = evType === 'escalate';
                     const statClass = isEscalated ? 'escalated' : (isBlocked ? 'active' : 'inactive');
                     const statLabel = isEscalated ? 'Escalated' : (isBlocked ? 'Blocked' : 'Unblocked');
-                    const actionBtn = isBlocked
-                        ? `<button class="blk-action-btn unblock" onclick="event.stopPropagation(); BLK.unblock('${this.esc(e.ip_address)}')" title="Unblock this IP">Unblock</button>`
-                        : `<button class="blk-action-btn reblock" onclick="event.stopPropagation(); BLK.reblock('${this.esc(e.ip_address)}')" title="Re-block this IP">Re-block</button>`;
-                    return `<tr onclick="BLK.showDetail('${this.esc(e.ip_address)}')">
+                    return `<tr>
                     <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary)">${this.fmtTime(e.created_at || e.blocked_at)}</td>
                     <td class="c-ip">${this.esc(e.ip_address)}</td>
                     <td><span class="c-stat ${statClass}">${statLabel}</span></td>
                     <td><span class="c-source ${srcClass}">${this.esc(srcLabel)}</span></td>
                     <td><span class="c-agent">${this.esc(e.agent_hostname || e.agent_name || 'System')}</span></td>
                     <td><div class="c-reason" title="${this.esc(e.reason || '')}">${this.esc(e.reason || 'No reason specified')}</div></td>
-                    <td>${actionBtn}</td>
                 </tr>`;
                 }).join('')}</tbody></table></div>`;
 
@@ -158,6 +187,7 @@ const BLK = {
                 }
             } else {
                 box.innerHTML = '<div class="ev-msg">No block events found</div>';
+                this.updateStats([]);
             }
         } catch (e) {
             console.error('Error loading blocked:', e);
@@ -235,6 +265,22 @@ const BLK = {
             if (window.showToast) window.showToast(`Error: ${e.message}`, 'error');
             else alert(`Error: ${e.message}`);
         }
+    },
+
+    updateStats(events) {
+        let blocked = 0, unblocked = 0, fail2ban = 0, rule = 0;
+        events.forEach(e => {
+            const evType = (e.event_type || '').toLowerCase();
+            const isBlocked = evType === 'blocked' || evType === 'block' || evType === 'escalate';
+            if (isBlocked) blocked++; else unblocked++;
+            const src = (e.block_source || '').toLowerCase();
+            if (src.includes('fail2ban')) fail2ban++;
+            if (src.includes('rule')) rule++;
+        });
+        document.getElementById('blk-stat-blocked').textContent = blocked;
+        document.getElementById('blk-stat-unblocked').textContent = unblocked;
+        document.getElementById('blk-stat-fail2ban').textContent = fail2ban;
+        document.getElementById('blk-stat-rule').textContent = rule;
     },
 
     esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; },
