@@ -286,9 +286,23 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
     # Check if approval is required
     requires_approval = rule_to_apply.get('requires_approval', False)
 
-    # Determine block source based on rule type
+    # Check if rule specifies block_method (ufw or fail2ban)
+    conditions = rule.get('conditions', {})
+    if isinstance(conditions, str):
+        import json
+        conditions = json.loads(conditions)
+    explicit_block_method = conditions.get('block_method')
+
+    # Also check if evaluation result includes block_method
+    eval_block_method = rule_to_apply.get('block_method')
+
+    # Determine block source based on rule type or explicit block_method
     rule_type = rule['rule_type']
-    if rule_type == 'behavioral_analysis':
+
+    # Explicit block_method in rule conditions takes precedence
+    if explicit_block_method == 'ufw' or eval_block_method == 'ufw':
+        block_source = 'ufw'
+    elif rule_type == 'behavioral_analysis':
         # ML behavioral analysis - highest priority
         block_source = 'ml_behavioral'
     elif rule_type in ('ml_threshold', 'anomaly_pattern'):
@@ -309,7 +323,7 @@ def check_and_block_ip(ip_address, ml_result=None, event_id=None, event_type=Non
     adjusted_duration = get_repeat_offender_duration(ip_address, base_duration)
 
     # Check if ML behavioral analysis recommends permanent UFW block
-    force_ufw = rule_to_apply.get('force_ufw', False)
+    force_ufw = rule_to_apply.get('force_ufw', False) or (explicit_block_method == 'ufw')
     ml_risk_factors = rule_to_apply.get('risk_factors', [])
 
     # For behavioral analysis with critical threat level, override auto_unblock

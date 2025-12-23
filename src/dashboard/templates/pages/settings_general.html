@@ -44,4 +44,89 @@
     <div id="settings-categories-container">
         <!-- Settings will be loaded here -->
     </div>
+
+    <!-- Data Management Section -->
+    <div class="card" style="padding: 20px; margin-top: 16px;">
+        <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">🗄️</span> Data Management
+        </h3>
+
+        <!-- Export Database -->
+        <div style="padding: 16px; background: var(--surface-alt); border-radius: 8px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Export Database</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Download a SQL backup of all data</div>
+                </div>
+                <button id="export-database-btn" onclick="exportDatabase()" style="padding: 10px 16px; background: var(--azure-blue); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <span>📥</span> Export Database
+                </button>
+            </div>
+        </div>
+
+        <!-- Clear Data - Danger Zone -->
+        <div style="padding: 16px; background: rgba(209, 52, 56, 0.05); border: 1px solid rgba(209, 52, 56, 0.2); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #D13438; display: flex; align-items: center; gap: 6px;">
+                        <span>⚠️</span> Clear Data
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Permanently delete selected data (cannot be undone)</div>
+                </div>
+                <span style="font-size: 10px; padding: 4px 8px; background: rgba(209, 52, 56, 0.1); color: #D13438; border-radius: 4px; font-weight: 600;">DANGER ZONE</span>
+            </div>
+
+            <!-- Data Tables to Clear -->
+            <div id="data-clear-options" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
+                <label class="data-clear-item" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                    <input type="checkbox" name="clear-data" value="auth_events" style="width: 16px; height: 16px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 500;">Event Logs</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">auth_events table</div>
+                    </div>
+                    <span id="count-auth_events" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-alt); padding: 2px 8px; border-radius: 4px;">-</span>
+                </label>
+
+                <label class="data-clear-item" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                    <input type="checkbox" name="clear-data" value="ip_blocks" style="width: 16px; height: 16px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 500;">IP Block List</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">ip_blocks table</div>
+                    </div>
+                    <span id="count-ip_blocks" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-alt); padding: 2px 8px; border-radius: 4px;">-</span>
+                </label>
+
+                <label class="data-clear-item" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                    <input type="checkbox" name="clear-data" value="blocking_actions" style="width: 16px; height: 16px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 500;">Blocking History</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">blocking_actions table</div>
+                    </div>
+                    <span id="count-blocking_actions" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-alt); padding: 2px 8px; border-radius: 4px;">-</span>
+                </label>
+
+                <label class="data-clear-item" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                    <input type="checkbox" name="clear-data" value="notifications" style="width: 16px; height: 16px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 500;">Notifications</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">notifications table</div>
+                    </div>
+                    <span id="count-notifications" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-alt); padding: 2px 8px; border-radius: 4px;">-</span>
+                </label>
+
+                <label class="data-clear-item" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                    <input type="checkbox" name="clear-data" value="agent_log_batches" style="width: 16px; height: 16px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 500;">Agent Log Batches</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">agent_log_batches table</div>
+                    </div>
+                    <span id="count-agent_log_batches" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--surface-alt); padding: 2px 8px; border-radius: 4px;">-</span>
+                </label>
+            </div>
+
+            <button id="clear-selected-data-btn" onclick="clearSelectedData()" style="padding: 10px 16px; background: #D13438; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; opacity: 0.5;" disabled>
+                <span>🗑️</span> Clear Selected Data
+            </button>
+        </div>
+    </div>
 </div>

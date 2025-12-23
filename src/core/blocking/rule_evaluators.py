@@ -22,7 +22,9 @@ def evaluate_brute_force_rule(rule, ip_address):
     {
         "failed_attempts": 5,
         "time_window_minutes": 10,
-        "event_type": "failed"
+        "event_type": "failed",
+        "max_abuseipdb_score": 20,  # Optional: only trigger for clean IPs
+        "block_method": "fail2ban"   # Optional: 'fail2ban' or 'ufw'
     }
 
     Returns:
@@ -30,7 +32,8 @@ def evaluate_brute_force_rule(rule, ip_address):
             'should_block': bool,
             'reason': str,
             'failed_attempts': int,
-            'trigger_event_id': int or None
+            'trigger_event_id': int or None,
+            'block_method': str
         }
     """
     try:
@@ -40,14 +43,36 @@ def evaluate_brute_force_rule(rule, ip_address):
         threshold = conditions.get('failed_attempts', 5)
         time_window = conditions.get('time_window_minutes', 10)
         event_type = conditions.get('event_type', 'failed')
-
-        # Calculate time window
-        cutoff_time = datetime.now() - timedelta(minutes=time_window)
+        max_abuse_score = conditions.get('max_abuseipdb_score')
+        block_method = conditions.get('block_method', 'fail2ban')
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # Check max_abuseipdb_score filter (for "clean IP only" rules)
+            if max_abuse_score is not None:
+                cursor.execute("""
+                    SELECT abuseipdb_score FROM ip_threat_intelligence
+                    WHERE ip_address_text = %s
+                    ORDER BY last_seen DESC LIMIT 1
+                """, (ip_address,))
+                threat_row = cursor.fetchone()
+                ip_abuse_score = threat_row['abuseipdb_score'] if threat_row and threat_row['abuseipdb_score'] else 0
+
+                if ip_abuse_score > max_abuse_score:
+                    # IP is not "clean" - skip this rule (let bad-IP rules handle it)
+                    return {
+                        'should_block': False,
+                        'reason': f"IP AbuseIPDB score ({ip_abuse_score}) exceeds max ({max_abuse_score}) - handled by bad-IP rules",
+                        'failed_attempts': 0,
+                        'trigger_event_id': None,
+                        'block_method': block_method
+                    }
+
+            # Calculate time window
+            cutoff_time = datetime.now() - timedelta(minutes=time_window)
+
             # Count failed attempts in time window
             cursor.execute("""
                 SELECT
@@ -68,14 +93,16 @@ def evaluate_brute_force_rule(rule, ip_address):
                     'should_block': True,
                     'reason': f"{attempt_count} {event_type} attempts in {time_window} minutes (threshold: {threshold})",
                     'failed_attempts': attempt_count,
-                    'trigger_event_id': latest_event_id
+                    'trigger_event_id': latest_event_id,
+                    'block_method': block_method
                 }
 
             return {
                 'should_block': False,
                 'reason': f"Only {attempt_count}/{threshold} attempts",
                 'failed_attempts': attempt_count,
-                'trigger_event_id': None
+                'trigger_event_id': None,
+                'block_method': block_method
             }
 
         finally:
@@ -88,7 +115,8 @@ def evaluate_brute_force_rule(rule, ip_address):
             'should_block': False,
             'reason': f"Error: {str(e)}",
             'failed_attempts': 0,
-            'trigger_event_id': None
+            'trigger_event_id': None,
+            'block_method': 'fail2ban'
         }
 
 

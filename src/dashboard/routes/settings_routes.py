@@ -441,3 +441,183 @@ def update_time_settings():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# DATA MANAGEMENT
+# =============================================================================
+
+@settings_routes.route('/data-stats', methods=['GET'])
+def get_data_stats():
+    """Get record counts for clearable data tables"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        stats = {}
+
+        # Get counts for each table
+        tables = [
+            ('auth_events', 'Event Logs'),
+            ('ip_blocks', 'IP Block List'),
+            ('blocking_actions', 'Blocking History'),
+            ('notifications', 'Notifications'),
+            ('agent_log_batches', 'Agent Log Batches')
+        ]
+
+        for table_name, label in tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) as count FROM {table_name}")
+                result = cursor.fetchone()
+                stats[table_name] = {
+                    'count': result['count'] if result else 0,
+                    'label': label
+                }
+            except Exception:
+                stats[table_name] = {'count': 0, 'label': label, 'error': True}
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({'success': True, 'data': stats})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@settings_routes.route('/clear-data/<table_name>', methods=['DELETE'])
+def clear_data(table_name):
+    """
+    Clear data from a specific table
+    Allowed tables: auth_events, ip_blocks, notifications, agent_log_batches
+    """
+    try:
+        allowed_tables = ['auth_events', 'ip_blocks', 'blocking_actions', 'notifications', 'agent_log_batches']
+
+        if table_name not in allowed_tables:
+            return jsonify({
+                'success': False,
+                'error': f'Table not allowed. Must be one of: {", ".join(allowed_tables)}'
+            }), 400
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        user_id = get_current_user_id()
+
+        # Get count before clearing
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        count_before = cursor.fetchone()[0]
+
+        # Clear the table
+        cursor.execute(f"DELETE FROM {table_name}")
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        # Invalidate cache
+        invalidate_on_settings_change()
+
+        # Audit log
+        AuditLogger.log_action(
+            user_id=user_id,
+            action='data_cleared',
+            resource_type='table',
+            resource_id=table_name,
+            details={'table': table_name, 'records_cleared': count_before},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Cleared {count_before} records from {table_name}',
+            'records_cleared': count_before
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@settings_routes.route('/export-database', methods=['POST'])
+def export_database():
+    """
+    Export full database as SQL dump (structure + data)
+    Returns SQL file content
+    """
+    try:
+        import subprocess
+        from flask import Response
+        from datetime import datetime
+
+        # Get database credentials from connection
+        conn = get_connection()
+        db_name = conn.database
+        conn.close()
+
+        # Generate timestamp for filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'ssh_guardian_full_backup_{timestamp}.sql'
+
+        # Full database export with structure and data
+        cmd = [
+            'mysqldump',
+            '-u', 'root',
+            '-p123123',
+            '--single-transaction',
+            '--routines',
+            '--triggers',
+            '--skip-lock-tables',
+            '--default-character-set=utf8mb4',
+            db_name
+        ]
+
+        # Execute mysqldump
+        result = subprocess.run(cmd, capture_output=True)
+
+        if result.returncode != 0:
+            error_msg = result.stderr.decode('utf-8', errors='ignore')
+            return jsonify({'success': False, 'error': f'mysqldump failed: {error_msg}'}), 500
+
+        sql_content = result.stdout
+
+        if not sql_content:
+            return jsonify({'success': False, 'error': 'Failed to generate database export'}), 500
+
+        # Add header comment
+        header = f"""-- ============================================
+-- SSH Guardian v3.0 Full Database Export
+-- Generated: {datetime.now().isoformat()}
+-- Database: {db_name}
+-- ============================================
+
+""".encode('utf-8')
+
+        sql_content = header + sql_content
+
+        # Audit log
+        user_id = get_current_user_id()
+        AuditLogger.log_action(
+            user_id=user_id,
+            action='database_exported',
+            resource_type='database',
+            resource_id='full_export',
+            details={'database': db_name, 'filename': filename, 'size_bytes': len(sql_content)},
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+
+        # Return as downloadable file
+        return Response(
+            sql_content,
+            mimetype='application/octet-stream',
+            headers={
+                'Content-Disposition': f'attachment; filename={filename}',
+                'Content-Type': 'application/sql; charset=utf-8'
+            }
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500

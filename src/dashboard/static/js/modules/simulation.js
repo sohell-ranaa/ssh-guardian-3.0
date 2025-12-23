@@ -1348,3 +1348,163 @@
 
     console.log('[Simulation] Module initialized');
 })();
+
+/**
+ * SSH Guardian v3.0 - IP Reference Table
+ * Collapsible IP reference for simulation use
+ */
+(function() {
+    'use strict';
+
+    window.IpReference = {
+        isOpen: false,
+
+        toggle() {
+            this.isOpen = !this.isOpen;
+            const content = document.getElementById('ip-reference-content');
+            const icon = document.getElementById('ip-ref-toggle-icon');
+
+            if (content) {
+                content.style.display = this.isOpen ? 'block' : 'none';
+            }
+            if (icon) {
+                icon.textContent = this.isOpen ? '▲' : '▼';
+            }
+
+            // Load IPs on first open
+            if (this.isOpen) {
+                this.load();
+            }
+        },
+
+        async load() {
+            const categories = ['malicious', 'clean'];
+
+            // Show loading state
+            categories.forEach(cat => {
+                const el = document.getElementById(`ref-ips-${cat}`);
+                if (el) el.innerHTML = '<div style="font-size: 11px; color: var(--text-secondary);">Loading...</div>';
+            });
+
+            try {
+                const response = await fetch('/api/demo/reference-ips', { credentials: 'same-origin' });
+                const data = await response.json();
+
+                if (data.success && data.categories) {
+                    categories.forEach(cat => {
+                        this.renderCategory(cat, data.categories[cat] || []);
+                    });
+                } else {
+                    categories.forEach(cat => {
+                        const el = document.getElementById(`ref-ips-${cat}`);
+                        if (el) el.innerHTML = '<div style="font-size: 11px; color: var(--text-secondary);">No IPs available</div>';
+                    });
+                }
+            } catch (error) {
+                console.error('[IpReference] Error loading IPs:', error);
+                categories.forEach(cat => {
+                    const el = document.getElementById(`ref-ips-${cat}`);
+                    if (el) el.innerHTML = '<div style="font-size: 11px; color: var(--text-hint);">Error loading</div>';
+                });
+            }
+        },
+
+        renderCategory(category, ips) {
+            const el = document.getElementById(`ref-ips-${category}`);
+            if (!el) return;
+
+            if (ips.length === 0) {
+                el.innerHTML = '<div style="font-size: 11px; color: var(--text-secondary);">No IPs available</div>';
+                return;
+            }
+
+            // Color code based on AbuseIPDB score
+            const getScoreColor = (score) => {
+                if (score >= 75) return '#D13438';  // Red - critical
+                if (score >= 50) return '#E6A502';  // Orange - high
+                if (score >= 25) return '#F5B041';  // Yellow - medium
+                return '#2EA44F';  // Green - low/clean
+            };
+
+            el.innerHTML = ips.slice(0, 8).map(ip => {
+                const score = ip.abusedb_score || 0;
+                const scoreColor = getScoreColor(score);
+                return `
+                <div class="ip-ref-item" onclick="IpReference.copy('${ip.ip}', this)" title="Click to copy">
+                    <span class="ip-text">${ip.ip}</span>
+                    <span class="ip-score" style="background: ${scoreColor}20; color: ${scoreColor}; border: 1px solid ${scoreColor}40;">
+                        ${score}/100
+                    </span>
+                    <span class="copy-icon">📋</span>
+                </div>
+            `}).join('');
+        },
+
+        async refresh() {
+            const btn = document.getElementById('refresh-ref-ips-btn');
+            const icon = document.getElementById('refresh-ref-icon');
+
+            if (btn) btn.disabled = true;
+            if (icon) icon.style.animation = 'spin 1s linear infinite';
+
+            try {
+                // First refresh the IP pool from external sources
+                await fetch('/api/demo/refresh-ips', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+
+                // Then reload the reference table
+                await this.load();
+
+                showToast('IPs refreshed', 'success');
+            } catch (error) {
+                console.error('[IpReference] Error refreshing:', error);
+                showToast('Failed to refresh IPs', 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+                if (icon) icon.style.animation = '';
+            }
+        },
+
+        copy(ip, element) {
+            if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(ip).then(() => {
+                    this._showCopied(element, ip);
+                }).catch(() => {
+                    this._fallbackCopy(ip, element);
+                });
+            } else {
+                this._fallbackCopy(ip, element);
+            }
+        },
+
+        _fallbackCopy(ip, element) {
+            const textarea = document.createElement('textarea');
+            textarea.value = ip;
+            textarea.style.cssText = 'position: fixed; opacity: 0;';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                this._showCopied(element, ip);
+            } catch (err) {
+                showToast('Copy failed', 'error');
+            }
+            document.body.removeChild(textarea);
+        },
+
+        _showCopied(element, ip) {
+            if (element) {
+                element.classList.add('copied');
+                setTimeout(() => element.classList.remove('copied'), 1000);
+            }
+            showToast(`Copied: ${ip}`, 'success');
+        }
+    };
+
+    // Global exports
+    window.toggleIpReferenceTable = () => IpReference.toggle();
+    window.refreshReferenceIps = () => IpReference.refresh();
+
+})();

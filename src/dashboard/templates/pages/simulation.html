@@ -32,6 +32,50 @@
         </div>
     </div>
 
+    <!-- IP Reference Table (Collapsible) -->
+    <div id="ip-reference-section" class="card" style="margin-bottom: 16px;">
+        <div onclick="toggleIpReferenceTable()" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; cursor: pointer; user-select: none;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px;">📋</span>
+                <span style="font-size: 14px; font-weight: 600;">IP Reference (Copy & Use)</span>
+                <span style="font-size: 11px; color: var(--text-secondary); background: var(--surface-alt); padding: 2px 8px; border-radius: 4px;">External Sources</span>
+            </div>
+            <span id="ip-ref-toggle-icon" style="font-size: 14px; color: var(--text-secondary);">▼</span>
+        </div>
+        <div id="ip-reference-content" style="display: none; padding: 0 16px 16px;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                <button onclick="refreshReferenceIps()" id="refresh-ref-ips-btn" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; cursor: pointer;">
+                    <span id="refresh-ref-icon">↻</span> Refresh IPs
+                </button>
+            </div>
+            <div id="ip-reference-table-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                <!-- Malicious IPs -->
+                <div style="background: var(--surface-alt); border-radius: 6px; padding: 12px;">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #D13438; display: flex; align-items: center; gap: 8px;">
+                        <span>🔴</span> Malicious (Reported)
+                        <span style="font-size: 10px; color: var(--text-hint); font-weight: 400;">High AbuseIPDB Score</span>
+                    </div>
+                    <div id="ref-ips-malicious" class="ip-ref-list" style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="font-size: 11px; color: var(--text-secondary);">Loading...</div>
+                    </div>
+                </div>
+                <!-- Clean IPs -->
+                <div style="background: var(--surface-alt); border-radius: 6px; padding: 12px;">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #2EA44F; display: flex; align-items: center; gap: 8px;">
+                        <span>🟢</span> Clean (Safe)
+                        <span style="font-size: 10px; color: var(--text-hint); font-weight: 400;">Low/No Reports</span>
+                    </div>
+                    <div id="ref-ips-clean" class="ip-ref-list" style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="font-size: 11px; color: var(--text-secondary);">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 10px; font-size: 10px; color: var(--text-hint); text-align: center;">
+                Click IP to copy • Score = AbuseIPDB confidence score (0-100)
+            </div>
+        </div>
+    </div>
+
     <!-- No Server Selected Placeholder -->
     <div id="simulationNoServer" class="card" style="text-align: center; padding: 60px 20px;">
         <div style="font-size: 48px; margin-bottom: 16px;">🎯</div>
@@ -49,25 +93,10 @@
                 <span class="sim-cat-tab-label">UFW Block</span>
                 <span class="sim-cat-tab-count" id="count-ufw">0</span>
             </button>
-            <button class="sim-cat-tab" data-category="fail2ban" onclick="switchScenarioCategory('fail2ban')">
-                <span class="sim-cat-tab-icon">🔒</span>
-                <span class="sim-cat-tab-label">Fail2ban</span>
-                <span class="sim-cat-tab-count" id="count-fail2ban">0</span>
-            </button>
-            <button class="sim-cat-tab" data-category="ml_behavioral" onclick="switchScenarioCategory('ml_behavioral')">
-                <span class="sim-cat-tab-icon">🧠</span>
-                <span class="sim-cat-tab-label">ML Behavioral</span>
-                <span class="sim-cat-tab-count" id="count-ml">0</span>
-            </button>
             <button class="sim-cat-tab" data-category="alert_only" onclick="switchScenarioCategory('alert_only')">
                 <span class="sim-cat-tab-icon">⚠️</span>
                 <span class="sim-cat-tab-label">Alert Only</span>
                 <span class="sim-cat-tab-count" id="count-alert">0</span>
-            </button>
-            <button class="sim-cat-tab" data-category="private_ip" onclick="switchScenarioCategory('private_ip')">
-                <span class="sim-cat-tab-icon">🏠</span>
-                <span class="sim-cat-tab-label">Private IP</span>
-                <span class="sim-cat-tab-count" id="count-private">0</span>
             </button>
             <button class="sim-cat-tab" data-category="baseline" onclick="switchScenarioCategory('baseline')">
                 <span class="sim-cat-tab-icon">✅</span>
@@ -562,20 +591,11 @@
 }
 
 /* Category specific colors */
-.sim-cat-tab[data-category="ml_behavioral"].active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
 .sim-cat-tab[data-category="alert_only"].active {
     background: #E6A502;
 }
 .sim-cat-tab[data-category="baseline"].active {
     background: #2EA44F;
-}
-.sim-cat-tab[data-category="fail2ban"].active {
-    background: #6366f1;
-}
-.sim-cat-tab[data-category="private_ip"].active {
-    background: #8b5cf6;
 }
 
 /* Category Steps Guide */
@@ -598,6 +618,50 @@
 .cat-step:first-child {
     color: var(--azure-blue);
     border-color: var(--azure-blue);
+}
+</style>
+
+<!-- IP Reference Table Styles -->
+<style>
+.ip-ref-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.ip-ref-item:hover {
+    border-color: var(--azure-blue);
+    background: rgba(0, 120, 212, 0.05);
+}
+.ip-ref-item.copied {
+    border-color: #2EA44F;
+    background: rgba(46, 164, 79, 0.1);
+}
+.ip-ref-item .ip-text {
+    color: var(--text-primary);
+}
+.ip-ref-item .ip-score {
+    font-size: 10px;
+    color: var(--text-secondary);
+    background: var(--surface-alt);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+.ip-ref-item .copy-icon {
+    font-size: 10px;
+    color: var(--text-hint);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.ip-ref-item:hover .copy-icon {
+    opacity: 1;
 }
 </style>
 

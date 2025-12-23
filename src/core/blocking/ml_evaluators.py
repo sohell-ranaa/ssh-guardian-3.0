@@ -83,37 +83,104 @@ def evaluate_ml_threshold_rule(rule, ip_address, ml_result):
 def evaluate_credential_stuffing_rule(rule, ip_address):
     """Evaluate credential stuffing (same IP, many different usernames).
 
-    Rule conditions: unique_usernames, time_window_minutes, requires_approval
+    Rule conditions:
+        - unique_usernames: Minimum unique usernames to trigger (default 10)
+        - time_window_minutes: Time window to check (default 60)
+        - event_type: Filter by event type - 'failed', 'successful', or None for both (default None)
+        - max_abuseipdb_score: Only trigger for clean IPs with score <= this value (default None = no filter)
+        - off_hours: If true, only trigger during off-hours (default False)
+        - requires_approval: Whether to require manual approval
+
     Returns: triggered, reason, requires_approval, unique_usernames, time_window
     """
+    from datetime import datetime
+
     try:
         conditions = rule['conditions']
         threshold = conditions.get('unique_usernames', 10)
         time_window = conditions.get('time_window_minutes', 60)
         requires_approval = conditions.get('requires_approval', False)
+        event_type_filter = conditions.get('event_type')  # 'failed', 'successful', or None
+        max_abuse_score = conditions.get('max_abuseipdb_score')
+        check_off_hours = conditions.get('off_hours', False)
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
-            cursor.execute("""
-                SELECT COUNT(DISTINCT target_username) as unique_count
-                FROM auth_events
-                WHERE source_ip_text = %s
-                AND event_type = 'failed'
-                AND timestamp >= NOW() - INTERVAL %s MINUTE
-            """, (ip_address, time_window))
+            # Check max_abuseipdb_score filter (for "clean IP only" rules)
+            if max_abuse_score is not None:
+                cursor.execute("""
+                    SELECT abuseipdb_score FROM ip_threat_intelligence
+                    WHERE ip_address_text = %s
+                    ORDER BY last_seen DESC LIMIT 1
+                """, (ip_address,))
+                threat_row = cursor.fetchone()
+                ip_abuse_score = threat_row['abuseipdb_score'] if threat_row and threat_row['abuseipdb_score'] else 0
+
+                if ip_abuse_score > max_abuse_score:
+                    return {
+                        'triggered': False,
+                        'reason': f"IP AbuseIPDB score ({ip_abuse_score}) exceeds max ({max_abuse_score}) - handled by bad-IP rules",
+                        'requires_approval': False,
+                        'unique_usernames': 0,
+                        'time_window': time_window
+                    }
+
+            # Check off-hours filter
+            if check_off_hours:
+                now = datetime.now()
+                current_hour = now.hour
+                # Off-hours = before 6 AM or after 10 PM
+                is_off_hours = current_hour < 6 or current_hour >= 22
+                if not is_off_hours:
+                    return {
+                        'triggered': False,
+                        'reason': f"Current time ({current_hour}:00) is during business hours - off_hours filter not met",
+                        'requires_approval': False,
+                        'unique_usernames': 0,
+                        'time_window': time_window
+                    }
+
+            # Build query based on event_type filter
+            if event_type_filter:
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT target_username) as unique_count
+                    FROM auth_events
+                    WHERE source_ip_text = %s
+                    AND event_type = %s
+                    AND timestamp >= NOW() - INTERVAL %s MINUTE
+                """, (ip_address, event_type_filter, time_window))
+            else:
+                # Count all events (both failed and successful)
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT target_username) as unique_count
+                    FROM auth_events
+                    WHERE source_ip_text = %s
+                    AND timestamp >= NOW() - INTERVAL %s MINUTE
+                """, (ip_address, time_window))
 
             result = cursor.fetchone()
             unique_count = result['unique_count'] or 0
 
             if unique_count >= threshold:
-                return {'triggered': True,
-                        'reason': f"Credential stuffing detected: {unique_count} unique usernames in {time_window} minutes (threshold: {threshold})",
-                        'requires_approval': requires_approval, 'unique_usernames': unique_count, 'time_window': time_window}
+                event_desc = f" ({event_type_filter} only)" if event_type_filter else ""
+                off_hours_desc = " during off-hours" if check_off_hours else ""
+                return {
+                    'triggered': True,
+                    'reason': f"Multi-user activity detected: {unique_count} unique usernames{event_desc}{off_hours_desc} in {time_window} minutes (threshold: {threshold})",
+                    'requires_approval': requires_approval,
+                    'unique_usernames': unique_count,
+                    'time_window': time_window
+                }
 
-            return {'triggered': False, 'reason': f"Only {unique_count}/{threshold} unique usernames",
-                    'requires_approval': False, 'unique_usernames': unique_count, 'time_window': time_window}
+            return {
+                'triggered': False,
+                'reason': f"Only {unique_count}/{threshold} unique usernames",
+                'requires_approval': False,
+                'unique_usernames': unique_count,
+                'time_window': time_window
+            }
 
         finally:
             cursor.close()
@@ -595,6 +662,9 @@ def evaluate_off_hours_anomaly_rule(rule, ip_address, username=None, event_times
         - work_end_hour: Business end hour (default 18)
         - work_days: List of work days 0=Mon, 6=Sun (default [0,1,2,3,4])
         - min_off_hours_attempts: Minimum attempts outside hours to trigger (default 3)
+        - event_type: Filter by event type - 'failed', 'successful', or None for both (default None)
+        - max_abuseipdb_score: Only trigger for clean IPs with score <= this value (default None)
+        - check_ip_reputation: If true, check IP reputation (default False)
         - check_user_baseline: Compare against user's normal login times (default true)
         - requires_approval: Whether to require manual approval
 
@@ -608,28 +678,112 @@ def evaluate_off_hours_anomaly_rule(rule, ip_address, username=None, event_times
         work_end = conditions.get('work_end_hour', 18)
         work_days = conditions.get('work_days', [0, 1, 2, 3, 4])  # Mon-Fri
         min_attempts = conditions.get('min_off_hours_attempts', 3)
+        event_type_filter = conditions.get('event_type')  # 'failed', 'successful', or None
+        max_abuse_score = conditions.get('max_abuseipdb_score')
+        check_ip_reputation = conditions.get('check_ip_reputation', False)
         check_baseline = conditions.get('check_user_baseline', True)
         requires_approval = conditions.get('requires_approval', False)
-
-        # Server is already in KL timezone - use local time directly
-        now = datetime.now()
-        current_hour = now.hour
-        current_weekday = now.weekday()
-
-        is_work_day = current_weekday in work_days
-        is_work_hours = work_start <= current_hour < work_end
-        is_off_hours = not (is_work_day and is_work_hours)
 
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
         try:
-            # Count recent off-hours attempts from this IP
+            # Get the most recent event's timestamp to check if IT was during off-hours
             cursor.execute("""
+                SELECT timestamp FROM auth_events
+                WHERE source_ip_text = %s
+                ORDER BY timestamp DESC LIMIT 1
+            """, (ip_address,))
+            latest_event = cursor.fetchone()
+
+            if latest_event:
+                event_time = latest_event['timestamp']
+                current_hour = event_time.hour
+                current_weekday = event_time.weekday()
+            else:
+                # Fall back to current time if no events found
+                now = datetime.now()
+                current_hour = now.hour
+                current_weekday = now.weekday()
+
+            is_work_day = current_weekday in work_days
+
+            # Check max_abuseipdb_score filter (for "clean IP only" rules)
+            if max_abuse_score is not None or check_ip_reputation:
+                cursor.execute("""
+                    SELECT abuseipdb_score FROM ip_threat_intelligence
+                    WHERE ip_address_text = %s
+                    ORDER BY last_seen DESC LIMIT 1
+                """, (ip_address,))
+                threat_row = cursor.fetchone()
+                ip_abuse_score = threat_row['abuseipdb_score'] if threat_row and threat_row['abuseipdb_score'] else 0
+
+                if max_abuse_score is not None and ip_abuse_score > max_abuse_score:
+                    return {
+                        'triggered': False,
+                        'reason': f"IP AbuseIPDB score ({ip_abuse_score}) exceeds max ({max_abuse_score}) - handled by bad-IP rules",
+                        'requires_approval': False,
+                        'off_hours_attempts': 0,
+                        'is_weekend': not is_work_day,
+                        'hour_of_day': current_hour,
+                        'anomaly_score': 0
+                    }
+
+            # For successful login alert during off-hours, trigger immediately if filter matches
+            if event_type_filter == 'successful':
+                # This is specifically for SCENARIO 2: Clean IP + Midnight Success = ALERT
+                # Check if the MOST RECENTLY INSERTED event was during off-hours
+                # ORDER BY id DESC gets the most recent INSERT, not the latest timestamp
+                cursor.execute("""
+                    SELECT timestamp
+                    FROM auth_events
+                    WHERE source_ip_text = %s
+                    AND event_type = 'successful'
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (ip_address,))
+                result = cursor.fetchone()
+
+                if result:
+                    latest_event = result['timestamp']
+                    event_hour = latest_event.hour
+                    event_weekday = latest_event.weekday()
+
+                    # Check if this specific event was during off-hours
+                    is_off_hour = event_hour < work_start or event_hour >= work_end
+                    is_weekend = event_weekday >= 5  # Sat=5, Sun=6
+
+                    if is_off_hour or is_weekend:
+                        # This event IS during off-hours - trigger alert
+                        return {
+                            'triggered': True,
+                            'reason': f"Off-hours successful login detected at {event_hour}:00 (outside {work_start}:00-{work_end}:00)",
+                            'requires_approval': requires_approval,
+                            'off_hours_attempts': 1,
+                            'is_weekend': is_weekend,
+                            'hour_of_day': event_hour,
+                            'anomaly_score': 1,
+                            'threat_level': 'medium'
+                        }
+
+                # Event is during work hours OR no event found - no alert
+                return {
+                    'triggered': False,
+                    'reason': f"Successful login during work hours or no events found",
+                    'requires_approval': False,
+                    'off_hours_attempts': 0,
+                    'is_weekend': False,
+                    'hour_of_day': current_hour,
+                    'anomaly_score': 0
+                }
+
+            # Count recent off-hours attempts from this IP (for failed login detection)
+            event_type_clause = "AND event_type = 'failed'" if not event_type_filter else f"AND event_type = '{event_type_filter}'"
+            cursor.execute(f"""
                 SELECT COUNT(*) as off_hours_count
                 FROM auth_events
                 WHERE source_ip_text = %s
-                AND event_type = 'failed'
+                {event_type_clause}
                 AND timestamp >= NOW() - INTERVAL 24 HOUR
                 AND (
                     HOUR(timestamp) < %s OR HOUR(timestamp) >= %s
@@ -751,7 +905,8 @@ def evaluate_behavioral_analysis_rule(rule, ip_address, username=None, event_typ
         conditions = rule['conditions']
         min_risk_score = conditions.get('min_risk_score', 40)
         min_confidence = conditions.get('min_confidence', 0.5)
-        priority_factors = conditions.get('priority_factors', ['impossible_travel', 'credential_stuffing', 'brute_force'])
+        # Note: impossible_travel removed from default - should contribute to score, not auto-block
+        priority_factors = conditions.get('priority_factors', ['credential_stuffing', 'brute_force'])
         requires_approval = conditions.get('requires_approval', False)
 
         if not username:
@@ -910,6 +1065,9 @@ def evaluate_impossible_travel_rule(rule, ip_address, username=None):
         conditions = rule['conditions']
         max_distance_km = conditions.get('max_distance_km', 1000)
         time_window_hours = conditions.get('time_window_hours', 2)
+        max_abuse_score = conditions.get('max_abuseipdb_score')  # For "clean IP only" filter
+        require_anomaly = conditions.get('require_anomaly', False)  # Require other anomalies
+        min_risk_score = conditions.get('min_risk_score', 0)  # Minimum ML risk score
 
         if not username:
             return {'triggered': False, 'reason': 'No username provided for travel check',
@@ -919,6 +1077,24 @@ def evaluate_impossible_travel_rule(rule, ip_address, username=None):
         cursor = conn.cursor(dictionary=True)
 
         try:
+            # Check max_abuseipdb_score filter (for "clean IP only" rules)
+            if max_abuse_score is not None:
+                cursor.execute("""
+                    SELECT abuseipdb_score FROM ip_threat_intelligence
+                    WHERE ip_address_text = %s
+                    ORDER BY last_seen DESC LIMIT 1
+                """, (ip_address,))
+                threat_row = cursor.fetchone()
+                ip_abuse_score = threat_row['abuseipdb_score'] if threat_row and threat_row['abuseipdb_score'] else 0
+
+                if ip_abuse_score > max_abuse_score:
+                    return {
+                        'triggered': False,
+                        'reason': f"IP AbuseIPDB score ({ip_abuse_score}) exceeds max ({max_abuse_score}) - handled by bad-IP rules",
+                        'distance_km': 0,
+                        'time_diff_hours': 0
+                    }
+
             # Get current location
             cursor.execute("""
                 SELECT g.latitude, g.longitude, g.country_code, g.city
@@ -987,7 +1163,44 @@ def evaluate_impossible_travel_rule(rule, ip_address, username=None):
             conn.commit()
 
             # Check if impossible travel
-            if distance_km > max_distance_km and time_diff_hours < time_window_hours:
+            is_impossible_travel = distance_km > max_distance_km and time_diff_hours < time_window_hours
+
+            if is_impossible_travel:
+                # If require_anomaly or min_risk_score is set, check additional conditions
+                if require_anomaly or min_risk_score > 0:
+                    # Get IP's threat/anomaly score from threat intelligence
+                    cursor.execute("""
+                        SELECT abuseipdb_score, overall_threat_level
+                        FROM ip_threat_intelligence
+                        WHERE ip_address_text = %s
+                    """, (ip_address,))
+                    threat_data = cursor.fetchone()
+
+                    # Calculate a combined risk score
+                    ip_risk_score = 0
+                    if threat_data:
+                        abuse_score = threat_data.get('abuseipdb_score') or 0
+                        threat_level = threat_data.get('overall_threat_level', 'clean')
+
+                        # Base score from AbuseIPDB
+                        ip_risk_score = abuse_score
+
+                        # Boost for threat level
+                        threat_boosts = {'low': 10, 'medium': 25, 'high': 40, 'critical': 60}
+                        ip_risk_score += threat_boosts.get(threat_level, 0)
+
+                    # Add impossible travel contribution
+                    travel_risk = min(40, int(distance_km / 100))  # Up to 40 points for long distance
+                    combined_risk = ip_risk_score + travel_risk
+
+                    if min_risk_score > 0 and combined_risk < min_risk_score:
+                        return {
+                            'triggered': False,
+                            'reason': f"Impossible travel detected but combined risk ({combined_risk}) below threshold ({min_risk_score})",
+                            'distance_km': distance_km,
+                            'time_diff_hours': time_diff_hours
+                        }
+
                 return {'triggered': True,
                         'reason': f"Impossible travel: {distance_km:.0f}km in {time_diff_hours:.1f}h "
                                   f"(from {baseline['last_city']}/{baseline['last_country_code']} "

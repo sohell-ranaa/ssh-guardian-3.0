@@ -360,10 +360,15 @@
 
         if (!container) return;
 
-        // Filter out 'display' category (already shown in Time & Date section) and 'navigation' (shown above)
+        // Filter out categories that are shown elsewhere or should be hidden
+        // - 'display': shown in Time & Date section
+        // - 'navigation': shown above
+        // - 'cache': internal cache settings, not user-configurable
+        // - 'system': internal system settings
         const filteredGrouped = {};
+        const hiddenCategories = ['display', 'navigation', 'cache', 'system'];
         for (const [category, settings] of Object.entries(grouped)) {
-            if (category !== 'display' && category !== 'navigation') {
+            if (!hiddenCategories.includes(category)) {
                 filteredGrouped[category] = settings;
             }
         }
@@ -626,5 +631,203 @@
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
     }
+
+    // =============================================================================
+    // DATA MANAGEMENT FUNCTIONS
+    // =============================================================================
+
+    /**
+     * Load data statistics (record counts)
+     */
+    window.loadDataStats = async function() {
+        try {
+            const response = await fetch('/api/dashboard/settings/data-stats');
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                const stats = data.data;
+
+                // Update counts in UI
+                for (const [table, info] of Object.entries(stats)) {
+                    const countEl = document.getElementById(`count-${table}`);
+                    if (countEl) {
+                        countEl.textContent = info.count.toLocaleString();
+                        countEl.style.color = info.count > 0 ? 'var(--text-primary)' : 'var(--text-hint)';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading data stats:', error);
+        }
+    };
+
+    /**
+     * Export database as SQL file
+     */
+    window.exportDatabase = async function() {
+        const btn = document.getElementById('export-database-btn');
+        const originalText = btn.innerHTML;
+
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Exporting...';
+
+            const response = await fetch('/api/dashboard/settings/export-database', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+
+            if (response.ok) {
+                // Get filename from Content-Disposition header
+                const disposition = response.headers.get('Content-Disposition');
+                let filename = 'ssh_guardian_backup.sql';
+                if (disposition && disposition.includes('filename=')) {
+                    filename = disposition.split('filename=')[1].replace(/"/g, '');
+                }
+
+                // Download the file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                showNotification('Database exported successfully', 'success');
+            } else {
+                const data = await response.json();
+                throw new Error(data.error || 'Export failed');
+            }
+        } catch (error) {
+            console.error('Error exporting database:', error);
+            showNotification('Failed to export database: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    };
+
+    /**
+     * Clear selected data with confirmation
+     */
+    window.clearSelectedData = async function() {
+        const checkboxes = document.querySelectorAll('input[name="clear-data"]:checked');
+
+        if (checkboxes.length === 0) {
+            showNotification('Please select at least one data type to clear', 'warning');
+            return;
+        }
+
+        const tables = Array.from(checkboxes).map(cb => cb.value);
+        const labels = {
+            'auth_events': 'Event Logs',
+            'ip_blocks': 'IP Block List',
+            'blocking_actions': 'Blocking History',
+            'notifications': 'Notifications',
+            'agent_log_batches': 'Agent Log Batches'
+        };
+
+        const tableLabels = tables.map(t => labels[t] || t).join(', ');
+
+        // Confirmation dialog
+        const confirmed = confirm(
+            `⚠️ WARNING: This action cannot be undone!\n\n` +
+            `You are about to permanently delete all data from:\n` +
+            `• ${tables.map(t => labels[t] || t).join('\n• ')}\n\n` +
+            `Are you sure you want to continue?`
+        );
+
+        if (!confirmed) return;
+
+        // Double confirmation for safety
+        const doubleConfirmed = confirm(
+            `🔴 FINAL CONFIRMATION\n\n` +
+            `Type YES in the next prompt to confirm deletion of ${tableLabels}.`
+        );
+
+        if (!doubleConfirmed) return;
+
+        const userInput = prompt('Type YES to confirm deletion:');
+        if (userInput !== 'YES') {
+            showNotification('Deletion cancelled', 'info');
+            return;
+        }
+
+        const btn = document.getElementById('clear-selected-data-btn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> Clearing...';
+
+        try {
+            let totalCleared = 0;
+
+            for (const table of tables) {
+                const response = await fetch(`/api/dashboard/settings/clear-data/${table}`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    totalCleared += data.records_cleared || 0;
+                } else {
+                    showNotification(`Failed to clear ${labels[table]}: ${data.error}`, 'error');
+                }
+            }
+
+            showNotification(`Successfully cleared ${totalCleared.toLocaleString()} records`, 'success');
+
+            // Reload stats
+            await loadDataStats();
+
+            // Uncheck all checkboxes
+            checkboxes.forEach(cb => cb.checked = false);
+            updateClearButtonState();
+
+        } catch (error) {
+            console.error('Error clearing data:', error);
+            showNotification('Failed to clear data: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    };
+
+    /**
+     * Update clear button state based on checkbox selection
+     */
+    function updateClearButtonState() {
+        const checkboxes = document.querySelectorAll('input[name="clear-data"]:checked');
+        const btn = document.getElementById('clear-selected-data-btn');
+
+        if (btn) {
+            btn.disabled = checkboxes.length === 0;
+            btn.style.opacity = checkboxes.length === 0 ? '0.5' : '1';
+        }
+    }
+
+    /**
+     * Setup data management event listeners
+     */
+    function setupDataManagementListeners() {
+        // Checkbox change listeners
+        document.querySelectorAll('input[name="clear-data"]').forEach(cb => {
+            cb.addEventListener('change', updateClearButtonState);
+        });
+
+        // Load data stats on page load
+        loadDataStats();
+    }
+
+    // Extend the original loadSettingsGeneralPage to include data management
+    const originalLoadSettingsGeneralPage = window.loadSettingsGeneralPage;
+    window.loadSettingsGeneralPage = async function() {
+        await originalLoadSettingsGeneralPage();
+        setupDataManagementListeners();
+    };
 
 })();

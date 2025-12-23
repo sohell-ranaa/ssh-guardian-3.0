@@ -792,6 +792,76 @@ def ip_pool_stats():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@demo_routes.route('/reference-ips', methods=['GET'])
+@login_required
+def get_reference_ips():
+    """
+    Get reference IPs in two categories: malicious and clean.
+    Shows AbuseIPDB score beside each IP.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get malicious IPs (high threat score)
+        cursor.execute("""
+            SELECT ip_address, threat_score
+            FROM simulation_ip_pool
+            WHERE ip_type = 'malicious' AND threat_score >= 50
+            ORDER BY RAND()
+            LIMIT 10
+        """)
+        malicious_rows = cursor.fetchall()
+
+        # Get clean IPs (low threat score or trusted type)
+        cursor.execute("""
+            SELECT ip_address, threat_score
+            FROM simulation_ip_pool
+            WHERE ip_type = 'trusted' OR threat_score < 20
+            ORDER BY RAND()
+            LIMIT 10
+        """)
+        clean_rows = cursor.fetchall()
+
+        # If no clean IPs in pool, use well-known clean IPs
+        if not clean_rows:
+            clean_rows = [
+                {'ip_address': '8.8.8.8', 'threat_score': 0},
+                {'ip_address': '1.1.1.1', 'threat_score': 0},
+                {'ip_address': '208.67.222.222', 'threat_score': 0},
+                {'ip_address': '9.9.9.9', 'threat_score': 0},
+                {'ip_address': '64.6.64.6', 'threat_score': 0}
+            ]
+
+        cursor.close()
+        conn.close()
+
+        # Format response
+        malicious = [{
+            'ip': row['ip_address'],
+            'abusedb_score': row['threat_score']
+        } for row in malicious_rows]
+
+        clean = [{
+            'ip': row['ip_address'] if isinstance(row, dict) and 'ip_address' in row else row.get('ip_address', row.get('ip', '')),
+            'abusedb_score': row.get('threat_score', 0)
+        } for row in clean_rows]
+
+        return jsonify({
+            'success': True,
+            'categories': {
+                'malicious': malicious,
+                'clean': clean
+            },
+            'total': len(malicious) + len(clean)
+        })
+    except Exception as e:
+        print(f"[Demo] Error getting reference IPs: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @demo_routes.route('/scenarios', methods=['GET'])
 @login_required
 def list_scenarios():

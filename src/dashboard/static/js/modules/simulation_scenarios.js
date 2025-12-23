@@ -14,33 +14,12 @@ const categoryConfig = {
         badge: null,
         steps: ['1. Select target server', '2. Click scenario card', '3. Run Attack → IP blocked via UFW']
     },
-    fail2ban: {
-        icon: '🔒',
-        title: 'Fail2ban Scenarios',
-        description: 'Generate auth.log entries → Fail2ban detects & bans automatically',
-        badge: { text: 'REQUIRES TARGET', color: 'purple' },
-        steps: ['1. Select target server (required)', '2. Click scenario card', '3. Run Attack → Fail2ban bans IP']
-    },
-    ml_behavioral: {
-        icon: '🧠',
-        title: 'ML Behavioral Analysis',
-        description: 'Advanced pattern detection: impossible travel, time anomalies, lateral movement',
-        badge: { text: 'ML', color: 'gradient' },
-        steps: ['1. Select target server', '2. Click scenario card', '3. (Optional) Create Baseline first', '4. Run Attack → ML detects anomaly']
-    },
     alert_only: {
         icon: '⚠️',
         title: 'Alert Only Scenarios',
         description: 'Successful logins with anomalies - generates Telegram alert but NO IP block',
         badge: { text: 'NO BLOCK', color: 'warning' },
         steps: ['1. Select target server', '2. Click scenario card', '3. Run Attack → Alert sent (no block)']
-    },
-    private_ip: {
-        icon: '🏠',
-        title: 'Private IP Scenarios',
-        description: 'Internal network threats - behavioral analysis only (skip GeoIP/ThreatIntel)',
-        badge: { text: 'INTERNAL', color: 'purple' },
-        steps: ['1. Select target server', '2. Click scenario card', '3. Run Attack → Behavioral analysis only']
     },
     baseline: {
         icon: '✅',
@@ -119,22 +98,6 @@ function switchScenarioCategory(category) {
     renderScenariosForCategory(category);
 }
 
-// Update fail2ban category state based on target selection
-function updateFail2banCategoryState() {
-    const targetId = document.getElementById('scenario-target')?.value || '';
-    const f2bTab = document.querySelector('.sim-cat-tab[data-category="fail2ban"]');
-
-    if (f2bTab) {
-        if (!targetId) {
-            f2bTab.classList.add('disabled');
-            f2bTab.title = 'Select a target server to enable Fail2ban scenarios';
-        } else {
-            f2bTab.classList.remove('disabled');
-            f2bTab.title = '';
-        }
-    }
-}
-
 // ========================
 // SCENARIO RENDERING
 // ========================
@@ -165,16 +128,10 @@ function renderScenarioCard(s, colors, icons) {
     let actionBadge = '';
     if (s.action_type === 'alert') {
         actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: linear-gradient(135deg, ${TC.purple} 0%, ${TC.warning} 100%); color: white; border-radius: 4px; font-weight: 600;">ALERT ONLY</span>`;
-    } else if (s.category === 'ml_behavioral') {
-        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: linear-gradient(135deg, ${TC.purple} 0%, ${TC.purple} 100%); color: white; border-radius: 4px; font-weight: 600;">ML</span>`;
-    } else if (s.category === 'private_ip' || s.is_private_ip) {
-        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.purple}; color: white; border-radius: 4px; font-weight: 600;">🏠 PRIVATE IP</span>`;
     } else if (s.category === 'baseline') {
         actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.success}; color: white; border-radius: 4px; font-weight: 600;">CONTROL</span>`;
     } else if (s.category === 'ufw_block') {
         actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.danger}; color: white; border-radius: 4px; font-weight: 600;">UFW BLOCK</span>`;
-    } else if (s.category === 'fail2ban') {
-        actionBadge = `<span style="font-size: 10px; padding: 2px 6px; background: ${TC.warning}; color: black; border-radius: 4px; font-weight: 600;">FAIL2BAN</span>`;
     }
 
     const mlFactorsHtml = renderMLFactorsCompact(s.ml_factors);
@@ -201,7 +158,7 @@ function renderScenarioCard(s, colors, icons) {
                     <span style="padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; background: ${colors[s.severity]}; color: white;">
                         ${icons[s.severity]} ${s.severity}
                     </span>
-                    <span class="scenario-ip" style="font-family: monospace; font-size: 11px; color: var(--azure-blue); font-weight: 600;">${s.ip}</span>
+                    <span class="scenario-ip" style="display: none;">${s.ip}</span>
                 </div>
             </div>
         </div>
@@ -248,26 +205,17 @@ function renderDemoScenarios(scenarios) {
     // Count scenarios per category
     const counts = {
         ufw_block: scenarios.filter(s => s.category === 'ufw_block').length,
-        fail2ban: scenarios.filter(s => s.category === 'fail2ban').length,
-        ml_behavioral: scenarios.filter(s => s.category === 'ml_behavioral').length,
         alert_only: scenarios.filter(s => s.category === 'alert_only').length,
-        private_ip: scenarios.filter(s => s.category === 'private_ip').length,
         baseline: scenarios.filter(s => s.category === 'baseline').length
     };
 
     // Update tab counts
     const countUfw = document.getElementById('count-ufw');
-    const countF2b = document.getElementById('count-fail2ban');
-    const countMl = document.getElementById('count-ml');
     const countAlert = document.getElementById('count-alert');
-    const countPrivate = document.getElementById('count-private');
     const countBaseline = document.getElementById('count-baseline');
 
     if (countUfw) countUfw.textContent = counts.ufw_block;
-    if (countF2b) countF2b.textContent = counts.fail2ban;
-    if (countMl) countMl.textContent = counts.ml_behavioral;
     if (countAlert) countAlert.textContent = counts.alert_only;
-    if (countPrivate) countPrivate.textContent = counts.private_ip;
     if (countBaseline) countBaseline.textContent = counts.baseline;
 
     // Render current category
@@ -292,6 +240,5 @@ function hideScenarioTooltip(card) {
 // ========================
 window.loadDemoScenarios = loadDemoScenarios;
 window.switchScenarioCategory = switchScenarioCategory;
-window.updateFail2banCategoryState = updateFail2banCategoryState;
 window.showScenarioTooltip = showScenarioTooltip;
 window.hideScenarioTooltip = hideScenarioTooltip;

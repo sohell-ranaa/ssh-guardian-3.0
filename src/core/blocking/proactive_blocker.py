@@ -282,7 +282,9 @@ class ProactiveBlocker:
             recommendations = analysis.get('recommendations', [])
 
             # Check for priority factors (immediate block regardless of total score)
-            priority_types = ['impossible_travel', 'credential_stuffing', 'brute_force']
+            # Note: impossible_travel removed - it should contribute to score, not auto-block
+            # (user could be using VPN, legitimate travel, etc.)
+            priority_types = ['credential_stuffing', 'brute_force']
             detected_types = [f.get('type') for f in risk_factors]
             has_priority_factor = any(pt in detected_types for pt in priority_types)
 
@@ -340,15 +342,30 @@ class ProactiveBlocker:
                 return result
 
             elif risk_score >= 40:
-                # MEDIUM: Standard fail2ban block (24h)
-                success = self._block_via_fail2ban(ip, risk_score, factor_descriptions, bantime=86400)
+                # MEDIUM (40-59): Alert only - no blocking
+                # This score range indicates suspicious but not confirmed threat
+                try:
+                    from .alert_operations import create_security_alert
+                    create_security_alert(
+                        ip_address=ip,
+                        alert_type='behavioral_anomaly',
+                        title=f'Medium Risk Activity Detected (score: {risk_score})',
+                        description=f"Behavioral analysis detected medium-risk activity. Factors: {', '.join(factor_descriptions[:3])}",
+                        severity='medium',
+                        username=event.get('target_username'),
+                        ml_score=int(risk_score),
+                        ml_factors=risk_factors[:5]
+                    )
+                except Exception as alert_err:
+                    print(f"Failed to create medium-risk alert: {alert_err}")
+
                 result = {
-                    'should_block': True,
-                    'block_method': 'fail2ban',
+                    'should_block': False,  # Changed: Don't block at 40-59
+                    'block_method': 'none',
                     'threat_score': risk_score,
                     'risk_level': 'medium',
                     'factors': factor_descriptions,
-                    'action_taken': 'ML BEHAVIORAL: Standard fail2ban block (24h)' if success else 'Block failed',
+                    'action_taken': 'ML BEHAVIORAL: Alert created (monitoring)',
                     'ml_analysis': {
                         'source': 'BehavioralAnalyzer',
                         'risk_factors': risk_factors,
@@ -359,7 +376,7 @@ class ProactiveBlocker:
                 self._log_evaluation(ip, event, result)
                 return result
 
-            # Below blocking threshold but still anomalous - create ALERT (not block)
+            # Below 40: Low risk - create alert only if notable factors exist
             if risk_score >= 20 and risk_factors:
                 # Import alert_operations to create behavioral alert
                 try:
