@@ -588,7 +588,8 @@ def run_demo_scenario(scenario_id: str, verbose: bool = False,
             source_type='agent' if agent_id else 'simulation',
             agent_id=agent_id,
             skip_blocking=False,
-            skip_learning=True
+            skip_learning=True,
+            skip_notifications=True  # Skip Telegram notifications for simulations
         )
 
         # Accumulate blocking results across all events

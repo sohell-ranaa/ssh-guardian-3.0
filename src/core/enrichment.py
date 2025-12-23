@@ -16,13 +16,14 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 from connection import get_connection
 
 # Notification thresholds
-HIGH_RISK_THRESHOLD = 50  # ML risk score threshold for high_risk_detected (lowered from 60)
-ANOMALY_NOTIFICATION = True  # Send notification when anomaly detected
+HIGH_RISK_THRESHOLD = 70  # ML risk score threshold for high_risk_detected (realistic: prevents noise)
+BEHAVIORAL_ANOMALY_THRESHOLD = 60  # Behavioral anomaly score threshold for notifications
+ANOMALY_NOTIFICATION = True  # Send notification when ML anomaly detected
 
-# Risk score adjustments (added for aggressive blocking)
-NIGHT_TIME_RISK_BOOST = 20  # +20 for logins between 10PM-6AM
-HIGH_RISK_COUNTRY_BOOST = 25  # +25 for high-risk countries on first fail
-VPN_PROXY_RISK_BOOST = 15  # +15 for VPN/proxy IPs
+# Risk score adjustments (tuned for realistic alerting)
+NIGHT_TIME_RISK_BOOST = 10  # +10 for logins between 10PM-6AM (reduced from 20)
+HIGH_RISK_COUNTRY_BOOST = 20  # +20 for high-risk countries on first fail (reduced from 25)
+VPN_PROXY_RISK_BOOST = 10  # +10 for VPN/proxy IPs (reduced from 15)
 
 # High-risk countries
 HIGH_RISK_COUNTRIES = {'CN', 'RU', 'KP', 'IR', 'BY'}
@@ -602,7 +603,8 @@ class EventEnricher:
                      skip_ml: bool = False,
                      skip_threat_intel: bool = False,
                      skip_blocking: bool = False,
-                     skip_learning: bool = False) -> Dict:
+                     skip_learning: bool = False,
+                     skip_notifications: bool = False) -> Dict:
         """
         Full enrichment pipeline for a single event.
 
@@ -620,6 +622,7 @@ class EventEnricher:
             skip_threat_intel: Skip threat intelligence
             skip_blocking: Skip auto-blocking (analysis only mode)
             skip_learning: Skip behavioral profile learning (for simulation)
+            skip_notifications: Skip sending notifications (for simulation)
 
         Returns:
             Dict with enrichment results
@@ -775,39 +778,47 @@ class EventEnricher:
                                 self._log(f"⚠️  Rule evaluation error: {e}")
                                 result['errors'].append(f"Rule evaluation error: {str(e)}")
 
-                        notif_module = self._get_notification_module()
-                        if notif_module:
-                            # Send high_risk notification if score >= threshold
-                            if risk_score >= HIGH_RISK_THRESHOLD:
-                                self._log(f"🔔 Triggering high_risk notification (score: {risk_score})")
-                                try:
-                                    notif_module['high_risk'](
-                                        event_id=event_id,
-                                        ip_address=source_ip,
-                                        risk_score=risk_score,
-                                        threat_type=threat_type,
-                                        geo_data=geo_data,
-                                        threat_data=threat_data,
-                                        verbose=self.verbose
-                                    )
-                                except Exception as e:
-                                    self._log(f"❌ High risk notification error: {e}")
+                        # Send notifications (skip for simulations)
+                        if skip_notifications:
+                            self._log(f"⏭️  Skipping notifications (simulation mode)")
+                        else:
+                            notif_module = self._get_notification_module()
+                            if notif_module:
+                                # Send high_risk notification if score >= threshold (70)
+                                if risk_score >= HIGH_RISK_THRESHOLD:
+                                    self._log(f"🔔 Triggering high_risk notification (score: {risk_score})")
+                                    try:
+                                        notif_module['high_risk'](
+                                            event_id=event_id,
+                                            ip_address=source_ip,
+                                            risk_score=risk_score,
+                                            threat_type=threat_type,
+                                            geo_data=geo_data,
+                                            threat_data=threat_data,
+                                            verbose=self.verbose
+                                        )
+                                    except Exception as e:
+                                        self._log(f"❌ High risk notification error: {e}")
 
-                            # Send anomaly notification if anomaly detected
-                            if ANOMALY_NOTIFICATION and is_anomaly:
-                                self._log(f"🔔 Triggering anomaly notification")
-                                try:
-                                    notif_module['anomaly'](
-                                        event_id=event_id,
-                                        ip_address=source_ip,
-                                        risk_score=risk_score,
-                                        threat_type=threat_type,
-                                        confidence=confidence,
-                                        geo_data=geo_data,
-                                        verbose=self.verbose
-                                    )
-                                except Exception as e:
-                                    self._log(f"❌ Anomaly notification error: {e}")
+                                # Send ML anomaly notification only for significant anomalies
+                                # Must meet BEHAVIORAL_ANOMALY_THRESHOLD (60) and be below HIGH_RISK_THRESHOLD (70)
+                                # Skip if risk_score >= 70 (already handled by high_risk above)
+                                if ANOMALY_NOTIFICATION and is_anomaly and risk_score >= BEHAVIORAL_ANOMALY_THRESHOLD and risk_score < HIGH_RISK_THRESHOLD:
+                                    self._log(f"🔔 Triggering anomaly notification (score: {risk_score})")
+                                    try:
+                                        notif_module['anomaly'](
+                                            event_id=event_id,
+                                            ip_address=source_ip,
+                                            risk_score=risk_score,
+                                            threat_type=threat_type,
+                                            confidence=confidence,
+                                            geo_data=geo_data,
+                                            verbose=self.verbose
+                                        )
+                                    except Exception as e:
+                                        self._log(f"❌ Anomaly notification error: {e}")
+                                elif is_anomaly and risk_score < BEHAVIORAL_ANOMALY_THRESHOLD:
+                                    self._log(f"ℹ️  ML anomaly below threshold ({risk_score} < {BEHAVIORAL_ANOMALY_THRESHOLD}), no notification")
 
                             # Check for new location on successful logins (allow + notify)
                             if event_type == 'successful' and target_username and geo_data:
@@ -895,24 +906,30 @@ class EventEnricher:
                     self._log(f"🚨 Behavioral anomaly detected: score={anomaly_score}, type={anomaly_type}, factors={factors}")
 
                     # Send notification for behavioral anomaly (ALERT ONLY - no blocking)
-                    notif_module = self._get_notification_module()
-                    if notif_module and 'anomaly' in notif_module:
-                        try:
-                            notif_module['anomaly'](
-                                event_id=event_id,
-                                ip_address=source_ip,
-                                risk_score=anomaly_score,
-                                threat_type=anomaly_type,
-                                confidence=behavioral_result.get('details', {}).get('profile_confidence', 0),
-                                geo_data=geo_data,
-                                username=target_username,
-                                anomaly_factors=factors,
-                                anomaly_details=behavioral_result.get('factor_details', []),
-                                verbose=self.verbose
-                            )
-                            self._log(f"✅ Behavioral anomaly notification sent")
-                        except Exception as e:
-                            self._log(f"❌ Behavioral anomaly notification error: {e}")
+                    # Only notify if score >= BEHAVIORAL_ANOMALY_THRESHOLD and not skipping notifications
+                    if skip_notifications:
+                        self._log(f"⏭️  Skipping behavioral notification (simulation mode)")
+                    elif anomaly_score < BEHAVIORAL_ANOMALY_THRESHOLD:
+                        self._log(f"ℹ️  Behavioral anomaly below threshold ({anomaly_score} < {BEHAVIORAL_ANOMALY_THRESHOLD}), no notification")
+                    else:
+                        notif_module = self._get_notification_module()
+                        if notif_module and 'anomaly' in notif_module:
+                            try:
+                                notif_module['anomaly'](
+                                    event_id=event_id,
+                                    ip_address=source_ip,
+                                    risk_score=anomaly_score,
+                                    threat_type=anomaly_type,
+                                    confidence=behavioral_result.get('details', {}).get('profile_confidence', 0),
+                                    geo_data=geo_data,
+                                    username=target_username,
+                                    anomaly_factors=factors,
+                                    anomaly_details=behavioral_result.get('factor_details', []),
+                                    verbose=self.verbose
+                                )
+                                self._log(f"✅ Behavioral anomaly notification sent")
+                            except Exception as e:
+                                self._log(f"❌ Behavioral anomaly notification error: {e}")
                 else:
                     self._log(f"✅ Behavioral analysis: normal (score={behavioral_result.get('anomaly_score', 0)})")
 
@@ -1131,7 +1148,8 @@ def get_enricher(verbose: bool = True) -> EventEnricher:
 
 
 def enrich_event(event_id: int, source_ip: str, verbose: bool = True,
-                 skip_blocking: bool = False, skip_learning: bool = False) -> Dict:
+                 skip_blocking: bool = False, skip_learning: bool = False,
+                 skip_notifications: bool = False) -> Dict:
     """
     Convenience function to enrich a single event.
 
@@ -1141,12 +1159,18 @@ def enrich_event(event_id: int, source_ip: str, verbose: bool = True,
         verbose: Print progress
         skip_blocking: Skip auto-blocking (analysis only mode)
         skip_learning: Skip behavioral profile learning (for simulation)
+        skip_notifications: Skip sending notifications (for simulation)
 
     Returns:
         Enrichment result dict
     """
     enricher = get_enricher(verbose=verbose)
-    return enricher.enrich_event(event_id, source_ip, skip_blocking=skip_blocking, skip_learning=skip_learning)
+    return enricher.enrich_event(
+        event_id, source_ip,
+        skip_blocking=skip_blocking,
+        skip_learning=skip_learning,
+        skip_notifications=skip_notifications
+    )
 
 
 def enrich_batch(event_ids: List[int], verbose: bool = True) -> List[Dict]:

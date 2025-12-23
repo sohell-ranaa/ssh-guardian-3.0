@@ -167,7 +167,8 @@ class AttackSimulator:
                         enrichment_result = enrich_event(
                             event_id=result['event_id'],
                             source_ip=event['source_ip'],
-                            verbose=False  # Don't spam console during simulation
+                            verbose=False,  # Don't spam console during simulation
+                            skip_notifications=True  # Skip Telegram notifications for simulations
                         )
                         if enrichment_result.get('ml', {}).get('ml_available'):
                             logger.info('ENRICHMENT',

@@ -134,7 +134,7 @@ def run_enrichment(event_ids: list):
             conn.close()
 
             if event:
-                result = enrich_event(event_id, event['source_ip_text'], verbose=False)
+                result = enrich_event(event_id, event['source_ip_text'], verbose=False, skip_notifications=True)
                 results.append({
                     'event_id': event_id,
                     'success': result.get('success', False),

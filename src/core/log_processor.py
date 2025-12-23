@@ -166,7 +166,8 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                     simulation_run_id: Optional[int] = None,
                     target_server_override: Optional[str] = None,
                     skip_blocking: bool = False,
-                    skip_learning: bool = False) -> Dict:
+                    skip_learning: bool = False,
+                    skip_notifications: bool = False) -> Dict:
     """
     Process a single log line and create auth_event
 
@@ -179,6 +180,7 @@ def process_log_line(log_line: str, source_type: str = 'agent',
         target_server_override: Override target server name (for simulations)
         skip_blocking: Skip auto-blocking (analysis-only mode for simulations without agent)
         skip_learning: Skip behavioral profile learning (for simulations)
+        skip_notifications: Skip sending notifications (for simulations)
 
     Returns:
         dict with success status and event_id or error
@@ -266,7 +268,8 @@ def process_log_line(log_line: str, source_type: str = 'agent',
                     enrichment_result = enrich_event(
                         event_id, source_ip, verbose=False,
                         skip_blocking=skip_blocking,
-                        skip_learning=skip_learning
+                        skip_learning=skip_learning,
+                        skip_notifications=skip_notifications
                     )
             except Exception as e:
                 # Don't fail the event if enrichment fails
