@@ -181,6 +181,332 @@ class EventEnricher:
                 self._behavioral_learner = False
         return self._behavioral_scorer, self._behavioral_learner
 
+    def _is_private_ip(self, ip: str) -> bool:
+        """
+        Check if IP is a private/local network address.
+        Private IPs should use behavioral analysis only (skip GeoIP, ThreatIntel).
+
+        RFC 1918 ranges:
+        - 10.0.0.0/8 (10.x.x.x)
+        - 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+        - 192.168.0.0/16 (192.168.x.x)
+        - 127.0.0.0/8 (loopback)
+        """
+        if not ip:
+            return False
+
+        # Check common private ranges
+        if ip.startswith('10.') or ip.startswith('192.168.') or ip.startswith('127.'):
+            return True
+
+        # Check 172.16.0.0/12 range (172.16.x.x - 172.31.x.x)
+        if ip.startswith('172.'):
+            try:
+                second_octet = int(ip.split('.')[1])
+                if 16 <= second_octet <= 31:
+                    return True
+            except (IndexError, ValueError):
+                pass
+
+        return False
+
+    def _enrich_private_ip_event(self, event_id: int, source_ip: str,
+                                  skip_blocking: bool = False,
+                                  skip_learning: bool = False) -> Dict:
+        """
+        Behavioral-only enrichment for private network IPs.
+
+        For private IPs (192.168.x.x, 10.x.x.x, etc.), we skip:
+        - GeoIP lookups (no useful data)
+        - Threat Intelligence (AbuseIPDB, VirusTotal)
+        - Impossible Travel detection (requires geo coordinates)
+
+        We still perform:
+        - Login time anomaly detection
+        - Rapid attempt detection
+        - Brute force counting
+        - Success after failures detection
+        - User baseline tracking
+        """
+        self._log(f"\n🏠 Private IP detected: {source_ip} - Using behavioral analysis only")
+
+        result = {
+            'event_id': event_id,
+            'source_ip': source_ip,
+            'is_private_ip': True,
+            'enrichment_type': 'behavioral_only',
+            'geoip': None,  # Skipped for private IPs
+            'threat_intel': None,  # Skipped for private IPs
+            'ml': None,
+            'success': True,
+            'errors': []
+        }
+
+        # Get event data
+        event_data = self._get_event_data(event_id)
+        if not event_data:
+            result['success'] = False
+            result['errors'].append('Event not found')
+            return result
+
+        target_username = event_data.get('target_username')
+        event_type = event_data.get('event_type', 'unknown')
+        event_timestamp = event_data.get('timestamp', datetime.now())
+
+        # Perform behavioral analysis for private IP
+        behavioral_result = self._analyze_private_ip_behavior(
+            event_id, source_ip, target_username, event_type, event_timestamp
+        )
+        result['behavioral'] = behavioral_result
+        result['ml'] = {
+            'risk_score': behavioral_result.get('risk_score', 0),
+            'threat_type': behavioral_result.get('threat_type'),
+            'is_anomaly': behavioral_result.get('is_anomaly', False),
+            'confidence': behavioral_result.get('confidence', 0.5),
+            'ml_available': True,
+            'private_ip_mode': True
+        }
+
+        # Update auth_events with behavioral results
+        self._update_ml_results(
+            event_id,
+            behavioral_result.get('risk_score', 0),
+            behavioral_result.get('threat_type'),
+            behavioral_result.get('confidence', 0.5),
+            behavioral_result.get('is_anomaly', False)
+        )
+
+        # Handle blocking decision for private IPs
+        if not skip_blocking and behavioral_result.get('risk_score', 0) >= 60:
+            try:
+                from core.blocking.rule_coordinator import check_and_block_ip
+                blocking_result = check_and_block_ip(
+                    ip_address=source_ip,
+                    ml_result=result['ml'],
+                    event_id=event_id,
+                    event_type=event_type,
+                    username=target_username
+                )
+                result['blocking'] = blocking_result
+                if blocking_result.get('blocked'):
+                    self._log(f"🚫 Private IP {source_ip} blocked (behavioral): {blocking_result.get('triggered_rules')}")
+            except Exception as e:
+                self._log(f"⚠️  Blocking error for private IP: {e}")
+                result['errors'].append(f"Blocking error: {str(e)}")
+
+        # Send notifications if high risk
+        risk_score = behavioral_result.get('risk_score', 0)
+        if risk_score >= HIGH_RISK_THRESHOLD:
+            notif_module = self._get_notification_module()
+            if notif_module and 'high_risk' in notif_module:
+                try:
+                    notif_module['high_risk'](
+                        event_id=event_id,
+                        ip_address=source_ip,
+                        risk_score=risk_score,
+                        threat_type=behavioral_result.get('threat_type', 'behavioral_anomaly'),
+                        geo_data=None,  # No geo for private IP
+                        threat_data=None,
+                        verbose=self.verbose
+                    )
+                    self._log(f"🔔 High risk notification sent for private IP")
+                except Exception as e:
+                    self._log(f"❌ Notification error: {e}")
+
+        # Update behavioral profile (learning) for private IPs too
+        if event_type == 'successful' and target_username and not skip_learning:
+            behavioral_scorer, behavioral_learner = self._get_behavioral_modules()
+            if behavioral_learner:
+                try:
+                    login_data = {
+                        'hour': event_timestamp.hour if hasattr(event_timestamp, 'hour') else datetime.now().hour,
+                        'day_of_week': event_timestamp.weekday() if hasattr(event_timestamp, 'weekday') else datetime.now().weekday(),
+                        'ip_address': source_ip,
+                        'country': 'PRIVATE',  # Mark as private network
+                        'city': 'LOCAL',
+                        'is_successful': True,
+                        'timestamp': event_timestamp if isinstance(event_timestamp, datetime) else datetime.now()
+                    }
+                    behavioral_learner.learn_from_login(target_username, login_data)
+                    self._log(f"📚 Updated behavioral profile for {target_username} (private IP)")
+                except Exception as e:
+                    self._log(f"⚠️  Profile learning error: {e}")
+
+        # Mark as completed
+        self._update_processing_status(event_id, 'completed')
+        self._log(f"✅ Private IP enrichment complete (behavioral score: {behavioral_result.get('risk_score', 0)})")
+
+        return result
+
+    def _analyze_private_ip_behavior(self, event_id: int, source_ip: str,
+                                      username: str, event_type: str,
+                                      timestamp: datetime) -> Dict:
+        """
+        Behavioral analysis specifically for private network IPs.
+
+        Checks performed:
+        - Login time anomaly (unusual hours: before 6AM or after 10PM)
+        - New IP for this user
+        - Rapid attempts (brute force indicator)
+        - Success after multiple failures
+        - Off-hours weekend login
+        """
+        result = {
+            'risk_score': 0,
+            'is_anomaly': False,
+            'threat_type': None,
+            'confidence': 0.5,
+            'factors': [],
+            'factor_details': []
+        }
+
+        if not username:
+            return result
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            risk_score = 0
+            factors = []
+            factor_details = []
+
+            # 1. Check login time anomaly (unusual hours: 10PM - 6AM = +25 risk)
+            hour = timestamp.hour if hasattr(timestamp, 'hour') else datetime.now().hour
+            if hour >= NIGHT_START_HOUR or hour < NIGHT_END_HOUR:
+                risk_score += 25
+                factors.append('unusual_login_time')
+                factor_details.append({
+                    'factor': 'unusual_login_time',
+                    'description': f'Login at {hour}:00 (outside 6AM-10PM)',
+                    'weight': 25
+                })
+                self._log(f"⏰ Unusual login time: {hour}:00 (+25 risk)")
+
+            # 2. Check if this is a new private IP for this user (+15 risk)
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM auth_events
+                WHERE target_username = %s AND source_ip_text = %s
+                AND event_type = 'successful'
+                AND id < %s
+            """, (username, source_ip, event_id))
+            prev_logins = cursor.fetchone()
+
+            if prev_logins and prev_logins['count'] == 0:
+                risk_score += 15
+                factors.append('new_ip_for_user')
+                factor_details.append({
+                    'factor': 'new_ip_for_user',
+                    'description': f'First login from {source_ip}',
+                    'weight': 15
+                })
+                self._log(f"🆕 New private IP for user: {source_ip} (+15 risk)")
+
+            # 3. Check rapid attempts (10+ attempts in 5 minutes = +20 risk)
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM auth_events
+                WHERE source_ip_text = %s
+                AND timestamp >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+                AND id <= %s
+            """, (source_ip, event_id))
+            rapid = cursor.fetchone()
+
+            if rapid and rapid['count'] >= 10:
+                risk_score += 20
+                factors.append('rapid_attempts')
+                factor_details.append({
+                    'factor': 'rapid_attempts',
+                    'description': f'{rapid["count"]} attempts in 5 minutes',
+                    'weight': 20
+                })
+                self._log(f"⚡ Rapid attempts: {rapid['count']} in 5 min (+20 risk)")
+
+            # 4. Check success after failures (3+ failures then success = +15 risk)
+            if event_type == 'successful':
+                cursor.execute("""
+                    SELECT COUNT(*) as count FROM auth_events
+                    WHERE source_ip_text = %s AND event_type = 'failed'
+                    AND timestamp >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                    AND id < %s
+                """, (source_ip, event_id))
+                failures = cursor.fetchone()
+
+                if failures and failures['count'] >= 3:
+                    risk_score += 15
+                    factors.append('success_after_failures')
+                    factor_details.append({
+                        'factor': 'success_after_failures',
+                        'description': f'Success after {failures["count"]} failures',
+                        'weight': 15
+                    })
+                    self._log(f"🔓 Success after {failures['count']} failures (+15 risk)")
+
+            # 5. Check off-hours weekend login (+10 risk)
+            day_of_week = timestamp.weekday() if hasattr(timestamp, 'weekday') else datetime.now().weekday()
+            if day_of_week >= 5:  # Saturday = 5, Sunday = 6
+                risk_score += 10
+                factors.append('weekend_login')
+                factor_details.append({
+                    'factor': 'weekend_login',
+                    'description': 'Login on weekend',
+                    'weight': 10
+                })
+                self._log(f"📅 Weekend login (+10 risk)")
+
+            # 6. Check brute force pattern (20+ failed attempts from this IP = +30 risk)
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM auth_events
+                WHERE source_ip_text = %s AND event_type = 'failed'
+                AND timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            """, (source_ip,))
+            brute_force = cursor.fetchone()
+
+            if brute_force and brute_force['count'] >= 20:
+                risk_score += 30
+                factors.append('brute_force_pattern')
+                factor_details.append({
+                    'factor': 'brute_force_pattern',
+                    'description': f'{brute_force["count"]} failures in 24h',
+                    'weight': 30
+                })
+                self._log(f"🔨 Brute force pattern: {brute_force['count']} failures (+30 risk)")
+
+            # Cap at 100
+            risk_score = min(risk_score, 100)
+
+            # Determine anomaly and threat type
+            is_anomaly = risk_score >= 40
+            threat_type = None
+            if 'brute_force_pattern' in factors:
+                threat_type = 'brute_force'
+            elif 'rapid_attempts' in factors:
+                threat_type = 'rapid_attack'
+            elif 'success_after_failures' in factors:
+                threat_type = 'credential_compromise'
+            elif 'unusual_login_time' in factors:
+                threat_type = 'time_anomaly'
+            elif is_anomaly:
+                threat_type = 'behavioral_anomaly'
+
+            result = {
+                'risk_score': risk_score,
+                'is_anomaly': is_anomaly,
+                'threat_type': threat_type,
+                'confidence': min(0.5 + (len(factors) * 0.1), 0.95),
+                'factors': factors,
+                'factor_details': factor_details
+            }
+
+            return result
+
+        except Exception as e:
+            self._log(f"⚠️  Behavioral analysis error: {e}")
+            result['errors'] = [str(e)]
+            return result
+        finally:
+            cursor.close()
+            conn.close()
+
     def _check_new_location(self, username: str, geo_data: Dict, source_ip: str) -> Tuple[bool, Optional[Dict]]:
         """
         Check if this is a new/unusual location for the user.
@@ -300,6 +626,16 @@ class EventEnricher:
         """
         self._log(f"\n🔄 Enriching event {event_id} (IP: {source_ip})")
 
+        # PRIVATE IP CHECK - Branch to behavioral-only analysis
+        # Private IPs (192.168.x, 10.x, 172.16-31.x) skip GeoIP/ThreatIntel
+        if self._is_private_ip(source_ip):
+            return self._enrich_private_ip_event(
+                event_id=event_id,
+                source_ip=source_ip,
+                skip_blocking=skip_blocking,
+                skip_learning=skip_learning
+            )
+
         result = {
             'event_id': event_id,
             'source_ip': source_ip,
@@ -317,7 +653,7 @@ class EventEnricher:
             result['errors'].append('Event not found')
             return result
 
-        # Step 1: GeoIP Enrichment
+        # Step 1: GeoIP Enrichment (PUBLIC IPs only)
         geo_data = None
         if not skip_geoip:
             try:
