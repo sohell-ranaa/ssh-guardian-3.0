@@ -593,6 +593,23 @@ def get_event_detail(event_id):
             if event_type == 'failed':
                 failed_count += 1
 
+            # Check for off-hours login (using event timestamp, not current time)
+            event_timestamp = event.get('timestamp')
+            is_off_hours = False
+            event_hour = None
+            if event_timestamp:
+                from datetime import datetime
+                if isinstance(event_timestamp, str):
+                    try:
+                        event_dt = datetime.fromisoformat(event_timestamp.replace('Z', '+00:00'))
+                    except:
+                        event_dt = datetime.now()
+                else:
+                    event_dt = event_timestamp
+                event_hour = event_dt.hour
+                # Off-hours: before 6 AM or after 10 PM
+                is_off_hours = event_hour < 6 or event_hour >= 22
+
             # Detect actual malicious behavior patterns
             has_brute_force = failed_count >= 5
             has_bad_reputation = abuseipdb_score >= 50
@@ -601,10 +618,16 @@ def get_event_detail(event_id):
 
             # Decision logic: Block on BEHAVIOR, not just risk score
             if has_good_reputation and is_successful_login and not has_brute_force:
-                # Good reputation + successful login + no attack pattern = Allow
-                decision = 'allow'
-                decision_text = 'Allow - Good reputation, legitimate login'
-                reason = f'Successful login from IP with good reputation (AbuseIPDB: {abuseipdb_score})'
+                # Good reputation + successful login + no attack pattern
+                # But check for off-hours anomaly
+                if is_off_hours:
+                    decision = 'monitor'
+                    decision_text = f'Monitor - Off-hours login at {event_hour}:00'
+                    reason = f'Successful login during unusual hours ({event_hour}:00) - recommend verification'
+                else:
+                    decision = 'allow'
+                    decision_text = 'Allow - Good reputation, legitimate login'
+                    reason = f'Successful login from IP with good reputation (AbuseIPDB: {abuseipdb_score})'
             elif has_brute_force and risk >= 60:
                 # Actual brute force attack pattern
                 if risk >= 80:
@@ -691,6 +714,14 @@ def get_event_detail(event_id):
                     'type': 'geo_risk',
                     'label': 'High-Risk Country',
                     'value': event.get('country_name', event['country_code']),
+                    'impact': 'medium'
+                })
+            # Add off-hours factor if applicable
+            if is_off_hours and event_hour is not None:
+                ml_decision['factors'].append({
+                    'type': 'off_hours',
+                    'label': 'Off-Hours Login',
+                    'value': f'{event_hour}:00 (outside 06:00-22:00)',
                     'impact': 'medium'
                 })
 
