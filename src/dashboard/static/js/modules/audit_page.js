@@ -214,7 +214,7 @@
             const actionInfo = getActionInfo(log.action);
             const time = formatDateTime(log.created_at);
             const userName = log.user_name || log.user_email || 'System';
-            const details = formatDetails(log.details);
+            const details = formatDetails(log.old_values, log.new_values);
 
             html += `
                 <tr style="border-bottom: 1px solid ${TC.border};" onmouseover="this.style.background='${TC.surfaceAlt}'" onmouseout="this.style.background='${TC.surface}'">
@@ -286,7 +286,9 @@
     /**
      * Format details object for display
      */
-    function formatDetails(details) {
+    function formatDetails(oldValues, newValues) {
+        // Use new_values primarily as it contains the action data
+        const details = newValues || oldValues;
         if (!details) return '-';
 
         try {
@@ -299,7 +301,9 @@
             // Show first key-value pair
             const keys = Object.keys(obj);
             if (keys.length > 0) {
-                return `${keys[0]}: ${obj[keys[0]]}`;
+                const value = obj[keys[0]];
+                const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+                return `${keys[0]}: ${displayValue}`;
             }
 
             return JSON.stringify(obj);
@@ -450,10 +454,18 @@
                                 <span style="color: ${TC.textPrimary}; font-size: 13px;">${escapeHtml(log.resource_type)} ${log.resource_id ? `#${log.resource_id}` : ''}</span>
                             </div>
                             ` : ''}
+                            ${log.old_values ? `
                             <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: start;">
-                                <span style="font-weight: 600; color: ${TC.textSecondary}; font-size: 13px;">Details:</span>
-                                <pre style="margin: 0; background: ${TC.surfaceAlt}; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: ${TC.textPrimary};">${log.details ? JSON.stringify(log.details, null, 2) : '-'}</pre>
+                                <span style="font-weight: 600; color: ${TC.textSecondary}; font-size: 13px;">Old Values:</span>
+                                <pre style="margin: 0; background: ${TC.surfaceAlt}; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: ${TC.textPrimary};">${JSON.stringify(typeof log.old_values === 'string' ? JSON.parse(log.old_values) : log.old_values, null, 2)}</pre>
                             </div>
+                            ` : ''}
+                            ${log.new_values ? `
+                            <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: start;">
+                                <span style="font-weight: 600; color: ${TC.textSecondary}; font-size: 13px;">New Values:</span>
+                                <pre style="margin: 0; background: ${TC.surfaceAlt}; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: ${TC.textPrimary};">${JSON.stringify(typeof log.new_values === 'string' ? JSON.parse(log.new_values) : log.new_values, null, 2)}</pre>
+                            </div>
+                            ` : ''}
                             <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: start;">
                                 <span style="font-weight: 600; color: ${TC.textSecondary}; font-size: 13px;">User Agent:</span>
                                 <span style="color: ${TC.textSecondary}; font-size: 12px; word-break: break-all;">${escapeHtml(log.user_agent || '-')}</span>

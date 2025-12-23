@@ -86,7 +86,7 @@ def list_audit_logs():
             params.append(int(user_id_filter))
 
         if resource_type_filter:
-            where_clauses.append("a.resource_type = %s")
+            where_clauses.append("a.entity_type = %s")
             params.append(resource_type_filter)
 
         if start_date:
@@ -98,7 +98,8 @@ def list_audit_logs():
             params.append(end_date)
 
         if search:
-            where_clauses.append("(JSON_SEARCH(a.details, 'one', %s) IS NOT NULL OR a.ip_address LIKE %s)")
+            where_clauses.append("(JSON_SEARCH(a.old_values, 'one', %s) IS NOT NULL OR JSON_SEARCH(a.new_values, 'one', %s) IS NOT NULL OR a.ip_address LIKE %s)")
+            params.append(f'%{search}%')
             params.append(f'%{search}%')
             params.append(f'%{search}%')
 
@@ -119,8 +120,8 @@ def list_audit_logs():
         offset = (page - 1) * per_page
         query = f"""
             SELECT
-                a.id, a.user_id, a.action, a.resource_type, a.resource_id,
-                a.details, a.ip_address, a.user_agent, a.created_at,
+                a.id, a.user_id, a.action, a.entity_type as resource_type, a.entity_id as resource_id,
+                a.old_values, a.new_values, a.ip_address, a.user_agent, a.created_at,
                 u.email as user_email, u.full_name as user_name
             FROM audit_logs a
             LEFT JOIN users u ON a.user_id = u.id
@@ -231,10 +232,10 @@ def list_resource_types():
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT DISTINCT resource_type, COUNT(*) as count
+            SELECT DISTINCT entity_type as resource_type, COUNT(*) as count
             FROM audit_logs
-            WHERE resource_type IS NOT NULL
-            GROUP BY resource_type
+            WHERE entity_type IS NOT NULL
+            GROUP BY entity_type
             ORDER BY count DESC
         """)
 
@@ -374,8 +375,8 @@ def get_audit_log(log_id):
 
         cursor.execute("""
             SELECT
-                a.id, a.user_id, a.action, a.resource_type, a.resource_id,
-                a.details, a.ip_address, a.user_agent, a.created_at,
+                a.id, a.user_id, a.action, a.entity_type as resource_type, a.entity_id as resource_id,
+                a.old_values, a.new_values, a.ip_address, a.user_agent, a.created_at,
                 u.email as user_email, u.full_name as user_name
             FROM audit_logs a
             LEFT JOIN users u ON a.user_id = u.id
@@ -450,8 +451,8 @@ def export_audit_logs():
 
         query = f"""
             SELECT
-                a.id, a.user_id, a.action, a.resource_type, a.resource_id,
-                a.details, a.ip_address, a.user_agent, a.created_at,
+                a.id, a.user_id, a.action, a.entity_type as resource_type, a.entity_id as resource_id,
+                a.old_values, a.new_values, a.ip_address, a.user_agent, a.created_at,
                 u.email as user_email, u.full_name as user_name
             FROM audit_logs a
             LEFT JOIN users u ON a.user_id = u.id

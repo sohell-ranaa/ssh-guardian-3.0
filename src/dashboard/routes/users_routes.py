@@ -61,8 +61,10 @@ def list_users():
         cursor.execute("""
             SELECT
                 u.id, u.email, u.full_name, u.role_id,
-                u.is_active, u.is_email_verified,
-                u.last_login, u.failed_login_attempts,
+                u.is_active,
+                CASE WHEN u.email_verified_at IS NOT NULL THEN 1 ELSE 0 END as is_email_verified,
+                u.last_login_at as last_login,
+                u.failed_login_attempts,
                 u.locked_until, u.created_at, u.updated_at,
                 r.name as role_name, r.description as role_description
             FROM users u
@@ -183,8 +185,10 @@ def get_user(user_id):
         cursor.execute("""
             SELECT
                 u.id, u.email, u.full_name, u.role_id,
-                u.is_active, u.is_email_verified,
-                u.last_login, u.failed_login_attempts,
+                u.is_active,
+                CASE WHEN u.email_verified_at IS NOT NULL THEN 1 ELSE 0 END as is_email_verified,
+                u.last_login_at as last_login,
+                u.failed_login_attempts,
                 u.locked_until, u.created_at, u.updated_at,
                 r.name as role_name, r.description as role_description
             FROM users u
@@ -359,8 +363,10 @@ def update_user(user_id):
             params.append(data['is_active'])
 
         if 'is_email_verified' in data:
-            updates.append("is_email_verified = %s")
-            params.append(data['is_email_verified'])
+            if data['is_email_verified']:
+                updates.append("email_verified_at = NOW()")
+            else:
+                updates.append("email_verified_at = NULL")
 
         if 'password' in data and data['password']:
             if len(data['password']) < 8:
