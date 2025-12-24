@@ -730,8 +730,9 @@
                                 events_detected: data.events_detected || 0,
                                 detected: detectedOnce || data.events_detected > 0,
                                 ml_evaluated: !!data.ml_evaluation,
-                                block_id: data.ip_block?.block_id,
-                                block_source: data.ip_block?.source,
+                                block_id: data.ip_block?.id || data.fail2ban_block?.id,
+                                block_source: data.ip_block?.source || (data.fail2ban_block ? 'fail2ban' : null),
+                                block_reason: data.ip_block?.reason || data.fail2ban_block?.reason || null,
                                 scenario_id: scenarioId,
                                 scenario_name: simulationContext.scenario_name || scenarioId,
                                 scenario_type: simulationContext.scenario_type,
@@ -986,29 +987,38 @@
 
             // Blocking Decision
             const blockingDecision = document.getElementById('sim-blocking-decision');
-            blockingDecision.classList.remove('sim-decision-box--blocked', 'sim-decision-box--detected', 'sim-decision-box--neutral');
+            if (blockingDecision) {
+                blockingDecision.style.display = 'block';
+                blockingDecision.classList.remove('sim-decision-box--blocked', 'sim-decision-box--detected', 'sim-decision-box--neutral');
 
-            if (data.blocked) {
-                blockingDecision.classList.add('sim-decision-box--blocked');
-                this._setText('sim-block-icon', '🚫');
-                this._setText('sim-block-action', `IP Blocked via ${data.blocked_by || 'SSH Guardian'}`);
-                this._setText('sim-block-reason', `Block ID: #${data.block_id || 'N/A'} | Source: ${data.block_source || 'auto'}`);
-            } else if (data.detected) {
-                blockingDecision.classList.add('sim-decision-box--detected');
-                this._setText('sim-block-icon', '⚠️');
-                this._setText('sim-block-action', 'Attack Detected - Monitoring');
-                this._setText('sim-block-reason', 'Below threshold for automatic blocking');
-            } else {
-                blockingDecision.classList.add('sim-decision-box--neutral');
-                this._setText('sim-block-icon', '✅');
-                this._setText('sim-block-action', 'No Action Taken');
-                this._setText('sim-block-reason', 'Events injected but no threat detected');
+                if (data.blocked) {
+                    blockingDecision.classList.add('sim-decision-box--blocked');
+                    this._setText('sim-block-icon', '🚫');
+                    this._setText('sim-block-action', `IP Blocked via ${data.blocked_by || 'SSH Guardian'}`);
+                    // Show the actual block reason from the database
+                    const reasonText = data.block_reason || `Block ID: #${data.block_id || 'N/A'} | Source: ${data.block_source || 'auto'}`;
+                    this._setText('sim-block-reason', reasonText);
+                } else if (data.detected) {
+                    blockingDecision.classList.add('sim-decision-box--detected');
+                    this._setText('sim-block-icon', '⚠️');
+                    this._setText('sim-block-action', 'Attack Detected - Monitoring');
+                    this._setText('sim-block-reason', 'Events detected but below threshold for automatic blocking. More events may trigger a block.');
+                } else {
+                    blockingDecision.classList.add('sim-decision-box--neutral');
+                    this._setText('sim-block-icon', '✅');
+                    this._setText('sim-block-action', 'No Action Taken');
+                    this._setText('sim-block-reason', 'Events injected successfully. No threat rules matched for this scenario.');
+                }
+
+                // Factors - extract from block reason or collect from data
+                const factors = this._collectFactors(data, threatIntel, mlData);
+                const blockFactors = document.getElementById('sim-block-factors');
+                if (blockFactors) {
+                    blockFactors.innerHTML = factors.length > 0
+                        ? factors.slice(0, 6).map(f => `<span class="sim-factor-badge">${f}</span>`).join('')
+                        : '<span class="sim-factor-badge">Standard detection flow</span>';
+                }
             }
-
-            // Factors
-            const factors = this._collectFactors(data, threatIntel, mlData);
-            const blockFactors = document.getElementById('sim-block-factors');
-            blockFactors.innerHTML = factors.slice(0, 5).map(f => `<span class="sim-factor-badge">${f}</span>`).join('');
 
             card.style.display = 'block';
             card.scrollIntoView({ behavior: 'smooth', block: 'start' });
