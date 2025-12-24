@@ -376,6 +376,34 @@ const EV = {
             }
 
             decDiv.innerHTML = html || '<div class="m-dec-empty">No decision data</div>';
+
+            // Update recommendations based on block status
+            const recsDiv = document.querySelector('.m-recs');
+            if (recsDiv) {
+                if (block_info?.is_blocked) {
+                    // IP is blocked - show appropriate recommendations
+                    const blockSource = block_info.block_source || 'SSH Guardian';
+                    const isActive = block_info.is_active;
+                    let recHtml = '';
+
+                    if (isActive) {
+                        recHtml = `
+                            <div class="m-rec success"><span>🛡️</span><span>IP Blocked - Threat neutralized by ${blockSource}</span></div>
+                            <div class="m-rec info"><span>📊</span><span>Monitor for similar patterns from other IPs</span></div>
+                            <div class="m-rec info"><span>🔍</span><span>Review block reason for threat intel</span></div>`;
+                    } else {
+                        recHtml = `
+                            <div class="m-rec warn"><span>⚠️</span><span>Block expired - IP may resume activity</span></div>
+                            <div class="m-rec info"><span>👁️</span><span>Continue monitoring this IP</span></div>`;
+                    }
+                    recsDiv.innerHTML = recHtml;
+                } else if (ml_decision?.decision?.includes('block')) {
+                    // ML recommends block but not yet blocked
+                    recsDiv.innerHTML = `
+                        <div class="m-rec crit"><span>🚨</span><span>Block recommended - Take action</span></div>
+                        <div class="m-rec warn"><span>⏳</span><span>Awaiting block execution</span></div>`;
+                }
+            }
         } catch (e) {
             console.error('Error fetching ML decision:', e);
             decDiv.innerHTML = '<div class="m-dec-empty">Error loading decision</div>';

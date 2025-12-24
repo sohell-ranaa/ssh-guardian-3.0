@@ -213,6 +213,11 @@
     background: var(--color-info-bg-light);
 }
 
+.m-rec.success {
+    border-color: var(--color-success);
+    background: var(--color-success-bg-light);
+}
+
 /* ========== History Overview ========== */
 .h-over {
     display: grid;
