@@ -44,6 +44,15 @@
 
     window.Sim = window.Sim || {};
 
+    // Global helper for night time buttons (credential stuffing)
+    window.setNightTime = function(time) {
+        document.getElementById('scenario-var-time').value = time;
+        document.querySelectorAll('.night-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+    };
+
     Sim.Modal = {
         currentScenario: null,
 
@@ -94,6 +103,44 @@
             document.getElementById('scenario-var-user').value = defaultUsername;
             document.getElementById('scenario-var-count').value = scenario.event_count || 1;
 
+            // Handle credential_stuffing category specially
+            const credentialControls = document.getElementById('scenario-credential-controls');
+            const standardUsername = document.getElementById('standard-username-row');
+            const eventCountInput = document.getElementById('scenario-var-count');
+
+            if (scenario.category === 'credential_stuffing') {
+                // Show credential stuffing controls, hide standard username
+                if (credentialControls) credentialControls.style.display = 'block';
+                if (standardUsername) standardUsername.style.display = 'none';
+
+                // Lock event count to 1 (1 login per run)
+                eventCountInput.value = 1;
+                eventCountInput.disabled = true;
+
+                // Populate username dropdown from scenario.usernames
+                const usernameSelect = document.getElementById('scenario-var-username-select');
+                if (usernameSelect) {
+                    const usernames = scenario.usernames || ['john.smith', 'alice.johnson', 'bob.wilson'];
+                    usernameSelect.innerHTML = usernames.map(u =>
+                        `<option value="${u}">${u}</option>`
+                    ).join('');
+                }
+
+                // Reset night time buttons and set default to 2 AM
+                document.querySelectorAll('.night-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('scenario-var-time').value = '02:00';
+                const btn2am = document.querySelector('.night-btn[onclick*="02:00"]');
+                if (btn2am) btn2am.classList.add('active');
+
+                // Load progress from API
+                this._loadCredentialProgress(scenarioIp, scenario.usernames || []);
+            } else {
+                // Standard scenario - hide credential controls
+                if (credentialControls) credentialControls.style.display = 'none';
+                if (standardUsername) standardUsername.style.display = 'flex';
+                eventCountInput.disabled = false;
+            }
+
             // Set auth type based on scenario
             const authTypeSelect = document.getElementById('scenario-var-auth');
             if (scenario.log_template?.includes('publickey') || scenario.category === 'baseline') {
@@ -123,7 +170,8 @@
                 'private_ip': { text: '🏠 Expected: Behavioral Analysis Only - Skip GeoIP/ThreatIntel', class: 'alert' },
                 'ml_behavioral': { text: '🧠 Expected: ML Anomaly Detected → IP Block', class: 'block' },
                 'ufw_block': { text: '🛡️ Expected: IP Will Be Blocked via UFW', class: 'block' },
-                'fail2ban': { text: '🔒 Expected: Fail2ban Jail → IP Banned', class: 'block' }
+                'fail2ban': { text: '🔒 Expected: Fail2ban Jail → IP Banned', class: 'block' },
+                'credential_stuffing': { text: '🌙 Expected: 6-hour Block after 3 unique users at night', class: 'block' }
             };
             const expected = expectedMessages[scenario.category] || { text: '🛡️ Expected: IP Will Be Blocked', class: 'block' };
             expectedEl.textContent = expected.text;
@@ -227,10 +275,59 @@
                             <span class="scenario-action-title">Run Brute Force</span>
                             <span class="scenario-action-desc">Inject ${eventCount} failed logins → Fail2ban bans IP</span>
                         </div>
+                    </button>`,
+
+                'credential_stuffing': `
+                    <button class="scenario-action-btn attack" onclick="Sim.Runner.run('attack')" style="border-color: #8B008B;">
+                        <span class="scenario-action-icon">🌙</span>
+                        <div class="scenario-action-text">
+                            <span class="scenario-action-title">Inject Login</span>
+                            <span class="scenario-action-desc">Inject 1 login at selected night time - run 3x with different users</span>
+                        </div>
                     </button>`
             };
 
             buttonsEl.innerHTML = buttonConfigs[scenario.category] || buttonConfigs['ufw_block'];
+        },
+
+        async _loadCredentialProgress(ip, allUsernames) {
+            try {
+                const response = await fetch(`/api/live-sim/progress/${ip}`, { credentials: 'same-origin' });
+                const data = await response.json();
+
+                const progressText = document.getElementById('credential-progress-text');
+                const progressList = document.getElementById('credential-progress-list');
+                const usernameSelect = document.getElementById('scenario-var-username-select');
+
+                if (data.success && progressText && progressList) {
+                    const injectedUsers = data.usernames || [];
+                    const uniqueCount = data.unique_count || 0;
+                    const threshold = 3;
+
+                    progressText.textContent = `${uniqueCount}/${threshold} unique users injected`;
+
+                    // Render progress list with checkmarks
+                    progressList.innerHTML = allUsernames.map(u => {
+                        const isDone = injectedUsers.includes(u);
+                        return `
+                            <div class="progress-item ${isDone ? 'done' : 'pending'}">
+                                <span class="check-icon">${isDone ? '✓' : '○'}</span>
+                                <span>${u}</span>
+                            </div>
+                        `;
+                    }).join('');
+
+                    // Auto-select first unused username
+                    if (usernameSelect) {
+                        const firstUnused = allUsernames.find(u => !injectedUsers.includes(u));
+                        if (firstUnused) {
+                            usernameSelect.value = firstUnused;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[Simulation] Failed to load credential progress:', error);
+            }
         }
     };
 })();
@@ -375,7 +472,15 @@
 
             // Read input values
             const scenarioIp = document.getElementById('scenario-var-ip')?.value || scenario.ip || '8.8.8.8';
-            const scenarioUser = document.getElementById('scenario-var-user')?.value || scenario.username || 'testuser';
+
+            // For credential_stuffing scenarios, read from the username dropdown
+            let scenarioUser;
+            if (scenario.category === 'credential_stuffing') {
+                scenarioUser = document.getElementById('scenario-var-username-select')?.value || scenario.username || 'testuser';
+            } else {
+                scenarioUser = document.getElementById('scenario-var-user')?.value || scenario.username || 'testuser';
+            }
+
             const authType = document.getElementById('scenario-var-auth')?.value || 'password';
             const authResult = document.getElementById('scenario-var-result')?.value || 'Failed';
             const eventCount = parseInt(document.getElementById('scenario-var-count')?.value) || scenario.event_count || 1;
