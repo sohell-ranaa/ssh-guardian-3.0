@@ -344,20 +344,28 @@ class ProactiveBlocker:
             elif risk_score >= 40:
                 # MEDIUM (40-59): Alert only - no blocking
                 # This score range indicates suspicious but not confirmed threat
-                try:
-                    from .alert_operations import create_security_alert
-                    create_security_alert(
-                        ip_address=ip,
-                        alert_type='behavioral_anomaly',
-                        title=f'Medium Risk Activity Detected (score: {risk_score})',
-                        description=f"Behavioral analysis detected medium-risk activity. Factors: {', '.join(factor_descriptions[:3])}",
-                        severity='medium',
-                        username=event.get('target_username'),
-                        ml_score=int(risk_score),
-                        ml_factors=risk_factors[:5]
-                    )
-                except Exception as alert_err:
-                    print(f"Failed to create medium-risk alert: {alert_err}")
+                # Skip alert for clean IPs (AbuseIPDB < 20) - likely ML false positive
+                enrichment = self._get_enrichment(ip)
+                abuseipdb_score = enrichment.get('abuseipdb_score') if enrichment else None
+                is_clean_ip = abuseipdb_score is not None and abuseipdb_score < 20
+
+                if is_clean_ip:
+                    print(f"⏭️  Skipping medium-risk alert for clean IP {ip} (AbuseIPDB: {abuseipdb_score}, behavioral: {risk_score})")
+                else:
+                    try:
+                        from .alert_operations import create_security_alert
+                        create_security_alert(
+                            ip_address=ip,
+                            alert_type='behavioral_anomaly',
+                            title=f'Medium Risk Activity Detected (score: {risk_score})',
+                            description=f"Behavioral analysis detected medium-risk activity. Factors: {', '.join(factor_descriptions[:3])}",
+                            severity='medium',
+                            username=event.get('target_username'),
+                            ml_score=int(risk_score),
+                            ml_factors=risk_factors[:5]
+                        )
+                    except Exception as alert_err:
+                        print(f"Failed to create medium-risk alert: {alert_err}")
 
                 result = {
                     'should_block': False,  # Changed: Don't block at 40-59

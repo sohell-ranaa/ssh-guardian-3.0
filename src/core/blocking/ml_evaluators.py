@@ -127,37 +127,30 @@ def evaluate_credential_stuffing_rule(rule, ip_address):
                         'time_window': time_window
                     }
 
-            # Check off-hours filter
+            # Check off-hours filter - check if events happened during off-hours
+            off_hours_clause = ""
             if check_off_hours:
-                now = datetime.now()
-                current_hour = now.hour
-                # Off-hours = before 6 AM or after 10 PM
-                is_off_hours = current_hour < 6 or current_hour >= 22
-                if not is_off_hours:
-                    return {
-                        'triggered': False,
-                        'reason': f"Current time ({current_hour}:00) is during business hours - off_hours filter not met",
-                        'requires_approval': False,
-                        'unique_usernames': 0,
-                        'time_window': time_window
-                    }
+                # Off-hours = before 6 AM or after 10 PM (event timestamp, not current time)
+                off_hours_clause = "AND (HOUR(timestamp) < 6 OR HOUR(timestamp) >= 22)"
 
             # Build query based on event_type filter
             if event_type_filter:
-                cursor.execute("""
+                cursor.execute(f"""
                     SELECT COUNT(DISTINCT target_username) as unique_count
                     FROM auth_events
                     WHERE source_ip_text = %s
                     AND event_type = %s
                     AND timestamp >= NOW() - INTERVAL %s MINUTE
+                    {off_hours_clause}
                 """, (ip_address, event_type_filter, time_window))
             else:
                 # Count all events (both failed and successful)
-                cursor.execute("""
+                cursor.execute(f"""
                     SELECT COUNT(DISTINCT target_username) as unique_count
                     FROM auth_events
                     WHERE source_ip_text = %s
                     AND timestamp >= NOW() - INTERVAL %s MINUTE
+                    {off_hours_clause}
                 """, (ip_address, time_window))
 
             result = cursor.fetchone()

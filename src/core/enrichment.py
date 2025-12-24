@@ -785,20 +785,27 @@ class EventEnricher:
                             notif_module = self._get_notification_module()
                             if notif_module:
                                 # Send high_risk notification if score >= threshold (70)
+                                # BUT skip if IP is confirmed clean by AbuseIPDB (score < 20) - likely ML false positive
+                                abuseipdb_score = threat_data.get('abuseipdb_score') if threat_data else None
+                                is_clean_ip = abuseipdb_score is not None and abuseipdb_score < 20
+
                                 if risk_score >= HIGH_RISK_THRESHOLD:
-                                    self._log(f"🔔 Triggering high_risk notification (score: {risk_score})")
-                                    try:
-                                        notif_module['high_risk'](
-                                            event_id=event_id,
-                                            ip_address=source_ip,
-                                            risk_score=risk_score,
-                                            threat_type=threat_type,
-                                            geo_data=geo_data,
-                                            threat_data=threat_data,
-                                            verbose=self.verbose
-                                        )
-                                    except Exception as e:
-                                        self._log(f"❌ High risk notification error: {e}")
+                                    if is_clean_ip:
+                                        self._log(f"⏭️  Skipping high_risk notification for clean IP (AbuseIPDB: {abuseipdb_score}, ML: {risk_score} - likely false positive)")
+                                    else:
+                                        self._log(f"🔔 Triggering high_risk notification (score: {risk_score})")
+                                        try:
+                                            notif_module['high_risk'](
+                                                event_id=event_id,
+                                                ip_address=source_ip,
+                                                risk_score=risk_score,
+                                                threat_type=threat_type,
+                                                geo_data=geo_data,
+                                                threat_data=threat_data,
+                                                verbose=self.verbose
+                                            )
+                                        except Exception as e:
+                                            self._log(f"❌ High risk notification error: {e}")
 
                                 # Send ML anomaly notification only for significant anomalies
                                 # Must meet BEHAVIORAL_ANOMALY_THRESHOLD (60) and be below HIGH_RISK_THRESHOLD (70)
