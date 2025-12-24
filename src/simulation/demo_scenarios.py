@@ -1,24 +1,28 @@
 """
-SSH Guardian v3.0 - Demo Scenarios (Aligned with Blocking Rules)
-9 test scenarios covering core blocking rules
+SSH Guardian v3.0 - Demo Scenarios (8 Core Test Scenarios)
 
-BLOCKING RULES TESTED:
-ID | Rule Name                          | Type              | Action | Priority
----|------------------------------------|--------------------|--------|----------
-19 | Off-Hours Successful Login Alert   | off_hours_anomaly  | alert  | 20
-14 | Multi-User Same IP Alert           | credential_stuffing| alert  | 25
-11 | Failed Login Alert (3 attempts)    | brute_force        | alert  | 30
-12 | Failed Login Block (5 attempts)    | brute_force        | block  | 40
-13 | Persistent Attacker UFW Block      | brute_force        | block  | 50
-17 | Bad IP Failed Attempts Block       | api_reputation     | block  | 60
-18 | High Risk IP Immediate Block       | api_reputation     | block  | 70
+USAGE MODES:
+1. DEFAULT MODE  - Run scenario and see result immediately
+2. GUIDED MODE   - Step-by-step with explanations and verification
 
-CATEGORIES:
-1. CLEAN IP SCENARIOS (6) - Tests for clean IPs (AbuseIPDB < 20)
-2. BAD IP SCENARIOS (2) - Tests for bad IPs (AbuseIPDB >= 25)
-3. BASELINE (1) - Control scenario (no action)
-
-NOTE: Impossible travel scenarios removed - require complex baseline setup
+SCENARIO CATEGORIES:
+├── BASELINE (No Action)
+│   └── 1. Clean Daytime Success
+│
+├── ALERT ONLY (Monitor, No Block)
+│   ├── 2. Clean Midnight Success (off-hours)
+│   ├── 4. Clean Multi-User (credential stuffing watch)
+│   └── 7. Private IP Insider (internal threat)
+│
+├── FAIL2BAN BLOCK (Temporary 24h)
+│   ├── 3. Clean 5 Failed (brute force)
+│   └── 8. Bad IP 5 Failed (bad reputation)
+│
+├── FAIL2BAN BLOCK (Temporary 6h)
+│   └── 5. Clean Multi-User Night (suspicious activity)
+│
+└── UFW BLOCK (Permanent 30 days)
+    └── 6. Clean Persistent Attacker
 """
 
 import sys
@@ -33,346 +37,430 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 
 
 # =============================================================================
-# CATEGORY 1: CLEAN IP SCENARIOS (AbuseIPDB score < 20)
+# SCENARIO DEFINITIONS
 # =============================================================================
 
-CLEAN_IP_SCENARIOS = {
-    # SCENARIO 1: Clean IP + Daytime Success = NO ACTION
+DEMO_SCENARIOS = {
+
+    # =========================================================================
+    # CATEGORY: BASELINE (No Action Expected)
+    # =========================================================================
+
     "clean_daytime_success": {
         "id": "clean_daytime_success",
-        "name": "Clean IP - Daytime Success",
+        "name": "1. Clean Daytime Success",
+        "short_name": "Daytime Login",
         "category": "baseline",
+        "category_label": "No Action",
         "action_type": "none",
-        "description": "Clean IP (AbuseIPDB 0) with successful daytime login. Should trigger NO rules.",
-        "trigger": "None - normal login during business hours",
-        "block_duration": "N/A - NO ACTION",
+        "icon": "✅",
+        "color": "green",
+
+        # What it tests
+        "description": "Normal login during business hours from clean IP",
+        "test_purpose": "Verify system does NOT trigger false positives for normal activity",
+
+        # Technical details
+        "trigger": "Clean IP (AbuseIPDB 0) + successful login + daytime (6 AM - 10 PM)",
+        "expected_result": "NO alert, NO block",
+        "block_duration": None,
         "rule_id": None,
-        "rule_name": "None (no rule matches)",
+        "rule_name": None,
+
+        # How to verify
+        "verification_steps": [
+            "Check notifications table - should have NO new entries",
+            "Check ip_blocks table - IP should NOT be blocked",
+            "Check fail2ban status - IP should NOT be banned"
+        ],
+
+        # Simulation config
         "severity": "low",
         "ip": "8.8.8.8",
         "alternate_ips": ["1.1.1.1", "208.67.222.222"],
         "abuseipdb_score": 0,
-        "why_not_blocked": "Clean IP, daytime login, no suspicious patterns. Expected: NO ACTION.",
         "log_template": "Dec {day} {time} server sshd[{pid}]: Accepted password for {username} from {ip} port {port} ssh2",
         "usernames": ["john.smith", "alice.johnson"],
         "custom_time": "10:30:00",
         "event_count": 1,
-        "expected_outcome": {
-            "block": False,
-            "alert": False,
-            "rule_triggered": None
-        }
+
+        # Guided mode hints
+        "before_run": "This tests that normal logins don't trigger alerts",
+        "after_run": "Verify no notifications were created - this is the baseline",
     },
 
-    # SCENARIO 2: Clean IP + Midnight Success = ALERT
+    # =========================================================================
+    # CATEGORY: ALERT ONLY (Monitor but Don't Block)
+    # =========================================================================
+
     "clean_midnight_success": {
         "id": "clean_midnight_success",
-        "name": "Clean IP - Midnight Success",
+        "name": "2. Clean Midnight Success",
+        "short_name": "Night Login",
         "category": "alert_only",
+        "category_label": "Alert Only",
         "action_type": "alert",
-        "description": "Clean IP (AbuseIPDB 0) with successful login at 3 AM. Triggers off-hours alert.",
-        "trigger": "Successful login outside 6AM-10PM from clean IP",
-        "block_duration": "NO BLOCK - Alert Only",
+        "icon": "🔔",
+        "color": "yellow",
+
+        "description": "Successful login at 3 AM from clean IP",
+        "test_purpose": "Verify off-hours detection creates alert but doesn't block clean IPs",
+
+        "trigger": "Clean IP + successful login + off-hours (10 PM - 6 AM)",
+        "expected_result": "Alert created, NO block",
+        "block_duration": None,
         "rule_id": 19,
         "rule_name": "Off-Hours Successful Login Alert",
+
+        "verification_steps": [
+            "Check notifications table - should have 'Off-Hours' alert",
+            "Check ip_blocks table - IP should NOT be blocked",
+            "Alert should show time anomaly reason"
+        ],
+
         "severity": "medium",
         "ip": "8.8.8.8",
         "alternate_ips": ["1.1.1.1"],
         "abuseipdb_score": 0,
-        "why_alerted": "Off-hours login from clean IP warrants monitoring but not blocking.",
         "log_template": "Dec {day} {time} server sshd[{pid}]: Accepted password for {username} from {ip} port {port} ssh2",
         "usernames": ["john.smith", "dev.user"],
         "custom_time": "03:00:00",
         "event_count": 1,
-        "expected_outcome": {
-            "block": False,
-            "alert": True,
-            "rule_triggered": "Off-Hours Successful Login Alert"
-        }
+
+        "before_run": "This tests off-hours detection (10 PM - 6 AM)",
+        "after_run": "Check for alert with 'Off-Hours' in the title - no block should occur",
     },
 
-    # SCENARIO 3a: Clean IP + 3 Failed = ALERT
-    "clean_3_failed": {
-        "id": "clean_3_failed",
-        "name": "Clean IP - 3 Failed Logins",
-        "category": "alert_only",
-        "action_type": "alert",
-        "description": "Clean IP (AbuseIPDB 0) with 3 failed login attempts in 10 minutes. Alert only.",
-        "trigger": "3 failed attempts in 10 minutes from clean IP",
-        "block_duration": "NO BLOCK - Alert Only",
-        "rule_id": 11,
-        "rule_name": "Failed Login Alert (3 attempts)",
-        "severity": "medium",
-        "ip": "91.240.118.172",
-        "alternate_ips": ["45.227.254.0"],
-        "abuseipdb_score": 0,
-        "why_alerted": "Early warning for potential brute force. 3 fails = alert, 5 fails = block.",
-        "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
-        "usernames": ["root", "admin", "user"],
-        "event_count": 3,
-        "expected_outcome": {
-            "block": False,
-            "alert": True,
-            "rule_triggered": "Failed Login Alert (3 attempts)"
-        }
-    },
-
-    # SCENARIO 3b: Clean IP + 5 Failed = FAIL2BAN BLOCK
-    "clean_5_failed": {
-        "id": "clean_5_failed",
-        "name": "Clean IP - 5 Failed Logins",
-        "category": "fail2ban_block",
-        "action_type": "block",
-        "description": "Clean IP (AbuseIPDB 0) with 5 failed login attempts in 10 minutes. Fail2ban block.",
-        "trigger": "5 failed attempts in 10 minutes from clean IP",
-        "block_duration": "24 hours (fail2ban)",
-        "rule_id": 12,
-        "rule_name": "Failed Login Block (5 attempts)",
-        "severity": "high",
-        "ip": "91.240.118.172",
-        "alternate_ips": ["45.227.254.0", "193.56.28.103"],
-        "abuseipdb_score": 0,
-        "why_blocked": "Classic brute force pattern. 5 failed attempts = temporary block.",
-        "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
-        "usernames": ["root", "admin", "user", "postgres", "mysql"],
-        "event_count": 5,
-        "expected_outcome": {
-            "block": True,
-            "alert": False,
-            "rule_triggered": "Failed Login Block (5 attempts)",
-            "block_method": "fail2ban",
-            "auto_unblock": True
-        }
-    },
-
-    # SCENARIO 4: Clean IP + 10 Failed in 24h = UFW BLOCK
-    # Uses different IPs from clean_5_failed to avoid conflicts
-    "clean_10_failed_24h": {
-        "id": "clean_10_failed_24h",
-        "name": "Clean IP - Persistent Attacker",
-        "category": "ufw_block",
-        "action_type": "block",
-        "description": "Clean IP (AbuseIPDB 0) with 10+ failed logins in 24 hours. UFW permanent block.",
-        "trigger": "10 failed attempts in 24 hours from clean IP",
-        "block_duration": "30 days (UFW permanent)",
-        "rule_id": 13,
-        "rule_name": "Persistent Attacker UFW Block",
-        "severity": "critical",
-        "ip": "9.9.9.9",
-        "alternate_ips": ["8.8.9.9", "8.8.9.8"],
-        "abuseipdb_score": 0,
-        "why_blocked": "Persistent attack pattern over 24h indicates determined attacker.",
-        "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
-        "usernames": ["root", "admin", "user", "postgres", "mysql", "oracle", "test", "ftp", "www", "nginx"],
-        "event_count": 10,
-        "expected_outcome": {
-            "block": True,
-            "alert": False,
-            "rule_triggered": "Persistent Attacker UFW Block",
-            "block_method": "ufw",
-            "auto_unblock": False
-        }
-    },
-
-    # SCENARIO 5: Clean IP + Multiple Users Success = ALERT
     "clean_multi_user": {
         "id": "clean_multi_user",
-        "name": "Clean IP - Multi-User Success",
+        "name": "4. Clean Multi-User",
+        "short_name": "Multi-User",
         "category": "alert_only",
+        "category_label": "Alert Only",
         "action_type": "alert",
-        "description": "Clean IP (AbuseIPDB 0) with successful logins from 2+ different users. Alert only.",
-        "trigger": "2+ unique usernames succeed from same clean IP in 60 minutes",
-        "block_duration": "NO BLOCK - Alert Only",
+        "icon": "👥",
+        "color": "yellow",
+
+        "description": "3 different users login from same clean IP",
+        "test_purpose": "Detect potential credential stuffing success without blocking legitimate shared IPs",
+
+        "trigger": "Clean IP + 3+ unique usernames succeed in 1 hour",
+        "expected_result": "Alert created, NO block",
+        "block_duration": None,
         "rule_id": 14,
         "rule_name": "Multi-User Same IP Alert",
+
+        "verification_steps": [
+            "Check notifications table - should have 'Multi-User' alert",
+            "Check ip_blocks table - IP should NOT be blocked",
+            "Alert should list the usernames involved"
+        ],
+
         "severity": "medium",
         "ip": "73.162.0.1",
         "alternate_ips": ["24.48.0.1"],
         "abuseipdb_score": 0,
-        "why_alerted": "Multiple users from same IP may indicate shared VPN or credential stuffing success.",
         "log_template": "Dec {day} {time} server sshd[{pid}]: Accepted password for {username} from {ip} port {port} ssh2",
         "usernames": ["john.smith", "alice.johnson", "bob.wilson"],
-        "event_count": 2,
-        "expected_outcome": {
-            "block": False,
-            "alert": True,
-            "rule_triggered": "Multi-User Same IP Alert"
-        }
+        "custom_time": "14:00:00",
+        "event_count": 3,
+
+        "before_run": "This tests multi-user detection (possible credential stuffing)",
+        "after_run": "Check for 'Multi-User' alert - no block because it's daytime",
     },
-}
 
+    "private_ip_insider": {
+        "id": "private_ip_insider",
+        "name": "7. Private IP Insider",
+        "short_name": "Insider Threat",
+        "category": "alert_only",
+        "category_label": "Alert Only",
+        "action_type": "alert",
+        "icon": "🏢",
+        "color": "orange",
 
-# =============================================================================
-# CATEGORY 2: BAD IP SCENARIOS (AbuseIPDB score >= 25)
-# =============================================================================
+        "description": "Internal IP with brute force at 3 AM",
+        "test_purpose": "Detect insider threats from private/internal IPs without blocking",
 
-BAD_IP_SCENARIOS = {
-    # SCENARIO 8: Bad IP (25+) + 5 Failed = FAIL2BAN BLOCK
+        "trigger": "Private IP (192.168.x.x, 10.x.x.x) + 5 failed logins + night",
+        "expected_result": "Alert created, NO block (never block internal IPs)",
+        "block_duration": None,
+        "rule_id": None,
+        "rule_name": "Private IP Behavioral Alert",
+
+        "verification_steps": [
+            "Check notifications table - should have insider threat alert",
+            "Check ip_blocks table - private IP should NEVER be blocked",
+            "Alert should indicate internal network origin"
+        ],
+
+        "severity": "high",
+        "ip": "192.168.1.100",
+        "alternate_ips": ["10.0.0.50", "172.16.0.25"],
+        "abuseipdb_score": 0,
+        "is_private_ip": True,
+        "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
+        "usernames": ["root", "admin", "deploy"],
+        "custom_time": "03:00:00",
+        "event_count": 5,
+
+        "before_run": "This tests insider threat detection (private IPs are never blocked)",
+        "after_run": "Alert should be created but NO block - internal IPs are monitored only",
+    },
+
+    # =========================================================================
+    # CATEGORY: FAIL2BAN BLOCK (Temporary 24 hours)
+    # =========================================================================
+
+    "clean_5_failed": {
+        "id": "clean_5_failed",
+        "name": "3. Clean 5 Failed",
+        "short_name": "Brute Force",
+        "category": "fail2ban_block",
+        "category_label": "Fail2ban 24h",
+        "action_type": "block",
+        "icon": "🔒",
+        "color": "red",
+
+        "description": "5 failed login attempts from clean IP",
+        "test_purpose": "Block brute force attacks even from previously clean IPs",
+
+        "trigger": "Clean IP + 5 failed logins in 1 hour",
+        "expected_result": "IP blocked via fail2ban for 24 hours",
+        "block_duration": "24 hours",
+        "rule_id": 12,
+        "rule_name": "Failed Login Block (5 attempts)",
+
+        "verification_steps": [
+            "Check ip_blocks table - IP should be blocked with 24h duration",
+            "Run: sudo fail2ban-client status sshd - IP should be banned",
+            "Block reason should mention 'brute force'"
+        ],
+
+        "severity": "high",
+        "ip": "91.240.118.172",
+        "alternate_ips": ["45.227.254.0", "193.56.28.103"],
+        "abuseipdb_score": 0,
+        "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
+        "usernames": ["root", "admin", "user", "postgres", "mysql"],
+        "event_count": 5,
+
+        "before_run": "This tests fail2ban blocking for brute force attacks",
+        "after_run": "Check fail2ban status - IP should be banned for 24 hours",
+    },
+
     "bad_ip_5_failed": {
         "id": "bad_ip_5_failed",
-        "name": "Bad IP - 5 Failed Block",
+        "name": "8. Bad IP 5 Failed",
+        "short_name": "Bad IP Attack",
         "category": "fail2ban_block",
+        "category_label": "Fail2ban 24h",
         "action_type": "block",
-        "description": "Bad IP (AbuseIPDB 25+) with 5 failed logins in 24h. Fail2ban block.",
-        "trigger": "5 failed attempts from bad IP (AbuseIPDB 25+)",
-        "block_duration": "24 hours (fail2ban)",
+        "icon": "☠️",
+        "color": "red",
+
+        "description": "5 failed logins from bad reputation IP (AbuseIPDB 25+)",
+        "test_purpose": "Faster blocking for IPs with bad reputation",
+
+        "trigger": "Bad IP (AbuseIPDB 25+) + 5 failed logins",
+        "expected_result": "IP blocked via fail2ban for 24 hours",
+        "block_duration": "24 hours",
         "rule_id": 17,
         "rule_name": "Bad IP Failed Attempts Block",
+
+        "verification_steps": [
+            "Check ip_blocks table - IP should be blocked",
+            "Run: sudo fail2ban-client status sshd - IP should be banned",
+            "Block reason should mention 'bad reputation'"
+        ],
+
         "severity": "high",
         "ip": "185.220.101.1",
         "alternate_ips": ["45.142.212.61"],
         "abuseipdb_score": 30,
-        "why_blocked": "Bad reputation IP + multiple failed attempts = confirmed attack.",
         "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
         "usernames": ["root", "admin", "user", "postgres", "mysql"],
         "event_count": 5,
-        "expected_outcome": {
-            "block": True,
-            "alert": False,
-            "rule_triggered": "Bad IP Failed Attempts Block",
-            "block_method": "fail2ban",
-            "auto_unblock": True
-        }
+
+        "before_run": "This tests blocking of known bad IPs (Tor exit nodes, known attackers)",
+        "after_run": "IP should be blocked - bad reputation + failed attempts = confirmed attack",
     },
 
-    # SCENARIO 9: High Risk IP (50+) + 3 Failed = UFW BLOCK
-    "high_risk_3_failed": {
-        "id": "high_risk_3_failed",
-        "name": "High Risk IP - Immediate Block",
-        "category": "ufw_block",
+    # =========================================================================
+    # CATEGORY: FAIL2BAN BLOCK (Temporary 6 hours)
+    # =========================================================================
+
+    "clean_multi_user_night": {
+        "id": "clean_multi_user_night",
+        "name": "5. Clean Multi-User Night",
+        "short_name": "Night Stuffing",
+        "category": "credential_stuffing",
+        "category_label": "Fail2ban 6h",
         "action_type": "block",
-        "description": "High risk IP (AbuseIPDB 50+) with just 3 failed logins. UFW permanent block.",
-        "trigger": "3 failed attempts from high-risk IP (AbuseIPDB 50+)",
-        "block_duration": "30 days (UFW permanent)",
-        "rule_id": 18,
-        "rule_name": "High Risk IP Immediate Block",
-        "severity": "critical",
-        "ip": "45.142.212.61",
-        "alternate_ips": ["185.220.101.1"],
-        "abuseipdb_score": 70,
-        "why_blocked": "Very bad reputation + failed attempts = aggressive block immediately.",
-        "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
-        "usernames": ["root", "admin", "oracle"],
-        "event_count": 3,
-        "expected_outcome": {
-            "block": True,
-            "alert": False,
-            "rule_triggered": "High Risk IP Immediate Block",
-            "block_method": "ufw",
-            "auto_unblock": False
-        }
-    },
-}
+        "icon": "🌙",
+        "color": "purple",
 
+        "description": "3 different users login from same IP at 2 AM",
+        "test_purpose": "Block suspicious multi-user activity during off-hours",
 
-# =============================================================================
-# CATEGORY 3: ML BEHAVIORAL SCENARIOS
-# =============================================================================
+        "trigger": "Clean IP + 3+ users succeed + off-hours (10 PM - 6 AM)",
+        "expected_result": "Alert created AND 6-hour temporary block",
+        "block_duration": "6 hours",
+        "rule_id": 20,
+        "rule_name": "Multi-User Off-Hours Block",
 
-# NOTE: Impossible travel scenarios removed - require complex baseline setup
-# with prior login history from different geolocations
-ML_BEHAVIORAL_SCENARIOS = {}
+        "verification_steps": [
+            "Check notifications table - should have alert",
+            "Check ip_blocks table - IP blocked for 6 hours",
+            "Both alert AND block should occur"
+        ],
 
-
-# =============================================================================
-# CATEGORY 4: BASELINE (CONTROL SCENARIO)
-# =============================================================================
-
-BASELINE_SCENARIOS = {
-    "clean_baseline": {
-        "id": "clean_baseline",
-        "name": "Clean Baseline (Control)",
-        "category": "baseline",
-        "action_type": "none",
-        "description": "Control test: Clean IP, daytime, single user. Must NOT trigger any rules.",
-        "trigger": "None - this is the control scenario",
-        "block_duration": "N/A - NO ACTION expected",
-        "rule_id": None,
-        "rule_name": "None",
-        "severity": "low",
-        "ip": "8.8.8.8",
-        "alternate_ips": ["1.1.1.1"],
-        "abuseipdb_score": 0,
-        "why_not_blocked": "False positive test. This scenario must NOT trigger any rule.",
-        "log_template": "Dec {day} {time} server sshd[{pid}]: Accepted password for testuser from {ip} port {port} ssh2",
-        "usernames": ["testuser"],
-        "custom_time": "14:30:00",
-        "event_count": 1,
-        "expected_outcome": {
-            "block": False,
-            "alert": False,
-            "rule_triggered": None,
-            "ml_score_max": 20
-        }
-    },
-}
-
-
-# =============================================================================
-# COMBINED SCENARIOS
-# =============================================================================
-
-DEMO_SCENARIOS = {
-    **CLEAN_IP_SCENARIOS,
-    **BAD_IP_SCENARIOS,
-    **ML_BEHAVIORAL_SCENARIOS,
-    **BASELINE_SCENARIOS
-}
-
-# Legacy compatibility aliases
-UFW_BLOCKING_SCENARIOS = {
-    "bad_reputation": BAD_IP_SCENARIOS["high_risk_3_failed"],
-    "brute_force": CLEAN_IP_SCENARIOS["clean_5_failed"],
-    "anonymizer": BAD_IP_SCENARIOS["bad_ip_5_failed"],  # Was bad_ip_alert (removed)
-}
-
-FAIL2BAN_SCENARIOS = {
-    "fail2ban_trigger": CLEAN_IP_SCENARIOS["clean_5_failed"],
-}
-
-ALERT_ONLY_SCENARIOS = {
-    "alert_anomaly": CLEAN_IP_SCENARIOS["clean_midnight_success"],
-}
-
-PRIVATE_IP_SCENARIOS = {
-    "private_ip_insider": {
-        "id": "private_ip_insider",
-        "name": "Private IP: Insider Threat",
-        "category": "private_ip",
-        "description": "Internal network login at 3 AM with brute force pattern.",
-        "trigger": "Behavioral: Unusual time + brute force from private IP",
-        "block_duration": "Alert + elevated risk",
-        "rule_name": "private_ip_behavioral",
         "severity": "high",
-        "ip": "192.168.1.100",
-        "alternate_ips": ["10.0.0.50", "172.16.0.25"],
+        "ip": "73.162.0.2",
+        "alternate_ips": ["24.48.0.2"],
+        "abuseipdb_score": 0,
+        "log_template": "Dec {day} {time} server sshd[{pid}]: Accepted password for {username} from {ip} port {port} ssh2",
+        "usernames": ["john.smith", "alice.johnson", "bob.wilson"],
+        "custom_time": "02:00:00",
+        "event_count": 3,
+
+        "before_run": "This tests credential stuffing at night (suspicious + off-hours = block)",
+        "after_run": "Both alert AND 6-hour block should be created",
+    },
+
+    # =========================================================================
+    # CATEGORY: UFW BLOCK (Permanent 30 days)
+    # =========================================================================
+
+    "clean_10_failed_24h": {
+        "id": "clean_10_failed_24h",
+        "name": "6. Clean Persistent Attacker",
+        "short_name": "UFW Block",
+        "category": "ufw_block",
+        "category_label": "UFW 30 days",
+        "action_type": "block",
+        "icon": "🛡️",
+        "color": "darkred",
+
+        "description": "10+ failed logins over 24 hours",
+        "test_purpose": "Permanent block for persistent attackers",
+
+        "trigger": "Any IP + 10+ failed logins in 24 hours",
+        "expected_result": "IP blocked via UFW for 30 days (permanent)",
+        "block_duration": "30 days",
+        "rule_id": 13,
+        "rule_name": "Persistent Attacker UFW Block",
+
+        "verification_steps": [
+            "Check ip_blocks table - IP blocked with UFW method",
+            "Run: sudo ufw status - IP should have DENY rule",
+            "Block should NOT auto-expire (manual removal needed)"
+        ],
+
+        "severity": "critical",
+        "ip": "9.9.9.9",
+        "alternate_ips": ["8.8.9.9", "8.8.9.8"],
+        "abuseipdb_score": 0,
         "log_template": "Dec {day} {time} server sshd[{pid}]: Failed password for {username} from {ip} port {port} ssh2",
-        "usernames": ["root", "admin", "deploy"],
-        "custom_time": "03:00:00",
-        "is_private_ip": True,
-        "event_count": 5,
-        "expected_outcome": {
-            "block": False,
-            "alert": True,
-            "rule_triggered": None
-        }
+        "usernames": ["root", "admin", "user", "postgres", "mysql", "oracle", "test", "ftp", "www", "nginx"],
+        "event_count": 10,
+
+        "before_run": "This tests permanent UFW blocking for persistent attackers",
+        "after_run": "Check UFW status - IP should be permanently blocked",
     },
 }
 
+
+# =============================================================================
+# SCENARIO GROUPS FOR UI
+# =============================================================================
+
+SCENARIO_GROUPS = {
+    "baseline": {
+        "label": "Baseline (No Action)",
+        "description": "Normal activity that should NOT trigger any alerts or blocks",
+        "icon": "✅",
+        "color": "green",
+        "scenarios": ["clean_daytime_success"]
+    },
+    "alert_only": {
+        "label": "Alert Only (Monitor)",
+        "description": "Suspicious activity that creates alerts but doesn't block",
+        "icon": "🔔",
+        "color": "yellow",
+        "scenarios": ["clean_midnight_success", "clean_multi_user", "private_ip_insider"]
+    },
+    "fail2ban": {
+        "label": "Fail2ban Block (Temporary)",
+        "description": "Attacks blocked via fail2ban (auto-expires)",
+        "icon": "🔒",
+        "color": "red",
+        "scenarios": ["clean_5_failed", "clean_multi_user_night", "bad_ip_5_failed"]
+    },
+    "ufw": {
+        "label": "UFW Block (Permanent)",
+        "description": "Persistent attackers blocked via UFW firewall",
+        "icon": "🛡️",
+        "color": "darkred",
+        "scenarios": ["clean_10_failed_24h"]
+    }
+}
+
+
+# =============================================================================
+# USAGE MODES
+# =============================================================================
+
+def get_scenario_for_mode(scenario_id: str, mode: str = "default") -> Dict:
+    """
+    Get scenario with mode-specific presentation.
+
+    Modes:
+    - default: Run immediately, show result
+    - guided: Step-by-step with explanations
+    """
+    scenario = DEMO_SCENARIOS.get(scenario_id)
+    if not scenario:
+        return None
+
+    result = {**scenario}
+
+    if mode == "guided":
+        result["show_before_hint"] = True
+        result["show_verification"] = True
+        result["show_after_hint"] = True
+    else:
+        result["show_before_hint"] = False
+        result["show_verification"] = False
+        result["show_after_hint"] = False
+
+    return result
+
+
+def get_scenarios_grouped() -> Dict:
+    """Get scenarios organized by group for UI display"""
+    result = {}
+    for group_id, group in SCENARIO_GROUPS.items():
+        result[group_id] = {
+            **group,
+            "scenarios": [DEMO_SCENARIOS[sid] for sid in group["scenarios"] if sid in DEMO_SCENARIOS]
+        }
+    return result
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 def get_scenarios_by_category() -> Dict[str, List[Dict]]:
     """Get scenarios organized by blocking category"""
-    return {
-        "clean_ip": list(CLEAN_IP_SCENARIOS.values()),
-        "bad_ip": list(BAD_IP_SCENARIOS.values()),
-        "ml_behavioral": list(ML_BEHAVIORAL_SCENARIOS.values()),
-        "baseline": list(BASELINE_SCENARIOS.values()),
-        # Legacy compatibility
-        "ufw_blocking": list(UFW_BLOCKING_SCENARIOS.values()),
-        "fail2ban": list(FAIL2BAN_SCENARIOS.values()),
-        "alert_only": list(ALERT_ONLY_SCENARIOS.values()),
-        "private_ip": list(PRIVATE_IP_SCENARIOS.values()),
-    }
+    categories = {}
+    for scenario in DEMO_SCENARIOS.values():
+        cat = scenario.get("category", "unknown")
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(scenario)
+    return categories
 
 
 def get_demo_scenarios(use_fresh_ips: bool = True) -> List[Dict]:
@@ -383,39 +471,28 @@ def get_demo_scenarios(use_fresh_ips: bool = True) -> List[Dict]:
         scenario_data = {
             "id": scenario["id"],
             "name": scenario["name"],
+            "short_name": scenario.get("short_name", scenario["name"]),
             "description": scenario["description"],
+            "test_purpose": scenario.get("test_purpose", ""),
             "severity": scenario["severity"],
             "category": scenario.get("category", "unknown"),
+            "category_label": scenario.get("category_label", ""),
+            "icon": scenario.get("icon", ""),
+            "color": scenario.get("color", "gray"),
             "ip": ip or scenario["ip"],
             "trigger": scenario.get("trigger", ""),
-            "block_duration": scenario.get("block_duration", ""),
-            "why_blocked": scenario.get("why_blocked", scenario.get("why_not_blocked", scenario.get("why_alerted", ""))),
+            "expected_result": scenario.get("expected_result", ""),
+            "block_duration": scenario.get("block_duration"),
             "rule_name": scenario.get("rule_name", ""),
             "action_type": scenario.get("action_type", "block"),
             "is_private_ip": scenario.get("is_private_ip", False),
             "event_count": scenario.get("event_count", 1),
             "usernames": scenario.get("usernames", ["root"]),
-            "baseline_user": scenario.get("baseline_user", ""),
             "log_template": scenario.get("log_template", ""),
-            "expected_results": {
-                "rule_triggered": scenario.get("rule_name", ""),
-                "block_action": scenario.get("block_duration", "NO BLOCK"),
-                "threat_level": scenario.get("severity", "unknown").upper(),
-                "action_type": scenario.get("action_type", "block")
-            }
+            "verification_steps": scenario.get("verification_steps", []),
+            "before_run": scenario.get("before_run", ""),
+            "after_run": scenario.get("after_run", ""),
         }
-
-        # Add ML-specific fields
-        if scenario.get("ml_factors"):
-            scenario_data["ml_factors"] = scenario.get("ml_factors", [])
-            scenario_data["tooltip"] = scenario.get("tooltip", {})
-            scenario_data["creates_baseline"] = scenario.get("creates_baseline", False)
-            scenario_data["baseline_user"] = scenario.get("baseline_user", "")
-
-        # Add behavioral factors for private IP scenarios
-        if scenario.get("behavioral_factors"):
-            scenario_data["behavioral_factors"] = scenario.get("behavioral_factors", [])
-
         scenarios.append(scenario_data)
     return scenarios
 
@@ -435,25 +512,17 @@ def get_rotated_ip(scenario_id: str) -> str:
     if scenario.get('category') in ['baseline', 'alert_only', 'private_ip']:
         return scenario['ip']
 
-    # IMPORTANT: Clean IP scenarios (abuseipdb_score = 0) must use fixed IPs
-    # to ensure the max_abuseipdb_score filters work correctly
+    # Clean IP scenarios use fixed IPs to ensure filters work
     if scenario.get('abuseipdb_score', 100) <= 20:
-        # Clean IP scenario - use fixed IP or alternates only
         if scenario.get('alternate_ips'):
             all_ips = [scenario['ip']] + scenario['alternate_ips']
             return random.choice(all_ips)
         return scenario['ip']
 
-    # Try fresh IP pool for BAD IP attack scenarios only
+    # Try fresh IP pool for BAD IP scenarios only
     try:
         from simulation.ip_fetcher import get_fresh_ip
-        category_map = {
-            'bad_reputation': 'brute_force',
-            'brute_force': 'brute_force',
-            'anonymizer': 'tor_exit',
-        }
-        pool_category = category_map.get(scenario_id, 'brute_force')
-        fresh_ip = get_fresh_ip(pool_category)
+        fresh_ip = get_fresh_ip('brute_force')
         if fresh_ip:
             return fresh_ip
     except Exception:
@@ -495,15 +564,23 @@ def generate_demo_log(scenario_id: str, custom_ip: str = None) -> Optional[str]:
 
 
 def run_demo_scenario(scenario_id: str, verbose: bool = False,
-                      agent_id: int = None, run_full_pipeline: bool = False) -> Dict:
-    """Execute a single demo scenario with full enrichment pipeline."""
+                      agent_id: int = None, mode: str = "default") -> Dict:
+    """
+    Execute a demo scenario.
+
+    Args:
+        scenario_id: ID of scenario to run
+        verbose: Print detailed output
+        agent_id: Target agent for blocking
+        mode: "default" or "guided"
+    """
     from core.log_processor import process_log_line
 
     scenario = DEMO_SCENARIOS.get(scenario_id)
     if not scenario:
         return {"success": False, "error": f"Unknown scenario: {scenario_id}"}
 
-    # Default to first active agent for UFW/fail2ban integration
+    # Default to first active agent
     if agent_id is None:
         try:
             from connection import get_connection
@@ -516,26 +593,17 @@ def run_demo_scenario(scenario_id: str, verbose: bool = False,
             cursor.close()
             conn.close()
         except Exception:
-            pass  # Continue without agent_id if lookup fails
+            pass
 
-    # Auto-seed user profile for scenarios that require baselines
-    if scenario.get('creates_baseline') and scenario.get('baseline_user'):
-        try:
-            from core.ml_behavioral_learner import seed_simulation_profiles
-            if verbose:
-                print(f"[Baseline] Seeding profile for user: {scenario['baseline_user']}")
-            seed_simulation_profiles()
-        except Exception as e:
-            if verbose:
-                print(f"[Baseline] Warning: Could not seed profile: {e}")
-
-    if verbose:
+    if verbose or mode == "guided":
         print(f"\n{'='*60}")
-        print(f"SCENARIO: {scenario['name']}")
+        print(f"{scenario.get('icon', '')} SCENARIO: {scenario['name']}")
         print(f"{'='*60}")
-        print(f"Description: {scenario['description']}")
+        print(f"Purpose: {scenario.get('test_purpose', scenario['description'])}")
         print(f"Trigger: {scenario.get('trigger', 'N/A')}")
-        print(f"Expected: {scenario.get('block_duration', 'No block')}")
+        print(f"Expected: {scenario.get('expected_result', 'N/A')}")
+        if mode == "guided" and scenario.get('before_run'):
+            print(f"\n💡 {scenario['before_run']}")
         print(f"{'='*60}")
 
     event_count = scenario.get('event_count', 1)
@@ -543,40 +611,11 @@ def run_demo_scenario(scenario_id: str, verbose: bool = False,
 
     if verbose:
         print(f"\nUsing IP: {rotated_ip}")
-        print(f"Generating {event_count} log entries...")
+        print(f"Generating {event_count} events...")
 
-    # FAIL2BAN: Inject logs, let fail2ban handle
-    if scenario.get('category') == 'fail2ban' or scenario.get('mechanism') == 'fail2ban':
-        logs_injected = []
-        for i in range(event_count):
-            log_line = generate_demo_log(scenario_id, custom_ip=rotated_ip)
-            if verbose:
-                print(f"  [{i+1}] Injecting: {log_line}")
-
-            try:
-                with open('/var/log/auth.log', 'a') as f:
-                    f.write(log_line + '\n')
-                logs_injected.append(log_line)
-            except Exception as e:
-                if verbose:
-                    print(f"  Warning: Could not inject log: {e}")
-
-        return {
-            "success": True,
-            "scenario_id": scenario_id,
-            "scenario_name": scenario["name"],
-            "ip": rotated_ip,
-            "event_count": event_count,
-            "mechanism": "fail2ban",
-            "logs_injected": len(logs_injected),
-            "message": f"Injected {len(logs_injected)} logs. Fail2ban will detect and block."
-        }
-
-    # Other scenarios: Process through pipeline
-    # Track if IP was blocked at ANY point during the scenario
+    # Process events
     result = None
     cumulative_blocking = {'blocked': False, 'triggered_rules': [], 'alerts_created': 0}
-    cumulative_proactive = {}
 
     for i in range(event_count):
         log_line = generate_demo_log(scenario_id, custom_ip=rotated_ip)
@@ -589,16 +628,14 @@ def run_demo_scenario(scenario_id: str, verbose: bool = False,
             agent_id=agent_id,
             skip_blocking=False,
             skip_learning=True,
-            skip_notifications=True  # Skip Telegram notifications for simulations
+            skip_notifications=True
         )
 
-        # Accumulate blocking results across all events
         if result and result.get('success'):
             enrichment = result.get('enrichment', {})
             blocking_result = enrichment.get('blocking', {})
             proactive_block = result.get('proactive_block', {})
 
-            # Track if blocked at ANY point
             if blocking_result.get('blocked'):
                 cumulative_blocking['blocked'] = True
                 if blocking_result.get('triggered_rules'):
@@ -607,20 +644,21 @@ def run_demo_scenario(scenario_id: str, verbose: bool = False,
                             cumulative_blocking['triggered_rules'].append(rule)
             if blocking_result.get('alerts_created', 0) > 0:
                 cumulative_blocking['alerts_created'] += blocking_result.get('alerts_created', 0)
-            if blocking_result.get('triggered_rules') and not cumulative_blocking['triggered_rules']:
-                cumulative_blocking['triggered_rules'] = blocking_result['triggered_rules']
 
-            # Track proactive blocks
             if proactive_block and proactive_block.get('should_block'):
                 cumulative_blocking['blocked'] = True
-                cumulative_proactive = proactive_block
-                if not cumulative_blocking['triggered_rules']:
-                    cumulative_blocking['triggered_rules'] = [f"Proactive: {proactive_block.get('action_taken', 'blocked')}"]
                 cumulative_blocking['proactive'] = True
+
+    # Show guided mode hints
+    if mode == "guided" and scenario.get('after_run'):
+        print(f"\n✅ {scenario['after_run']}")
+        if scenario.get('verification_steps'):
+            print("\n📋 Verification Steps:")
+            for step in scenario['verification_steps']:
+                print(f"   • {step}")
 
     if result and result.get('success'):
         enrichment = result.get('enrichment', {})
-
         return {
             "success": True,
             "scenario_id": scenario_id,
@@ -630,40 +668,80 @@ def run_demo_scenario(scenario_id: str, verbose: bool = False,
             "event_id": result.get('event_id'),
             "is_private_ip": enrichment.get('is_private_ip', False),
             "blocking": cumulative_blocking,
-            "proactive_block": cumulative_proactive,
-            "actual_results": {
-                "geoip": enrichment.get('geoip'),
-                "ml": enrichment.get('ml'),
-                "threat_intel": enrichment.get('threat_intel'),
-                "behavioral": enrichment.get('behavioral')
-            }
+            "expected_result": scenario.get("expected_result"),
+            "verification_steps": scenario.get("verification_steps", []),
         }
     else:
         return {"success": False, "error": result.get('error') if result else "No result"}
 
 
-def run_full_demo(verbose: bool = True) -> Dict:
-    """Run all demo scenarios and return results."""
+def run_full_demo(verbose: bool = True, mode: str = "default") -> Dict:
+    """Run all 8 demo scenarios."""
     results = []
-    summary = {"total": len(DEMO_SCENARIOS), "successful": 0, "blocked": 0}
+    summary = {"total": len(DEMO_SCENARIOS), "successful": 0, "blocked": 0, "alerts": 0}
 
     if verbose:
         print("\n" + "=" * 60)
-        print("SSH GUARDIAN v3.0 - FULL DEMO (10 SCENARIOS)")
+        print("🚀 SSH GUARDIAN v3.0 - FULL DEMO (8 SCENARIOS)")
+        print("=" * 60)
+        print("\nScenario Categories:")
+        for group_id, group in SCENARIO_GROUPS.items():
+            print(f"  {group['icon']} {group['label']}: {len(group['scenarios'])} scenarios")
         print("=" * 60)
 
     for scenario_id in DEMO_SCENARIOS:
-        result = run_demo_scenario(scenario_id, verbose=verbose)
+        result = run_demo_scenario(scenario_id, verbose=verbose, mode=mode)
         results.append(result)
 
         if result.get('success'):
             summary['successful'] += 1
             if result.get('blocking', {}).get('blocked'):
                 summary['blocked'] += 1
+            if result.get('blocking', {}).get('alerts_created', 0) > 0:
+                summary['alerts'] += 1
 
     if verbose:
         print("\n" + "=" * 60)
-        print(f"SUMMARY: {summary['successful']}/{summary['total']} successful, {summary['blocked']} blocked")
+        print(f"📊 SUMMARY")
+        print(f"   Scenarios: {summary['successful']}/{summary['total']} successful")
+        print(f"   Blocks: {summary['blocked']}")
+        print(f"   Alerts: {summary['alerts']}")
         print("=" * 60)
 
     return {"success": True, "summary": summary, "results": results}
+
+
+# =============================================================================
+# QUICK REFERENCE
+# =============================================================================
+
+def print_quick_reference():
+    """Print quick reference guide for all scenarios"""
+    print("""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    SSH GUARDIAN v3.0 - SCENARIO REFERENCE                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  ✅ BASELINE (No Action)                                                     ║
+║  ├─ 1. clean_daytime_success    Normal login, daytime     → NO action       ║
+║                                                                              ║
+║  🔔 ALERT ONLY (Monitor)                                                     ║
+║  ├─ 2. clean_midnight_success   Night login (3 AM)        → Alert only      ║
+║  ├─ 4. clean_multi_user         3 users, daytime          → Alert only      ║
+║  └─ 7. private_ip_insider       Internal IP, brute force  → Alert only      ║
+║                                                                              ║
+║  🔒 FAIL2BAN (Temporary Block)                                               ║
+║  ├─ 3. clean_5_failed           5 failed logins           → Block 24h       ║
+║  ├─ 5. clean_multi_user_night   3 users at night          → Block 6h        ║
+║  └─ 8. bad_ip_5_failed          Bad IP + 5 failed         → Block 24h       ║
+║                                                                              ║
+║  🛡️  UFW (Permanent Block)                                                   ║
+║  └─ 6. clean_10_failed_24h      10+ failed in 24h         → Block 30 days   ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  USAGE:                                                                      ║
+║  • Default Mode:  run_demo_scenario("clean_5_failed")                        ║
+║  • Guided Mode:   run_demo_scenario("clean_5_failed", mode="guided")         ║
+║  • Run All:       run_full_demo()                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+    """)
