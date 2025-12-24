@@ -86,36 +86,21 @@
     <!-- Simulation Content (hidden until server selected) -->
     <div id="simulationContent" style="display: none;">
 
-        <!-- Category Tabs -->
-        <div class="sim-category-tabs" style="display: flex; gap: 4px; margin-bottom: 16px; padding: 4px; background: var(--surface-alt); border-radius: 8px; border: 1px solid var(--border);">
-            <button class="sim-cat-tab active" data-category="ufw_block" onclick="switchScenarioCategory('ufw_block')">
-                <span class="sim-cat-tab-icon">🛡️</span>
-                <span class="sim-cat-tab-label">UFW Block</span>
-                <span class="sim-cat-tab-count" id="count-ufw">0</span>
-            </button>
-            <button class="sim-cat-tab" data-category="alert_only" onclick="switchScenarioCategory('alert_only')">
-                <span class="sim-cat-tab-icon">⚠️</span>
-                <span class="sim-cat-tab-label">Alert Only</span>
-                <span class="sim-cat-tab-count" id="count-alert">0</span>
-            </button>
-            <button class="sim-cat-tab" data-category="baseline" onclick="switchScenarioCategory('baseline')">
-                <span class="sim-cat-tab-icon">✅</span>
-                <span class="sim-cat-tab-label">Baseline</span>
-                <span class="sim-cat-tab-count" id="count-baseline">0</span>
-            </button>
-        </div>
-
-        <!-- Category Description -->
-        <div id="category-description" class="card" style="padding: 12px 16px; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span id="cat-desc-icon" style="font-size: 24px;">🛡️</span>
+        <!-- Scenario Summary Header -->
+        <div class="card" style="padding: 16px; margin-bottom: 16px; background: linear-gradient(135deg, var(--surface) 0%, var(--surface-alt) 100%);">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <span style="font-size: 28px;">🎯</span>
                 <div style="flex: 1;">
-                    <h4 id="cat-desc-title" style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">UFW Blocking Scenarios</h4>
-                    <p id="cat-desc-text" style="margin: 0; font-size: 12px; color: var(--text-secondary);">Trigger SSH Guardian rules → Agent blocks IP via UFW</p>
+                    <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600;">8 Test Scenarios</h3>
+                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">Click any scenario to run it on the selected target server</p>
                 </div>
-                <span id="cat-desc-badge" style="display: none; padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 4px;"></span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span style="padding: 4px 10px; background: #2EA44F20; color: #2EA44F; border-radius: 4px; font-size: 11px; font-weight: 600;">✅ 1 Baseline</span>
+                    <span style="padding: 4px 10px; background: #E6A50220; color: #E6A502; border-radius: 4px; font-size: 11px; font-weight: 600;">🔔 3 Alert Only</span>
+                    <span style="padding: 4px 10px; background: #D1343820; color: #D13438; border-radius: 4px; font-size: 11px; font-weight: 600;">🔒 3 Fail2ban</span>
+                    <span style="padding: 4px 10px; background: #8B000020; color: #8B0000; border-radius: 4px; font-size: 11px; font-weight: 600;">🛡️ 1 UFW</span>
+                </div>
             </div>
-            <div id="cat-desc-steps" class="cat-steps-guide" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);"></div>
         </div>
 
         <!-- Live Attack Status Panel -->
@@ -548,78 +533,7 @@
 }
 </style>
 
-<style>
-/* Category Tabs */
-.sim-category-tabs {
-    overflow-x: auto;
-}
-.sim-cat-tab {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
-}
-.sim-cat-tab:hover {
-    background: var(--surface);
-    color: var(--text-primary);
-}
-.sim-cat-tab.active {
-    background: var(--azure-blue);
-    color: white;
-}
-.sim-cat-tab-icon {
-    font-size: 16px;
-}
-.sim-cat-tab-count {
-    padding: 2px 8px;
-    background: rgba(0,0,0,0.1);
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-}
-.sim-cat-tab.active .sim-cat-tab-count {
-    background: rgba(255,255,255,0.2);
-}
-
-/* Category specific colors */
-.sim-cat-tab[data-category="alert_only"].active {
-    background: #E6A502;
-}
-.sim-cat-tab[data-category="baseline"].active {
-    background: #2EA44F;
-}
-
-/* Category Steps Guide */
-.cat-steps-guide {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.cat-step {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 10px;
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    font-size: 11px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-.cat-step:first-child {
-    color: var(--azure-blue);
-    border-color: var(--azure-blue);
-}
-</style>
+<!-- Tab styles removed - using single page view -->
 
 <!-- IP Reference Table Styles -->
 <style>

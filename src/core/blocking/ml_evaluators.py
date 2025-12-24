@@ -134,24 +134,32 @@ def evaluate_credential_stuffing_rule(rule, ip_address):
                 off_hours_clause = "AND (HOUR(timestamp) < 6 OR HOUR(timestamp) >= 22)"
 
             # Build query based on event_type filter
+            # Use the IP's most recent event timestamp as reference (not NOW())
+            # This handles: simulated events with past timestamps AND real delayed logs
             if event_type_filter:
                 cursor.execute(f"""
                     SELECT COUNT(DISTINCT target_username) as unique_count
                     FROM auth_events
                     WHERE source_ip_text = %s
                     AND event_type = %s
-                    AND timestamp >= NOW() - INTERVAL %s MINUTE
+                    AND timestamp >= (
+                        SELECT MAX(timestamp) - INTERVAL %s MINUTE
+                        FROM auth_events WHERE source_ip_text = %s
+                    )
                     {off_hours_clause}
-                """, (ip_address, event_type_filter, time_window))
+                """, (ip_address, event_type_filter, time_window, ip_address))
             else:
                 # Count all events (both failed and successful)
                 cursor.execute(f"""
                     SELECT COUNT(DISTINCT target_username) as unique_count
                     FROM auth_events
                     WHERE source_ip_text = %s
-                    AND timestamp >= NOW() - INTERVAL %s MINUTE
+                    AND timestamp >= (
+                        SELECT MAX(timestamp) - INTERVAL %s MINUTE
+                        FROM auth_events WHERE source_ip_text = %s
+                    )
                     {off_hours_clause}
-                """, (ip_address, time_window))
+                """, (ip_address, time_window, ip_address))
 
             result = cursor.fetchone()
             unique_count = result['unique_count'] or 0
