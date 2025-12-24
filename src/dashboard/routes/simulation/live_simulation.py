@@ -188,6 +188,55 @@ def list_live_scenarios():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@live_sim_routes.route('/progress/<ip>', methods=['GET'])
+@login_required
+def get_simulation_progress(ip):
+    """
+    Get unique usernames already injected for an IP.
+    Used by credential stuffing scenario to track progress toward 3 unique users.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get unique usernames for this IP within the time window used by ml_evaluators
+        # Using same logic as credential stuffing detection (relative to IP's most recent event)
+        cursor.execute("""
+            SELECT
+                COUNT(DISTINCT target_username) as unique_count,
+                GROUP_CONCAT(DISTINCT target_username) as usernames
+            FROM auth_events
+            WHERE source_ip_text = %s
+            AND timestamp >= (
+                SELECT COALESCE(MAX(timestamp) - INTERVAL 60 MINUTE, NOW() - INTERVAL 60 MINUTE)
+                FROM auth_events
+                WHERE source_ip_text = %s
+            )
+        """, (ip, ip))
+
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        usernames_list = []
+        if result and result['usernames']:
+            usernames_list = [u.strip() for u in result['usernames'].split(',')]
+
+        return jsonify({
+            'success': True,
+            'unique_count': result['unique_count'] if result else 0,
+            'usernames': usernames_list
+        })
+    except Exception as e:
+        print(f"[LiveSim] Error getting simulation progress: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'unique_count': 0,
+            'usernames': []
+        }), 500
+
+
 @live_sim_routes.route('/live/run', methods=['POST'])
 @login_required
 def run_live_simulation():

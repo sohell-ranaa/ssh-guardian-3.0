@@ -31,10 +31,19 @@
 
             // Read input values
             const scenarioIp = document.getElementById('scenario-var-ip')?.value || scenario.ip || '8.8.8.8';
-            const scenarioUser = document.getElementById('scenario-var-user')?.value || scenario.username || 'testuser';
+
+            // For credential_stuffing scenarios, read from the username dropdown
+            let scenarioUser;
+            if (scenario.category === 'credential_stuffing') {
+                scenarioUser = document.getElementById('scenario-var-username-select')?.value || scenario.username || 'testuser';
+            } else {
+                scenarioUser = document.getElementById('scenario-var-user')?.value || scenario.username || 'testuser';
+            }
+
             const authType = document.getElementById('scenario-var-auth')?.value || 'password';
             const authResult = document.getElementById('scenario-var-result')?.value || 'Failed';
             const eventCount = parseInt(document.getElementById('scenario-var-count')?.value) || scenario.event_count || 1;
+            const eventTime = document.getElementById('scenario-var-time')?.value || null;
 
             Sim.Modal.close();
             const card = document.querySelector(`.demo-scenario-card[data-scenario="${scenario.id}"]`);
@@ -74,7 +83,8 @@
                         auth_type: authType,
                         auth_result: authResult,
                         event_count: eventCount,
-                        action_type: actionType
+                        action_type: actionType,
+                        event_time: eventTime
                     })
                 });
                 const result = await response.json();

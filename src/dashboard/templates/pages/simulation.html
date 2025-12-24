@@ -295,9 +295,42 @@
                     <label class="var-label">IP Address:</label>
                     <input type="text" id="scenario-var-ip" class="var-input" value="8.8.8.8">
                 </div>
-                <div class="var-row">
+                <div class="var-row" id="standard-username-row">
                     <label class="var-label">Username:</label>
                     <input type="text" id="scenario-var-user" class="var-input" value="testuser">
+                </div>
+
+                <!-- Credential Stuffing Controls (shown for credential_stuffing category only) -->
+                <div id="scenario-credential-controls" style="display: none;">
+                    <div class="var-row">
+                        <label class="var-label">Username:</label>
+                        <select id="scenario-var-username-select" class="var-input">
+                            <!-- Populated dynamically from scenario.usernames -->
+                        </select>
+                    </div>
+
+                    <div class="var-row">
+                        <label class="var-label">Night Time:</label>
+                        <div class="night-time-presets">
+                            <button type="button" class="night-btn" onclick="setNightTime('00:00')">12 AM</button>
+                            <button type="button" class="night-btn" onclick="setNightTime('01:00')">1 AM</button>
+                            <button type="button" class="night-btn" onclick="setNightTime('02:00')">2 AM</button>
+                            <button type="button" class="night-btn" onclick="setNightTime('03:00')">3 AM</button>
+                            <button type="button" class="night-btn" onclick="setNightTime('04:00')">4 AM</button>
+                            <button type="button" class="night-btn" onclick="setNightTime('05:00')">5 AM</button>
+                        </div>
+                    </div>
+
+                    <!-- Progress Indicator -->
+                    <div id="credential-progress" class="credential-progress">
+                        <div class="progress-header">
+                            <span class="progress-icon">🌙</span>
+                            <span id="credential-progress-text">0/3 unique users injected</span>
+                        </div>
+                        <div id="credential-progress-list" class="progress-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
                 </div>
                 <div class="var-row">
                     <label class="var-label">Auth Type:</label>
@@ -530,6 +563,79 @@
 .scenario-action-desc {
     font-size: 11px;
     color: var(--text-secondary);
+}
+
+/* Night Time Presets */
+.night-time-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+}
+.night-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.night-btn:hover {
+    border-color: #8B008B;
+    color: #8B008B;
+    background: rgba(139, 0, 139, 0.1);
+}
+.night-btn.active {
+    border-color: #8B008B;
+    background: #8B008B;
+    color: white;
+}
+
+/* Credential Progress Indicator */
+.credential-progress {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(139, 0, 139, 0.1);
+    border: 1px solid rgba(139, 0, 139, 0.3);
+    border-radius: 8px;
+}
+.credential-progress .progress-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #8B008B;
+}
+.credential-progress .progress-icon {
+    font-size: 16px;
+}
+.credential-progress .progress-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.credential-progress .progress-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.credential-progress .progress-item.done {
+    color: #10B981;
+    background: rgba(16, 185, 129, 0.1);
+}
+.credential-progress .progress-item.pending {
+    color: var(--text-hint);
+}
+.credential-progress .progress-item .check-icon {
+    font-size: 12px;
 }
 </style>
 
