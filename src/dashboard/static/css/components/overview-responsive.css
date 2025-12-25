@@ -22,7 +22,8 @@
         grid-template-columns: repeat(3, 1fr);
     }
 
-    .action-cards-grid {
+    #page-overview .action-cards-grid,
+    .overview-tab-content .action-cards-grid {
         grid-template-columns: repeat(2, 1fr);
     }
 
@@ -205,11 +206,13 @@
     }
 
     /* Quick Actions */
-    .quick-actions {
+    #page-overview .quick-actions,
+    .overview-tab-content .quick-actions {
         padding: 32px 16px;
     }
 
-    .action-cards-grid {
+    #page-overview .action-cards-grid,
+    .overview-tab-content .action-cards-grid {
         grid-template-columns: 1fr;
     }
 

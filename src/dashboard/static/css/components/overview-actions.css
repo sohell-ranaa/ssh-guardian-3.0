@@ -56,14 +56,17 @@
     white-space: nowrap;
 }
 
-/* Quick Actions Section */
-.quick-actions {
+/* Quick Actions Section - scoped to overview page */
+#page-overview .quick-actions,
+.overview-tab-content .quick-actions {
     padding: 48px 40px;
     background: var(--background);
     scroll-margin-top: 60px;
+    display: block;
 }
 
-.action-cards-grid {
+#page-overview .action-cards-grid,
+.overview-tab-content .action-cards-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 24px;
