@@ -18,3 +18,7 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Large files
+ref-report/Lecture Slides/10_Research Proposal.zip
+dbs/thesis_backup_*.sql.zip
